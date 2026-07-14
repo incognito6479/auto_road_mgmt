@@ -1,0 +1,22 @@
+"""
+management/urls.py
+
+URL patterns for the management app.
+All view functions and viewsets are imported from management.views.
+"""
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from management import views
+
+router = DefaultRouter()
+router.register(r"categories", views.CategoryViewSet, basename="category")
+router.register(r"users", views.UserViewSet, basename="user")
+router.register(r"students", views.StudentViewSet, basename="student")
+router.register(r"enrollments", views.EnrollmentViewSet, basename="enrollment")
+router.register(r"payments", views.PaymentViewSet, basename="payment")
+
+urlpatterns = [
+    path("", include(router.urls)),
+]
