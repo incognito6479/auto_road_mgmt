@@ -36,6 +36,7 @@ class BaseModel(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True, db_index=True)
+    notes = models.TextField(blank=True, null=True, help_text="Qo'shimcha eslatmalar")
 
     class Meta:
         abstract = True
@@ -66,12 +67,10 @@ class User(AbstractUser):
     # Primary login identifier
     phone = models.CharField(
         max_length=20,
-        unique=True,
         help_text="Namuna: 998909009090",
     )
 
     jshshr = models.BigIntegerField(
-        unique=True,
         help_text="Namuna: 29572006200016",
     )
 
@@ -81,7 +80,6 @@ class User(AbstractUser):
     )
 
     passport_number = models.IntegerField(
-        unique=True,
         help_text="Namuna: 2275679",
     )
 
@@ -94,6 +92,7 @@ class User(AbstractUser):
         db_table = "user"
         verbose_name = "User"
         verbose_name_plural = "Users"
+        unique_together = ["phone", "jshshr"]
 
     def __str__(self):
         return f"{self.phone} ({self.role})"
@@ -102,21 +101,14 @@ class User(AbstractUser):
 class Student(BaseModel):
     """Driving school student."""
 
-    class Status(models.TextChoices):
-        NEW = "new", "Yangi"
-        ENROLLED = "enrolled", "Qabul qilingan"
-        FINISHED = "finished", "Tugatgan"
-
     full_name = models.CharField(max_length=255)
 
     phone = models.CharField(
         max_length=20,
-        unique=True,
         help_text="Namuna: 998909009090",
     )
 
     jshshr = models.BigIntegerField(
-        unique=True,
         help_text="Namuna: 29572006200016",
     )
 
@@ -126,20 +118,14 @@ class Student(BaseModel):
     )
 
     passport_number = models.IntegerField(
-        unique=True,
         help_text="Namuna: 2275679",
-    )
-
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.NEW,
     )
 
     class Meta:
         db_table = "student"
         verbose_name = "Student"
         verbose_name_plural = "Students"
+        unique_together = ["phone", "jshshr"]
 
     def __str__(self):
         return self.full_name
@@ -172,24 +158,34 @@ class Enrollment(BaseModel):
     """Student enrollment in a driving license category."""
 
     class Status(models.TextChoices):
+        NEW = "new", "Yangi"
         ENROLLED = "enrolled", "Qabul qilingan"
         FINISHED = "finished", "Tugatgan"
         CANCELED = "canceled", "Bekor qilingan"
 
     student = models.ForeignKey(
         Student,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="enrollments",
     )
     category = models.ForeignKey(
         Category,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="enrollments",
     )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.ENROLLED,
+    )
+    enrolled_free = models.BooleanField(
+        default=False,
+        help_text="Bepul o'qish (grant yoki boshqa imtiyoz)",
+    )
+    enrolled_amount = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Shartnoma summasi",
     )
 
     class Meta:
@@ -217,12 +213,12 @@ class Payment(BaseModel):
 
     user = models.ForeignKey(
         User,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="payments",
     )
-    student = models.ForeignKey(
-        Student,
-        on_delete=models.SET_NULL,
+    enrollment = models.ForeignKey(
+        Enrollment,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="payments",

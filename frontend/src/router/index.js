@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import CategoriesView from '@/views/CategoriesView.vue'
+import CategoryDetailView from '@/views/CategoryDetailView.vue'
 import StudentsView from '@/views/StudentsView.vue'
 
 const routes = [
@@ -22,6 +23,12 @@ const routes = [
     path: '/categories',
     name: 'categories',
     component: CategoriesView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/categories/:id',
+    name: 'category-detail',
+    component: CategoryDetailView,
     meta: { requiresAuth: true },
   },
   {

@@ -37,7 +37,7 @@
         <div class="cat-stats">
           <div class="reg-block">
             <span class="reg-num">{{ cat.registered }}</span>
-            <span class="reg-label"> Ro'yxatda</span>
+            <span class="reg-label">/24 Ro'yxatda</span>
           </div>
           <div class="price-block">
             <span class="price-label">Narxi: </span>
@@ -51,7 +51,7 @@
         </div>
 
         <!-- View details button -->
-        <button class="btn-view">Ko'rish</button>
+        <button class="btn-view" @click="router.push({ name: 'category-detail', params: { id: cat.id } })">Ko'rish</button>
 
       </div>
     </div>
@@ -105,8 +105,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+
+const router = useRouter()
 
 // ── State ───────────────────────────────────────────
 const categories = ref([])
@@ -190,30 +193,8 @@ const formatPrice = (price) => {
 // ── Computed Enriched Categories ───────────────────
 const enrichedCategories = computed(() => {
   return categories.value.map(cat => {
-    const normName = cat.name.trim().toUpperCase()
-    let registered = 0
-    let pct = 0
-    
-    // Maintain mock numbers if using matching name to make UI populate beautifully
-    if (normName.startsWith('B') && !normName.includes('C')) {
-      registered = 78
-      pct = 78
-    } else if (normName.startsWith('A')) {
-      registered = 34
-      pct = 34
-    } else if (normName.startsWith('BC')) {
-      registered = 19
-      pct = 19
-    } else if (normName.startsWith('D')) {
-      registered = 11
-      pct = 11
-    } else if (normName.startsWith('C')) {
-      registered = 7
-      pct = 7
-    } else {
-      registered = 0
-      pct = 0
-    }
+    let registered = cat.registered || 0
+    let pct = Math.min((registered / 24) * 100, 100)
     
     return {
       ...cat,
@@ -510,7 +491,8 @@ onMounted(() => {
   width: 90%;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   background: white;
-  overflow: visible;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .modal-dialog::backdrop {
   background: rgba(0, 0, 0, 0.4);

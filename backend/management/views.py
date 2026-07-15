@@ -73,6 +73,16 @@ class StudentViewSet(SoftDeleteModelViewSet):
             return StudentCreateSerializer
         return StudentSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        category_id = self.request.query_params.get("category")
+        status = self.request.query_params.get("status")
+        if category_id:
+            queryset = queryset.filter(enrollments__category_id=category_id, enrollments__is_active=True)
+        if status:
+            queryset = queryset.filter(enrollments__status=status, enrollments__is_active=True)
+        return queryset
+
 
 # ---------------------------------------------------------------------------
 # Enrollment

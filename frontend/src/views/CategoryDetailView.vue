@@ -1,28 +1,44 @@
 <template>
   <AppLayout>
 
-    <!-- Top action -->
+    <!-- Top action / back bar -->
     <div class="page-top">
-      <button class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
+      <button class="btn-back" @click="router.push({ name: 'categories' })">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Kategoriyalarga qaytish
+      </button>
+      <div class="top-actions-right">
+        <button
+          v-if="selectedStudentIds.length === 23 || selectedStudentIds.length === 24"
+          class="btn-start-group"
+          @click="openGroupConfirmModal"
+        >
+          Guruhni boshlash
+        </button>
+        <button class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
+      </div>
+    </div>
+
+    <!-- Category Header Card -->
+    <div v-if="category" class="category-header-card">
+      <div class="cat-details">
+        <div class="cat-icon-wrap" v-html="categoryIcon"></div>
+        <div class="cat-info-block">
+          <h2 class="cat-name">{{ category.name }}</h2>
+          <p class="cat-price">Narxi: <span class="price-val">{{ formattedPrice }}</span></p>
+        </div>
+      </div>
+      <div class="cat-stat-badge">
+        <span class="stat-count">{{ students.length }}</span>
+        <span class="stat-label">Yangi O'quvchi</span>
+      </div>
     </div>
 
     <!-- Filter card -->
-    <div class="filter-card">
-      <div class="filter-field">
-        <label class="filter-label">Holat bo'yicha saralash</label>
-        <div class="select-wrap">
-          <select v-model="filterStatus" class="filter-select">
-            <option value="">Barchasi</option>
-            <option value="Yangi">Yangi</option>
-            <option value="Qabul qilingan">Qabul qilingan</option>
-            <option value="Tugatgan">Tugatgan</option>
-          </select>
-          <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-          </svg>
-        </div>
-      </div>
-
+    <div v-if="category && !loading && !error" class="filter-card">
       <div class="filter-field">
         <label class="filter-label">Ism yoki Telefon raqami bo'yicha qidirish</label>
         <input
@@ -44,24 +60,29 @@
       </div>
     </div>
 
-    <!-- Loading / error states -->
+    <!-- Loading, error, or empty states -->
     <div v-if="loading" class="state-container">
       <div class="spinner"></div>
-      <p class="state-text">O'quvchilar yuklanmoqda...</p>
+      <p class="state-text">Ma'lumotlar yuklanmoqda...</p>
     </div>
 
     <div v-else-if="error" class="state-container state-error">
       <p class="state-text">{{ error }}</p>
-      <button class="btn-retry" @click="fetchStudents">Qayta urinish</button>
+      <button class="btn-retry" @click="fetchData">Qayta urinish</button>
     </div>
 
-    <!-- Table -->
+    <!-- Table of registered students with status new -->
     <div v-else class="table-wrap">
+      <div class="table-header">
+        <h3>Navbatdagi / Yangi O'quvchilar Ro'yxati</h3>
+      </div>
       <table class="stbl">
         <thead>
           <tr>
+            <th>
+              <input type="checkbox" @change="toggleSelectAll" :checked="isAllSelected" class="th-chk" />
+            </th>
             <th>To'liq Ismi</th>
-            <th>Kategoriya</th>
             <th>Telefon Raqami</th>
             <th>JSHSHR</th>
             <th>Passport Ma'lumotlari</th>
@@ -74,21 +95,23 @@
         </thead>
         <tbody>
           <tr v-if="filteredStudents.length === 0">
-            <td colspan="10" class="no-data">Ma'lumot topilmadi</td>
+            <td colspan="10" class="no-data">Hozircha ushbu kategoriyada yangi o'quvchilar mavjud emas</td>
           </tr>
           <tr v-for="s in filteredStudents" :key="s.id" class="stbl-row">
+            <td>
+              <input type="checkbox" :value="s.id" v-model="selectedStudentIds" class="td-chk" />
+            </td>
             <td class="td-name">{{ s.name }}</td>
-            <td class="td-cat">{{ s.category }}</td>
             <td class="td-muted">{{ s.phone }}</td>
             <td class="td-muted">{{ s.jshshr }}</td>
             <td class="td-muted">{{ s.passport }}</td>
             <td class="td-muted">{{ s.date }}</td>
-            <td class="td-muted">
+            <td class="td-bold">
               <span v-if="s.enrolledFree" class="status-badge badge-free">Tekin</span>
               <span v-else>{{ s.paymentAmount }}</span>
             </td>
             <td>
-              <span class="status-badge" :class="statusClass(s.status)">{{ s.status }}</span>
+              <span class="status-badge badge-new">{{ s.status }}</span>
             </td>
             <td>
               <div class="td-notes" :title="s.notes">{{ s.notes || '-' }}</div>
@@ -109,7 +132,7 @@
     <!-- New Student Modal Dialog -->
     <dialog ref="studentModal" class="modal-dialog" closedby="any" aria-labelledby="modal-title">
       <form class="modal-form" @submit.prevent="saveStudent">
-        <h3 id="modal-title" class="modal-title">Yangi o'quvchi qo'shish</h3>
+        <h3 id="modal-title" class="modal-title">Yangi o'quvchi qo'shish (Yangi holatda)</h3>
 
         <div v-if="modalError" class="modal-error">
           {{ modalError }}
@@ -145,7 +168,7 @@
             <input
               id="std-jshshr"
               v-model="newStudent.jshshr"
-              type="text"
+              type="number"
               placeholder="Masalan: 30101990001014"
               required
               maxlength="14"
@@ -171,7 +194,7 @@
               <input
                 id="std-pass-num"
                 v-model="newStudent.passport_number"
-                type="text"
+                type="number"
                 placeholder="1234567"
                 required
                 maxlength="7"
@@ -181,18 +204,14 @@
           </div>
 
           <div class="form-group">
-            <label for="std-cat" class="form-label">Kategoriya</label>
-            <div class="select-wrap">
-              <select id="std-cat" v-model="newStudent.category" required class="form-input select-input">
-                <option value="" disabled>Kategoriyani tanlang</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                  {{ cat.name }} ({{ Number(cat.price).toLocaleString('uz-UZ') }} so'm)
-                </option>
-              </select>
-              <svg class="select-arrow-modal" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-              </svg>
-            </div>
+            <label class="form-label">Tanlangan Kategoriya</label>
+            <input
+              v-if="category"
+              type="text"
+              :value="category.name"
+              disabled
+              class="form-input disabled-input"
+            />
           </div>
 
           <div v-if="!newStudent.enrolled_free" class="form-group">
@@ -298,7 +317,7 @@
             <input
               id="edit-std-jshshr"
               v-model="editingStudent.jshshr"
-              type="text"
+              type="number"
               required
               maxlength="14"
               class="form-input"
@@ -377,42 +396,97 @@
       </form>
     </dialog>
 
+    <!-- Start Group Confirmation Modal Dialog -->
+    <dialog ref="groupConfirmModal" class="modal-dialog" closedby="any" aria-labelledby="group-modal-title">
+      <form class="modal-form" @submit.prevent="startGroup">
+        <h3 id="group-modal-title" class="modal-title">Guruhni boshlash</h3>
+
+        <div class="modal-confirm-body">
+          <p>Tanlangan <strong>{{ selectedStudentIds.length }}</strong> ta o'quvchi bilan yangi guruh boshlamoqchimisiz?</p>
+          <p class="modal-confirm-sub">Bu barcha tanlangan o'quvchilar holatini <strong>Qabul qilingan</strong> holatiga o'zgartiradi.</p>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="closeGroupConfirmModal">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="groupSaving">
+            <span v-if="groupSaving" class="btn-spinner"></span>
+            {{ groupSaving ? 'Boshlanmoqda...' : 'Tasdiqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 
-// ── Filter state ─────────────────────────────────────────────
-const filterStatus = ref('')
+const router = useRouter()
+const route = useRoute()
+const categoryId = route.params.id
+
+// ── Filter State ─────────────────────────────────────
 const filterSearch = ref('')
 const filterJshshr = ref('')
 
-// ── Loading & state ──────────────────────────────────────────
+// ── State ───────────────────────────────────────────
+const category = ref(null)
 const students = ref([])
 const categories = ref([])
 const loading = ref(false)
 const error = ref('')
 
-// ── Modal state ──────────────────────────────────────────────
-const studentModal = ref(null)
-const newStudent = ref({
-  full_name: '',
-  phone: '',
-  jshshr: '',
-  passport_serie: '',
-  passport_number: '',
-  category: '',
-  min_payment: null,
-  enrolled_free: false,
-  has_custom_price: false,
-  enrolled_amount: null,
-  notes: '',
+// ── Selection State ──────────────────────────────────
+const selectedStudentIds = ref([])
+const groupConfirmModal = ref(null)
+const groupSaving = ref(false)
+
+const isAllSelected = computed(() => {
+  return filteredStudents.value.length > 0 && selectedStudentIds.value.length === filteredStudents.value.length
 })
-const saving = ref(false)
-const modalError = ref('')
+
+const toggleSelectAll = (e) => {
+  if (e.target.checked) {
+    selectedStudentIds.value = filteredStudents.value.map(s => s.id)
+  } else {
+    selectedStudentIds.value = []
+  }
+}
+
+const openGroupConfirmModal = () => {
+  if (groupConfirmModal.value) {
+    groupConfirmModal.value.showModal()
+  }
+}
+
+const closeGroupConfirmModal = () => {
+  if (groupConfirmModal.value) {
+    groupConfirmModal.value.close()
+  }
+}
+
+const startGroup = async () => {
+  groupSaving.value = true
+  try {
+    await Promise.all(selectedStudentIds.value.map(id =>
+      api.patch(`/students/${id}/`, { status: 'enrolled' })
+    ))
+    selectedStudentIds.value = []
+    closeGroupConfirmModal()
+    await fetchData()
+  } catch (err) {
+    console.error(err)
+    alert("Guruhni boshlashda xatolik yuz berdi.")
+  } finally {
+    groupSaving.value = false
+  }
+}
+
+
 
 // ── Edit Modal state ─────────────────────────────────────────
 const editStudentModal = ref(null)
@@ -522,7 +596,7 @@ const updateStudent = async () => {
 
     await api.patch(`/students/${s.id}/`, payload)
     closeEditModal()
-    await fetchStudents()
+    await fetchData()
   } catch (err) {
     console.error(err)
     if (err.response?.data?.phone) {
@@ -538,6 +612,33 @@ const updateStudent = async () => {
     editSaving.value = false
   }
 }
+
+const filteredStudents = computed(() => {
+  return students.value.filter(s => {
+    const q = filterSearch.value.toLowerCase()
+    const matchSearch = !q || s.name.toLowerCase().includes(q) || s.phone.includes(q)
+    const matchJshshr = !filterJshshr.value || s.jshshr.includes(filterJshshr.value)
+    return matchSearch && matchJshshr
+  })
+})
+
+// ── Modal State ──────────────────────────────────────
+const studentModal = ref(null)
+const newStudent = ref({
+  full_name: '',
+  phone: '',
+  jshshr: '',
+  passport_serie: '',
+  passport_number: '',
+  category: categoryId,
+  min_payment: null,
+  enrolled_free: false,
+  has_custom_price: false,
+  enrolled_amount: null,
+  notes: '',
+})
+const saving = ref(false)
+const modalError = ref('')
 
 // Watch phone for formatting: +998 90 900 90 90
 watch(() => newStudent.value.phone, (newValue) => {
@@ -609,27 +710,74 @@ const formattedEnrolledAmount = computed({
   }
 })
 
-// ── Fetch data ───────────────────────────────────────────────
-const fetchStudents = async () => {
+// ── Icons & pricing helpers ──────────────────────────
+const categoryIcon = computed(() => {
+  if (!category.value) return ''
+  const norm = category.value.name.toUpperCase()
+  if (norm.includes('B') && !norm.includes('C')) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="1.6" width="36" height="36">
+      <circle cx="12" cy="12" r="9.5"/>
+      <circle cx="12" cy="12" r="3.5"/>
+      <line x1="12" y1="8.5" x2="12" y2="2.5"/>
+      <line x1="6.3" y1="15.5" x2="9.3" y2="13.4"/>
+      <line x1="17.7" y1="15.5" x2="14.7" y2="13.4"/>
+    </svg>`
+  } else if (norm.includes('A')) {
+    return `<svg viewBox="0 0 32 24" fill="none" stroke="#2D6A4F" stroke-width="1.6" width="36" height="36">
+      <circle cx="6" cy="18" r="4"/>
+      <circle cx="26" cy="18" r="4"/>
+      <path d="M6 18h5l3-7h5l4 7"/>
+      <path d="M14 11l1.5-4h3"/>
+      <circle cx="20" cy="6" r="1.5"/>
+    </svg>`
+  } else if (norm.includes('BC') || norm.includes('C')) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="1.6" width="36" height="36">
+      <rect x="1" y="7" width="14" height="11" rx="1"/>
+      <path d="M15 10h5l3 4v3h-8V10z"/>
+      <circle cx="5.5" cy="18.5" r="1.5"/>
+      <circle cx="18.5" cy="18.5" r="1.5"/>
+    </svg>`
+  } else if (norm.includes('D')) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="1.6" width="36" height="36">
+      <rect x="2" y="4" width="20" height="14" rx="2"/>
+      <line x1="2" y1="9" x2="22" y2="9"/>
+      <line x1="12" y1="4" x2="12" y2="18"/>
+      <circle cx="6" cy="20" r="1.5"/>
+      <circle cx="18" cy="20" r="1.5"/>
+      <line x1="6" y1="18" x2="6" y2="21"/>
+      <line x1="18" y1="18" x2="18" y2="21"/>
+    </svg>`
+  } else {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="1.6" width="36" height="36">
+      <circle cx="12" cy="12" r="9.5"/>
+      <path d="M12 8v8M8 12h8" stroke="#2D6A4F" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`
+  }
+})
+
+const formattedPrice = computed(() => {
+  if (!category.value || !category.value.price) return "0 so'm"
+  return Number(category.value.price).toLocaleString('uz-UZ') + " so'm"
+})
+
+// ── Fetch Category & Students ────────────────────────
+const fetchData = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/students/')
-    students.value = response.data.map(mapStudent)
+    const [catRes, stdRes, allCatsRes] = await Promise.all([
+      api.get(`/categories/${categoryId}/`),
+      api.get(`/students/?category=${categoryId}&status=new`),
+      api.get(`/categories/`)
+    ])
+    category.value = catRes.data
+    students.value = stdRes.data.map(mapStudent)
+    categories.value = allCatsRes.data
   } catch (err) {
     console.error(err)
-    error.value = "O'quvchilarni yuklashda xatolik yuz berdi."
+    error.value = "Ma'lumotlarni yuklashda xatolik yuz berdi."
   } finally {
     loading.value = false
-  }
-}
-
-const fetchCategories = async () => {
-  try {
-    const response = await api.get('/categories/')
-    categories.value = response.data
-  } catch (err) {
-    console.error('Error fetching categories:', err)
   }
 }
 
@@ -639,25 +787,19 @@ const formatPrice = (price) => {
 }
 
 const mapStudent = (s) => {
-  let statusText = 'Yangi'
-  if (s.status === 'enrolled') statusText = "Qabul qilingan"
-  else if (s.status === 'finished') statusText = 'Tugatgan'
-  
   const dateStr = s.created_at ? new Date(s.created_at).toLocaleDateString('uz-UZ') : ''
-  
   return {
     id: s.id,
     name: s.full_name,
-    category: s.category || '-',
-    categoryId: s.category_id,
     phone: formatPhoneDisplay(s.phone),
     jshshr: String(s.jshshr),
     passport: `${s.passport_serie} ${s.passport_number}`,
     passportSerie: s.passport_serie,
     passportNumber: s.passport_number,
     date: dateStr,
-    status: statusText,
+    status: "Yangi",
     rawStatus: s.status,
+    categoryId: s.category_id,
     enrolledFree: s.enrolled_free || false,
     paymentAmount: formatPrice(s.payment_amount),
     notes: s.notes || '',
@@ -675,8 +817,7 @@ const formatPhoneDisplay = (p) => {
 }
 
 onMounted(() => {
-  fetchStudents()
-  fetchCategories()
+  fetchData()
   
   // Light dismiss fallback
   if (studentModal.value && !('closedBy' in HTMLDialogElement.prototype)) {
@@ -696,25 +837,6 @@ onMounted(() => {
   }
 })
 
-// ── Filtered computed ────────────────────────────────────────
-const filteredStudents = computed(() => {
-  return students.value.filter(s => {
-    const matchStatus = !filterStatus.value || s.status === filterStatus.value
-    const q = filterSearch.value.toLowerCase()
-    const matchSearch = !q || s.name.toLowerCase().includes(q) || s.phone.includes(q)
-    const matchJshshr = !filterJshshr.value || s.jshshr.includes(filterJshshr.value)
-    return matchStatus && matchSearch && matchJshshr
-  })
-})
-
-// ── Status badge class ───────────────────────────────────────
-function statusClass(status) {
-  if (status === 'Yangi') return 'badge-new'
-  if (status === "Qabul qilingan" || status === "Ro'yxatdan o'tgan") return 'badge-registered'
-  if (status === 'Tugatgan') return 'badge-done'
-  return ''
-}
-
 // ── Modal Actions ────────────────────────────────────────────
 const openModal = () => {
   newStudent.value = {
@@ -723,7 +845,7 @@ const openModal = () => {
     jshshr: '',
     passport_serie: '',
     passport_number: '',
-    category: '',
+    category: categoryId,
     min_payment: null,
     enrolled_free: false,
     has_custom_price: false,
@@ -750,7 +872,7 @@ const saveStudent = async () => {
     s.min_payment = 0
   }
   
-  if (!s.full_name.trim() || !phoneCleaned || !s.jshshr || !s.passport_serie.trim() || !s.passport_number || !s.category || s.min_payment === null) {
+  if (!s.full_name.trim() || !phoneCleaned || !s.jshshr || !s.passport_serie.trim() || !s.passport_number || s.min_payment === null) {
     modalError.value = "Barcha maydonlarni to'ldiring."
     return
   }
@@ -785,12 +907,12 @@ const saveStudent = async () => {
       enrolled_free: s.enrolled_free || false,
       enrolled_amount: (s.has_custom_price && !s.enrolled_free) ? parseInt(s.enrolled_amount, 10) : null,
       notes: s.notes,
-      status: 'new' // Register new student in new status
+      status: 'new' // Set student status to new!
     }
     
     await api.post('/students/', payload)
     closeModal()
-    await fetchStudents()
+    await fetchData()
   } catch (err) {
     console.error(err)
     if (err.response?.data?.phone) {
@@ -809,11 +931,32 @@ const saveStudent = async () => {
 </script>
 
 <style scoped>
-/* ── Top action ─────────────────────────────────────────── */
+/* ── Top actions / back link ──────────────────────────────── */
 .page-top {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-back:hover {
+  background: #F9FAFB;
+  border-color: #D1D5DB;
 }
 
 .btn-add {
@@ -830,93 +973,77 @@ const saveStudent = async () => {
 }
 .btn-add:hover { background: #245C43; transform: translateY(-1px); }
 
-/* ── Filter card ─────────────────────────────────────────── */
-.filter-card {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr 1fr;
-  gap: 16px;
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-}
-
-.filter-field {
+/* ── Category Header Card ─────────────────────────────────── */
+.category-header-card {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-radius: 14px;
+  padding: 24px 28px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  margin-bottom: 24px;
 }
 
-.filter-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-}
-
-/* Select wrapper */
-.select-wrap {
-  position: relative;
+.cat-details {
   display: flex;
   align-items: center;
+  gap: 20px;
 }
 
-.filter-select {
-  width: 100%;
-  appearance: none;
-  -webkit-appearance: none;
-  padding: 9px 34px 9px 12px;
-  border: 1px solid #D1D5DB;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #374151;
-  background: white;
-  outline: none;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-.filter-select:focus { border-color: #2D6A4F; }
-
-.select-arrow {
-  position: absolute;
-  right: 10px;
-  color: #9CA3AF;
-  pointer-events: none;
+.cat-icon-wrap {
+  width: 68px;
+  height: 68px;
+  background: #d1fae5;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-/* Text inputs */
-.filter-input {
-  padding: 9px 12px;
-  border: 1px solid #D1D5DB;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #374151;
-  outline: none;
-  font-family: 'Inter', sans-serif;
-  transition: border-color 0.15s;
+.cat-info-block {
+  text-align: left;
 }
-.filter-input:focus { border-color: #2D6A4F; }
-.filter-input::placeholder { color: #9CA3AF; }
 
-.btn-edit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: 1px solid #D1D5DB;
-  border-radius: 6px;
-  color: #374151;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  padding: 0;
+.cat-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+  margin: 0 0 6px 0;
 }
-.btn-edit:hover {
-  background: #F9FAFB;
-  border-color: #9CA3AF;
+
+.cat-price {
+  font-size: 14px;
+  color: #6B7280;
+  margin: 0;
+  font-weight: 500;
+}
+
+.price-val {
+  font-weight: 700;
+  color: #111827;
+  font-size: 15px;
+}
+
+.cat-stat-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.stat-count {
+  font-size: 36px;
+  font-weight: 900;
+  color: #2D6A4F;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6B7280;
+  margin-top: 4px;
 }
 
 /* ── States ─────────────────────────────────────────── */
@@ -973,6 +1100,20 @@ const saveStudent = async () => {
   border-radius: 12px;
   border: 1px solid #E5E7EB;
   overflow-x: auto;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.table-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #F3F4F6;
+  text-align: left;
+}
+
+.table-header h3 {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .stbl {
@@ -1014,23 +1155,17 @@ const saveStudent = async () => {
   font-weight: 600;
   color: #111827;
   white-space: nowrap;
+  text-align: left;
 }
 
-.td-cat {
-  font-size: 20px;
-  font-weight: 900;
-  color: #2D6A4F;
-  letter-spacing: -0.01em;
-}
-
-.td-muted { color: #6B7280; }
+.td-muted { color: #6B7280; text-align: left; }
 
 /* No data row */
 .no-data {
   text-align: center;
-  padding: 40px;
+  padding: 48px;
   color: #9CA3AF;
-  font-size: 14px;
+  font-size: 14.5px;
 }
 
 /* ── Status badges ──────────────────────────────────────────── */
@@ -1047,16 +1182,6 @@ const saveStudent = async () => {
   background: white;
   color: #374151;
   border: 1.5px solid #D1D5DB;
-}
-
-.badge-registered {
-  background: #2D6A4F;
-  color: white;
-}
-
-.badge-done {
-  background: #1B2430;
-  color: white;
 }
 
 .badge-free {
@@ -1096,6 +1221,7 @@ const saveStudent = async () => {
   color: #111827;
   border-bottom: 1px solid #E5E7EB;
   padding-bottom: 12px;
+  text-align: left;
 }
 
 .modal-error {
@@ -1106,6 +1232,7 @@ const saveStudent = async () => {
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
+  text-align: left;
 }
 
 .form-grid {
@@ -1151,24 +1278,15 @@ const saveStudent = async () => {
   border-color: #2D6A4F;
 }
 
+.disabled-input {
+  background: #F3F4F6;
+  color: #9CA3AF;
+  border-color: #E5E7EB;
+  cursor: not-allowed;
+}
+
 .text-uppercase {
   text-transform: uppercase;
-}
-
-.select-input {
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  padding-right: 32px;
-}
-
-.select-arrow-modal {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9CA3AF;
-  pointer-events: none;
 }
 
 .modal-actions {
@@ -1225,7 +1343,138 @@ const saveStudent = async () => {
   animation: spin 0.8s linear infinite;
 }
 
-/* ── Responsive ─────────────────────────────────────────────── */
+/* ── Filter card ─────────────────────────────────────────── */
+.filter-card {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.filter-input {
+  padding: 9px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.filter-input:focus { border-color: #2D6A4F; }
+.filter-input::placeholder { color: #9CA3AF; }
+
+.btn-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: white;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  padding: 0;
+}
+.btn-edit:hover {
+  background: #F9FAFB;
+  border-color: #9CA3AF;
+}
+
+/* Select wrapper */
+.select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.filter-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 9px 34px 9px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+  background: white;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.filter-select:focus { border-color: #2D6A4F; }
+
+.select-arrow {
+  position: absolute;
+  right: 10px;
+  color: #9CA3AF;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.top-actions-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-start-group {
+  padding: 10px 20px;
+  background: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-start-group:hover {
+  background: #2563EB;
+  transform: translateY(-1px);
+}
+
+.modal-confirm-body {
+  padding: 10px 0;
+  text-align: left;
+  font-size: 14.5px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.modal-confirm-sub {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6B7280;
+}
+
+.th-chk, .td-chk {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #2D6A4F;
+}
+
 @media (max-width: 900px) {
   .filter-card { grid-template-columns: 1fr; }
   .table-wrap  { overflow-x: auto; }
