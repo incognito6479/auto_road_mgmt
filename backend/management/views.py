@@ -7,8 +7,9 @@ All application views for the Driving School Management app live here.
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
-from management.models import Category, Student, User, Enrollment, Payment
+from management.models import Category, Student, User, Enrollment, Payment, Group
 from management.serializers import (
     CategorySerializer,
     StudentSerializer,
@@ -16,6 +17,7 @@ from management.serializers import (
     StudentCreateSerializer,
     EnrollmentSerializer,
     PaymentSerializer,
+    GroupSerializer,
 )
 
 
@@ -34,6 +36,16 @@ class SoftDeleteModelViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.save(update_fields=["is_active"])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Custom standard pagination
+# ---------------------------------------------------------------------------
+
+class StandardPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 100
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +79,7 @@ class StudentViewSet(SoftDeleteModelViewSet):
 
     queryset = Student.objects.filter(is_active=True).order_by("full_name")
     serializer_class = StudentSerializer
+    pagination_class = StandardPagination
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -104,3 +117,15 @@ class PaymentViewSet(SoftDeleteModelViewSet):
 
     queryset = Payment.objects.filter(is_active=True).order_by("-created_at")
     serializer_class = PaymentSerializer
+    pagination_class = StandardPagination
+
+
+# ---------------------------------------------------------------------------
+# Group
+# ---------------------------------------------------------------------------
+
+class GroupViewSet(SoftDeleteModelViewSet):
+    """CRUD for groups of students."""
+
+    queryset = Group.objects.filter(is_active=True).order_by("-created_at")
+    serializer_class = GroupSerializer

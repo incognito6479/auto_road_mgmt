@@ -2,17 +2,27 @@
   <div class="app-shell">
 
     <!-- ━━━━━━━━━━━━━━━━━━ SIDEBAR ━━━━━━━━━━━━━━━━━━ -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
 
       <!-- Brand -->
       <div class="sidebar-brand">
-        <div class="brand-icon-wrap">
-          <img src="/car-icon.jpg" alt="AUTOROAD SCHOOL" class="brand-logo" />
+        <div class="brand-left" v-if="!isSidebarCollapsed">
+          <div class="brand-icon-wrap">
+            <img src="/car-icon.jpg" alt="AUTOROAD SCHOOL" class="brand-logo" />
+          </div>
+          <div class="brand-name">
+            <span>AUTOROAD</span>
+            <span>SCHOOL</span>
+          </div>
         </div>
-        <div class="brand-name">
-          <span>AUTOROAD</span>
-          <span>SCHOOL</span>
-        </div>
+        <button class="btn-toggle-sidebar" @click="toggleSidebar" :title="isSidebarCollapsed ? 'Menyuni ochish' : 'Menyuni yopish'">
+          <svg v-if="isSidebarCollapsed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
       </div>
 
       <!-- Main navigation -->
@@ -28,7 +38,7 @@
           @click="go(item.path)"
         >
           <span class="nav-ico" v-html="item.icon"></span>
-          {{ item.label }}
+          <span class="nav-label" v-if="!isSidebarCollapsed">{{ item.label }}</span>
         </button>
 
       </nav>
@@ -41,7 +51,7 @@
           @click="go('/settings')"
         >
           <span class="nav-ico" v-html="icons.settings"></span>
-          Sozlamalar
+          <span class="nav-label" v-if="!isSidebarCollapsed">Sozlamalar</span>
         </button>
       </div>
 
@@ -121,6 +131,12 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
+const isSidebarCollapsed = ref(localStorage.getItem('sidebar_collapsed') === 'true')
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+  localStorage.setItem('sidebar_collapsed', isSidebarCollapsed.value)
+}
+
 function go(path) {
   router.push(path)
 }
@@ -130,6 +146,7 @@ const pageTitles = {
   '/':                  "Ko'rinish",
   '/pending-students':  "Kutilayotgan Talabalar",
   '/students':          "O'quvchilar Boshqaruvi",
+  '/groups':            "Guruhlar Boshqaruvi",
   '/instructors':       "Instruktorlar",
   '/vehicles':          "Avtomobillar",
   '/lessons':           "Darslar",
@@ -169,16 +186,18 @@ const icons = {
   reports:   `<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-4h5v4zm5 0h-4v-7h4v7z"/></svg>`,
   pending:   `<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6zm10 14.5V20H8v-3.5l4-4 4 4zm-4-5l-4-4V4h8v3.5l-4 4z"/></svg>`,
   settings:  `<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54C14.6 3.17 14.4 3 14.16 3h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L3.74 9.47c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`,
+  groups:    `<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 2.01 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`,
 }
 
 const allNavItems = [
   { path: '/',                  label: 'Bosh sahifa',      icon: icons.dashboard },
   { path: '/categories',        label: 'Kategoriyalar',   icon: icons.pending },
   { path: '/students',          label: 'Talabalar',        icon: icons.students },
+  { path: '/groups',            label: 'Guruhlar',         icon: icons.groups },
+  { path: '/billing',           label: "To'lovlar",        icon: icons.billing },
   { path: '/instructors',       label: 'Instruktorlar',    icon: icons.instructors },
   { path: '/vehicles',          label: 'Avtomobillar',     icon: icons.vehicles },
   { path: '/lessons',           label: 'Darslar',          icon: icons.lessons },
-  { path: '/billing',           label: "To'lovlar",        icon: icons.billing },
   { path: '/reports',           label: 'Hisobotlar',       icon: icons.reports },
 ]
 </script>
@@ -206,15 +225,27 @@ button { cursor: pointer; background: none; border: none; font-family: inherit; 
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.sidebar-collapsed {
+  width: 68px;
 }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding: 18px 14px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
+  height: 79px;
+}
+
+.sidebar.sidebar-collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 18px 0;
 }
 
 .brand-icon-wrap {
@@ -280,6 +311,33 @@ button { cursor: pointer; background: none; border: none; font-family: inherit; 
 .nav-btn.active { background: #2D6A4F; color: white; }
 
 .nav-ico { display: flex; align-items: center; flex-shrink: 0; opacity: 0.9; }
+
+.brand-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-toggle-sidebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-toggle-sidebar:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.sidebar.sidebar-collapsed .nav-btn {
+  justify-content: center;
+  padding: 12px;
+}
 
 /* Sub-item */
 .nav-sub-btn {

@@ -108,6 +108,13 @@ class Student(BaseModel):
         help_text="Namuna: 998909009090",
     )
 
+    phone2 = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Qo'shimcha telefon raqami (namuna: 998909009090)",
+    )
+
     jshshr = models.BigIntegerField(
         help_text="Namuna: 29572006200016",
     )
@@ -144,6 +151,12 @@ class Category(BaseModel):
         help_text="Namuna: 4500000",
     )
 
+    duration = models.FloatField(
+        blank=True,
+        null=True,
+        help_text="Davomiyligi (oylar, masalan, 3.5 yoki 4)",
+    )
+
     class Meta:
         db_table = "category"
         verbose_name = "Kategoriya"
@@ -152,6 +165,48 @@ class Category(BaseModel):
 
     def __str__(self):
         return self.name
+
+
+class Group(BaseModel):
+    """Driving school group of students."""
+
+    class Status(models.TextChoices):
+        STARTED = "started", "Boshlangan"
+        FINISHED = "finished", "Tugatgan"
+        CANCELED = "canceled", "Bekor qilingan"
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.PROTECT,
+        related_name="groups",
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Guruh nomi",
+    )
+    started_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Boshlanish sanasi",
+    )
+    duration = models.FloatField(
+        blank=True,
+        null=True,
+        help_text="Davomiyligi (oylar, masalan, 3.5 yoki 4)",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.STARTED,
+    )
+
+    class Meta:
+        db_table = "group"
+        verbose_name = "Guruh"
+        verbose_name_plural = "Guruhlar"
+
+    def __str__(self):
+        return f"{self.name} ({self.category.name})"
 
 
 class Enrollment(BaseModel):
@@ -172,6 +227,29 @@ class Enrollment(BaseModel):
         Category,
         on_delete=models.PROTECT,
         related_name="enrollments",
+    )
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="enrollments",
+    )
+    instructor = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        limit_choices_to={"role": User.Role.INSTRUCTOR},
+        null=True,
+        blank=True,
+        related_name="instructor_enrollments",
+    )
+    coordinator = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        limit_choices_to={"role": User.Role.COORDINATOR},
+        null=True,
+        blank=True,
+        related_name="coordinator_enrollments",
     )
     status = models.CharField(
         max_length=20,

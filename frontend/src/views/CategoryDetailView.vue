@@ -102,7 +102,12 @@
               <input type="checkbox" :value="s.id" v-model="selectedStudentIds" class="td-chk" />
             </td>
             <td class="td-name">{{ s.name }}</td>
-            <td class="td-muted">{{ s.phone }}</td>
+            <td class="td-muted">
+              <div>{{ s.phone }}</div>
+              <div v-if="s.phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">
+                Qo'shimcha: {{ s.phone2 }}
+              </div>
+            </td>
             <td class="td-muted">{{ s.jshshr }}</td>
             <td class="td-muted">{{ s.passport }}</td>
             <td class="td-muted">{{ s.date }}</td>
@@ -159,6 +164,17 @@
               type="tel"
               placeholder="+998 90 123 45 67"
               required
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="std-phone2" class="form-label">Qo'shimcha telefon raqami</label>
+            <input
+              id="std-phone2"
+              v-model="newStudent.phone2"
+              type="tel"
+              placeholder="+998 90 123 45 67 (ixtiyoriy)"
               class="form-input"
             />
           </div>
@@ -313,6 +329,17 @@
           </div>
 
           <div class="form-group">
+            <label for="edit-std-phone2" class="form-label">Qo'shimcha telefon raqami</label>
+            <input
+              id="edit-std-phone2"
+              v-model="editingStudent.phone2"
+              type="tel"
+              placeholder="+998 90 123 45 67 (ixtiyoriy)"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
             <label for="edit-std-jshshr" class="form-label">JSHSHR (14 xonali raqam)</label>
             <input
               id="edit-std-jshshr"
@@ -401,12 +428,49 @@
       <form class="modal-form" @submit.prevent="startGroup">
         <h3 id="group-modal-title" class="modal-title">Guruhni boshlash</h3>
 
-        <div class="modal-confirm-body">
-          <p>Tanlangan <strong>{{ selectedStudentIds.length }}</strong> ta o'quvchi bilan yangi guruh boshlamoqchimisiz?</p>
-          <p class="modal-confirm-sub">Bu barcha tanlangan o'quvchilar holatini <strong>Qabul qilingan</strong> holatiga o'zgartiradi.</p>
+        <div class="modal-confirm-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <p style="margin: 0; font-size: 14px; color: #4B5563;">
+            Tanlangan <strong>{{ selectedStudentIds.length }}</strong> ta o'quvchi bilan yangi guruh boshlamoqchimisiz?
+          </p>
+
+          <div class="form-group">
+            <label for="group-name-input" class="form-label">Guruh nomi</label>
+            <input
+              id="group-name-input"
+              v-model="groupForm.name"
+              type="text"
+              required
+              class="form-input"
+              placeholder="Masalan: B-Guruh 1"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="group-start-input" class="form-label">Boshlanish sanasi</label>
+            <input
+              id="group-start-input"
+              v-model="groupForm.started_at"
+              type="date"
+              required
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="group-duration-input" class="form-label">Davomiyligi (oylar)</label>
+            <input
+              id="group-duration-input"
+              v-model="groupForm.duration"
+              type="number"
+              step="0.1"
+              required
+              class="form-input"
+              placeholder="Masalan: 3.5"
+            />
+          </div>
         </div>
 
-        <div class="modal-actions">
+        <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" class="btn-cancel" @click="closeGroupConfirmModal">Bekor qilish</button>
           <button type="submit" class="btn-save" :disabled="groupSaving">
             <span v-if="groupSaving" class="btn-spinner"></span>
@@ -445,6 +509,12 @@ const selectedStudentIds = ref([])
 const groupConfirmModal = ref(null)
 const groupSaving = ref(false)
 
+const groupForm = ref({
+  name: '',
+  started_at: '',
+  duration: null,
+})
+
 const isAllSelected = computed(() => {
   return filteredStudents.value.length > 0 && selectedStudentIds.value.length === filteredStudents.value.length
 })
@@ -458,6 +528,11 @@ const toggleSelectAll = (e) => {
 }
 
 const openGroupConfirmModal = () => {
+  groupForm.value = {
+    name: category.value ? `${category.value.name} guruhi` : '',
+    started_at: new Date().toISOString().substring(0, 10),
+    duration: category.value ? category.value.duration : null,
+  }
   if (groupConfirmModal.value) {
     groupConfirmModal.value.showModal()
   }
@@ -470,11 +545,23 @@ const closeGroupConfirmModal = () => {
 }
 
 const startGroup = async () => {
+  if (!groupForm.value.name.trim() || !groupForm.value.started_at || groupForm.value.duration === null || groupForm.value.duration === undefined) {
+    alert("Barcha maydonlarni to'ldiring.")
+    return
+  }
+
   groupSaving.value = true
   try {
-    await Promise.all(selectedStudentIds.value.map(id =>
-      api.patch(`/students/${id}/`, { status: 'enrolled' })
-    ))
+    const payload = {
+      name: groupForm.value.name.trim(),
+      started_at: groupForm.value.started_at,
+      duration: parseFloat(groupForm.value.duration),
+      category: parseInt(categoryId, 10),
+      status: 'started',
+      student_ids: selectedStudentIds.value,
+    }
+    await api.post('/groups/', payload)
+
     selectedStudentIds.value = []
     closeGroupConfirmModal()
     await fetchData()
@@ -494,6 +581,7 @@ const editingStudent = ref({
   id: null,
   full_name: '',
   phone: '',
+  phone2: '',
   jshshr: '',
   passport_serie: '',
   passport_number: '',
@@ -536,11 +624,44 @@ watch(() => editingStudent.value.phone, (newValue) => {
   }
 })
 
+watch(() => editingStudent.value.phone2, (newValue) => {
+  if (!newValue) return
+  let digits = newValue.replace(/\D/g, '')
+
+  if (digits.length > 0 && !digits.startsWith('998')) {
+    digits = '998' + digits
+  }
+
+  digits = digits.substring(0, 12)
+
+  let formatted = ''
+  if (digits.length > 0) {
+    formatted += '+' + digits.substring(0, 3)
+  }
+  if (digits.length > 3) {
+    formatted += ' ' + digits.substring(3, 5)
+  }
+  if (digits.length > 5) {
+    formatted += ' ' + digits.substring(5, 8)
+  }
+  if (digits.length > 8) {
+    formatted += ' ' + digits.substring(8, 10)
+  }
+  if (digits.length > 10) {
+    formatted += ' ' + digits.substring(10, 12)
+  }
+
+  if (newValue !== formatted) {
+    editingStudent.value.phone2 = formatted
+  }
+})
+
 const openEditModal = (student) => {
   editingStudent.value = {
     id: student.id,
     full_name: student.name,
     phone: student.phone,
+    phone2: student.phone2 || '',
     jshshr: student.jshshr,
     passport_serie: student.passportSerie,
     passport_number: student.passportNumber,
@@ -579,6 +700,12 @@ const updateStudent = async () => {
     return
   }
 
+  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
+  if (phone2Cleaned && phone2Cleaned.length < 12) {
+    editModalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
+    return
+  }
+
   editSaving.value = true
   editModalError.value = ''
 
@@ -586,6 +713,7 @@ const updateStudent = async () => {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
+      phone2: phone2Cleaned,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
@@ -627,6 +755,7 @@ const studentModal = ref(null)
 const newStudent = ref({
   full_name: '',
   phone: '',
+  phone2: '',
   jshshr: '',
   passport_serie: '',
   passport_number: '',
@@ -671,6 +800,38 @@ watch(() => newStudent.value.phone, (newValue) => {
 
   if (newValue !== formatted) {
     newStudent.value.phone = formatted
+  }
+})
+
+watch(() => newStudent.value.phone2, (newValue) => {
+  if (!newValue) return
+  let digits = newValue.replace(/\D/g, '')
+
+  if (digits.length > 0 && !digits.startsWith('998')) {
+    digits = '998' + digits
+  }
+
+  digits = digits.substring(0, 12)
+
+  let formatted = ''
+  if (digits.length > 0) {
+    formatted += '+' + digits.substring(0, 3)
+  }
+  if (digits.length > 3) {
+    formatted += ' ' + digits.substring(3, 5)
+  }
+  if (digits.length > 5) {
+    formatted += ' ' + digits.substring(5, 8)
+  }
+  if (digits.length > 8) {
+    formatted += ' ' + digits.substring(8, 10)
+  }
+  if (digits.length > 10) {
+    formatted += ' ' + digits.substring(10, 12)
+  }
+
+  if (newValue !== formatted) {
+    newStudent.value.phone2 = formatted
   }
 })
 
@@ -792,6 +953,7 @@ const mapStudent = (s) => {
     id: s.id,
     name: s.full_name,
     phone: formatPhoneDisplay(s.phone),
+    phone2: s.phone2 ? formatPhoneDisplay(s.phone2) : '',
     jshshr: String(s.jshshr),
     passport: `${s.passport_serie} ${s.passport_number}`,
     passportSerie: s.passport_serie,
@@ -842,6 +1004,7 @@ const openModal = () => {
   newStudent.value = {
     full_name: '',
     phone: '',
+    phone2: '',
     jshshr: '',
     passport_serie: '',
     passport_number: '',
@@ -892,6 +1055,12 @@ const saveStudent = async () => {
     return
   }
   
+  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
+  if (phone2Cleaned && phone2Cleaned.length < 12) {
+    modalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
+    return
+  }
+
   saving.value = true
   modalError.value = ''
   
@@ -899,6 +1068,7 @@ const saveStudent = async () => {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
+      phone2: phone2Cleaned,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),

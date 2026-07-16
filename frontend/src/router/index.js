@@ -37,6 +37,24 @@ const routes = [
     component: StudentsView,
     meta: { requiresAuth: true },
   },
+  {
+    path: '/groups',
+    name: 'groups',
+    component: () => import('@/views/GroupsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/groups/:id',
+    name: 'group-detail',
+    component: () => import('@/views/GroupDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/billing',
+    name: 'billing',
+    component: () => import('@/views/PaymentsView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

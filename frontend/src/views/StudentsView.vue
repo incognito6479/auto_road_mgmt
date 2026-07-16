@@ -24,6 +24,21 @@
       </div>
 
       <div class="filter-field">
+        <label class="filter-label">Kategoriya bo'yicha saralash</label>
+        <div class="select-wrap">
+          <select v-model="filterCategory" class="filter-select">
+            <option value="">Barchasi</option>
+            <option v-for="c in categories" :key="c.id" :value="c.name">
+              {{ c.name }}
+            </option>
+          </select>
+          <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="filter-field">
         <label class="filter-label">Ism yoki Telefon raqami bo'yicha qidirish</label>
         <input
           v-model="filterSearch"
@@ -79,7 +94,12 @@
           <tr v-for="s in filteredStudents" :key="s.id" class="stbl-row">
             <td class="td-name">{{ s.name }}</td>
             <td class="td-cat">{{ s.category }}</td>
-            <td class="td-muted">{{ s.phone }}</td>
+            <td class="td-muted">
+              <div>{{ s.phone }}</div>
+              <div v-if="s.phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">
+                Qo'shimcha: {{ s.phone2 }}
+              </div>
+            </td>
             <td class="td-muted">{{ s.jshshr }}</td>
             <td class="td-muted">{{ s.passport }}</td>
             <td class="td-muted">{{ s.date }}</td>
@@ -104,6 +124,24 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- Pagination controls -->
+      <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+        <span class="pagination-info" style="font-size: 13.5px; color: #6B7280; font-weight: 500;">
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions" style="display: flex; gap: 8px;">
+          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
+            Oldingi
+          </button>
+          <span class="page-num" style="display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px;">
+            Sahifa {{ currentPage }} / {{ totalPages }}
+          </span>
+          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
+            Keyingi
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- New Student Modal Dialog -->
@@ -136,6 +174,17 @@
               type="tel"
               placeholder="+998 90 123 45 67"
               required
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="std-phone2" class="form-label">Qo'shimcha telefon raqami</label>
+            <input
+              id="std-phone2"
+              v-model="newStudent.phone2"
+              type="tel"
+              placeholder="+998 90 123 45 67 (ixtiyoriy)"
               class="form-input"
             />
           </div>
@@ -294,6 +343,17 @@
           </div>
 
           <div class="form-group">
+            <label for="edit-std-phone2" class="form-label">Qo'shimcha telefon raqami</label>
+            <input
+              id="edit-std-phone2"
+              v-model="editingStudent.phone2"
+              type="tel"
+              placeholder="+998 90 123 45 67 (ixtiyoriy)"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
             <label for="edit-std-jshshr" class="form-label">JSHSHR (14 xonali raqam)</label>
             <input
               id="edit-std-jshshr"
@@ -387,8 +447,15 @@ import api from '@/services/api'
 
 // ── Filter state ─────────────────────────────────────────────
 const filterStatus = ref('')
+const filterCategory = ref('')
 const filterSearch = ref('')
 const filterJshshr = ref('')
+
+// Pagination state
+const currentPage = ref(1)
+const totalCount = ref(0)
+const pageSize = 50
+const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
 
 // ── Loading & state ──────────────────────────────────────────
 const students = ref([])
@@ -401,6 +468,7 @@ const studentModal = ref(null)
 const newStudent = ref({
   full_name: '',
   phone: '',
+  phone2: '',
   jshshr: '',
   passport_serie: '',
   passport_number: '',
@@ -420,6 +488,7 @@ const editingStudent = ref({
   id: null,
   full_name: '',
   phone: '',
+  phone2: '',
   jshshr: '',
   passport_serie: '',
   passport_number: '',
@@ -462,11 +531,44 @@ watch(() => editingStudent.value.phone, (newValue) => {
   }
 })
 
+watch(() => editingStudent.value.phone2, (newValue) => {
+  if (!newValue) return
+  let digits = newValue.replace(/\D/g, '')
+
+  if (digits.length > 0 && !digits.startsWith('998')) {
+    digits = '998' + digits
+  }
+
+  digits = digits.substring(0, 12)
+
+  let formatted = ''
+  if (digits.length > 0) {
+    formatted += '+' + digits.substring(0, 3)
+  }
+  if (digits.length > 3) {
+    formatted += ' ' + digits.substring(3, 5)
+  }
+  if (digits.length > 5) {
+    formatted += ' ' + digits.substring(5, 8)
+  }
+  if (digits.length > 8) {
+    formatted += ' ' + digits.substring(8, 10)
+  }
+  if (digits.length > 10) {
+    formatted += ' ' + digits.substring(10, 12)
+  }
+
+  if (newValue !== formatted) {
+    editingStudent.value.phone2 = formatted
+  }
+})
+
 const openEditModal = (student) => {
   editingStudent.value = {
     id: student.id,
     full_name: student.name,
     phone: student.phone,
+    phone2: student.phone2 || '',
     jshshr: student.jshshr,
     passport_serie: student.passportSerie,
     passport_number: student.passportNumber,
@@ -505,6 +607,12 @@ const updateStudent = async () => {
     return
   }
 
+  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
+  if (phone2Cleaned && phone2Cleaned.length < 12) {
+    editModalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
+    return
+  }
+
   editSaving.value = true
   editModalError.value = ''
 
@@ -512,6 +620,7 @@ const updateStudent = async () => {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
+      phone2: phone2Cleaned,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
@@ -573,6 +682,38 @@ watch(() => newStudent.value.phone, (newValue) => {
   }
 })
 
+watch(() => newStudent.value.phone2, (newValue) => {
+  if (!newValue) return
+  let digits = newValue.replace(/\D/g, '')
+
+  if (digits.length > 0 && !digits.startsWith('998')) {
+    digits = '998' + digits
+  }
+
+  digits = digits.substring(0, 12)
+
+  let formatted = ''
+  if (digits.length > 0) {
+    formatted += '+' + digits.substring(0, 3)
+  }
+  if (digits.length > 3) {
+    formatted += ' ' + digits.substring(3, 5)
+  }
+  if (digits.length > 5) {
+    formatted += ' ' + digits.substring(5, 8)
+  }
+  if (digits.length > 8) {
+    formatted += ' ' + digits.substring(8, 10)
+  }
+  if (digits.length > 10) {
+    formatted += ' ' + digits.substring(10, 12)
+  }
+
+  if (newValue !== formatted) {
+    newStudent.value.phone2 = formatted
+  }
+})
+
 // Two-way formatting for min_payment
 const formattedMinPayment = computed({
   get() {
@@ -614,14 +755,26 @@ const fetchStudents = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/students/')
-    students.value = response.data.map(mapStudent)
+    const response = await api.get('/students/', {
+      params: {
+        page: currentPage.value,
+        page_size: pageSize
+      }
+    })
+    students.value = response.data.results.map(mapStudent)
+    totalCount.value = response.data.count
   } catch (err) {
     console.error(err)
     error.value = "O'quvchilarni yuklashda xatolik yuz berdi."
   } finally {
     loading.value = false
   }
+}
+
+const changePage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  fetchStudents()
 }
 
 const fetchCategories = async () => {
@@ -651,6 +804,7 @@ const mapStudent = (s) => {
     category: s.category || '-',
     categoryId: s.category_id,
     phone: formatPhoneDisplay(s.phone),
+    phone2: s.phone2 ? formatPhoneDisplay(s.phone2) : '',
     jshshr: String(s.jshshr),
     passport: `${s.passport_serie} ${s.passport_number}`,
     passportSerie: s.passport_serie,
@@ -700,10 +854,11 @@ onMounted(() => {
 const filteredStudents = computed(() => {
   return students.value.filter(s => {
     const matchStatus = !filterStatus.value || s.status === filterStatus.value
+    const matchCategory = !filterCategory.value || s.category === filterCategory.value
     const q = filterSearch.value.toLowerCase()
     const matchSearch = !q || s.name.toLowerCase().includes(q) || s.phone.includes(q)
     const matchJshshr = !filterJshshr.value || s.jshshr.includes(filterJshshr.value)
-    return matchStatus && matchSearch && matchJshshr
+    return matchStatus && matchCategory && matchSearch && matchJshshr
   })
 })
 
@@ -720,6 +875,7 @@ const openModal = () => {
   newStudent.value = {
     full_name: '',
     phone: '',
+    phone2: '',
     jshshr: '',
     passport_serie: '',
     passport_number: '',
@@ -770,6 +926,12 @@ const saveStudent = async () => {
     return
   }
   
+  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
+  if (phone2Cleaned && phone2Cleaned.length < 12) {
+    modalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
+    return
+  }
+
   saving.value = true
   modalError.value = ''
   
@@ -777,6 +939,7 @@ const saveStudent = async () => {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
+      phone2: phone2Cleaned,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
@@ -833,7 +996,7 @@ const saveStudent = async () => {
 /* ── Filter card ─────────────────────────────────────────── */
 .filter-card {
   display: grid;
-  grid-template-columns: 1fr 1.4fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   background: white;
   border: 1px solid #E5E7EB;
@@ -1223,6 +1386,27 @@ const saveStudent = async () => {
   border-top-color: white;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+/* Pagination styles */
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+}
+.btn-page:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */

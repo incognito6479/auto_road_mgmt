@@ -8,7 +8,7 @@ from django.db import transaction
 from rest_framework import serializers
 from django.db.models import Sum
 
-from management.models import Category, Student, User, Enrollment, Payment
+from management.models import Category, Student, User, Enrollment, Payment, Group
 
 
 # ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ["id", "name", "price", "is_active", "registered", "notes", "created_at", "updated_at"]
+        fields = ["id", "name", "price", "duration", "is_active", "registered", "notes", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def get_registered(self, obj):
@@ -101,6 +101,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "id",
             "full_name",
             "phone",
+            "phone2",
             "jshshr",
             "passport_serie",
             "passport_number",
@@ -204,6 +205,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
             "id",
             "full_name",
             "phone",
+            "phone2",
             "jshshr",
             "passport_serie",
             "passport_number",
@@ -268,14 +270,79 @@ class StudentCreateSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class EnrollmentSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    student_phone = serializers.CharField(source="student.phone", read_only=True)
+    student_phone2 = serializers.CharField(source="student.phone2", read_only=True)
+    student_jshshr = serializers.CharField(source="student.jshshr", read_only=True)
+    paid_amount = serializers.SerializerMethodField()
+
     class Meta:
         model = Enrollment
-        fields = ["id", "student", "category", "status", "enrolled_free", "enrolled_amount", "notes", "is_active", "created_at", "updated_at"]
+        fields = [
+            "id", "student", "student_name", "student_phone", "student_phone2", "student_jshshr",
+            "category", "group", "instructor", "coordinator", "status",
+            "enrolled_free", "enrolled_amount", "paid_amount", "notes",
+            "is_active", "created_at", "updated_at"
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_paid_amount(self, obj):
+        from django.db.models import Sum
+        result = obj.payments.filter(status="accepted", is_active=True).aggregate(total=Sum("amount"))
+        return result["total"] or 0
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="enrollment.student.full_name", read_only=True)
+    student_jshshr = serializers.CharField(source="enrollment.student.jshshr", read_only=True)
+    category_name = serializers.CharField(source="enrollment.category.name", read_only=True)
+    cashier_name = serializers.CharField(source="user.phone", read_only=True)
+
     class Meta:
         model = Payment
-        fields = ["id", "user", "enrollment", "amount", "status", "method", "notes", "is_active", "created_at", "updated_at"]
+        fields = [
+            "id", "user", "cashier_name", "enrollment", "student_name", "student_jshshr", "category_name",
+            "amount", "status", "method", "notes", "is_active", "created_at", "updated_at"
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    student_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=False
+    )
+    student_count = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    enrollments = EnrollmentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Group
+        fields = [
+            "id", "category", "category_name", "name", "started_at",
+            "duration", "status", "student_ids", "student_count",
+            "enrollments", "notes", "is_active", "created_at", "updated_at"
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "student_count"]
+
+    def get_student_count(self, obj):
+        return obj.enrollments.count()
+
+    def create(self, validated_data):
+        student_ids = validated_data.pop("student_ids", [])
+        category = validated_data.get("category")
+        
+        with transaction.atomic():
+            group = Group.objects.create(**validated_data)
+            if student_ids and category:
+                # Find active enrollments of these students in this category
+                enrollments = Enrollment.objects.filter(
+                    student_id__in=student_ids,
+                    category=category,
+                    is_active=True
+                )
+                # Update their group and status to enrolled
+                enrollments.update(group=group, status=Enrollment.Status.ENROLLED)
+                
+        return group

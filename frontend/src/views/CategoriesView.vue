@@ -26,11 +26,19 @@
       <div class="cat-card" v-for="cat in enrichedCategories" :key="cat.id">
 
         <!-- Icon + title -->
-        <div class="cat-header">
-          <div class="cat-icon-wrap">
-            <span v-html="cat.icon"></span>
+        <div class="cat-header" style="justify-content: space-between; align-items: flex-start; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="cat-icon-wrap">
+              <span v-html="cat.icon"></span>
+            </div>
+            <h3 class="cat-title">{{ cat.name }}</h3>
           </div>
-          <h3 class="cat-title">{{ cat.name }}</h3>
+          <button class="btn-edit-cat" @click.stop="openEditModal(cat)" title="Tahrirlash">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
         </div>
 
         <!-- Stats: registered + price -->
@@ -43,6 +51,14 @@
             <span class="price-label">Narxi: </span>
             <span class="price-val">{{ cat.formattedPrice }}</span>
           </div>
+        </div>
+
+        <div style="font-size: 13.5px; color: #4B5563; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color: #6B7280;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>Davomiyligi: <strong style="color: #111827;">{{ cat.duration ? cat.duration + ' oy' : 'Belgilanmagan' }}</strong></span>
         </div>
 
         <!-- Progress bar -->
@@ -89,12 +105,82 @@
             class="form-input"
           />
         </div>
+
+        <div class="form-group">
+          <label for="cat-duration" class="form-label">Davomiyligi (oylar)</label>
+          <input
+            id="cat-duration"
+            v-model="newCategory.duration"
+            type="number"
+            step="0.1"
+            placeholder="Masalan: 3.5"
+            required
+            class="form-input"
+          />
+        </div>
         
         <div class="modal-actions">
           <button type="button" class="btn-cancel" @click="closeModal">Bekor qilish</button>
           <button type="submit" class="btn-save" :disabled="saving">
             <span v-if="saving" class="btn-spinner"></span>
             {{ saving ? 'Saqlanmoqda...' : 'Saqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Edit Category Dialog -->
+    <dialog ref="editCategoryModal" class="modal-dialog" closedby="any" aria-labelledby="edit-modal-title">
+      <form class="modal-form" @submit.prevent="updateCategory">
+        <h3 id="edit-modal-title" class="modal-title">Kategoriyani tahrirlash</h3>
+        
+        <div v-if="editModalError" class="modal-error">
+          {{ editModalError }}
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-cat-name" class="form-label">Kategoriya nomi</label>
+          <input
+            id="edit-cat-name"
+            v-model="editingCategory.name"
+            type="text"
+            placeholder="Masalan: B, A, BC"
+            required
+            class="form-input"
+            maxlength="10"
+          />
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-cat-price" class="form-label">Narxi (so'm)</label>
+          <input
+            id="edit-cat-price"
+            v-model="formattedEditPrice"
+            type="text"
+            placeholder="Masalan: 4 500 000"
+            required
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="edit-cat-duration" class="form-label">Davomiyligi (oylar)</label>
+          <input
+            id="edit-cat-duration"
+            v-model="editingCategory.duration"
+            type="number"
+            step="0.1"
+            placeholder="Masalan: 3.5"
+            required
+            class="form-input"
+          />
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="closeEditModal">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="editSaving">
+            <span v-if="editSaving" class="btn-spinner"></span>
+            {{ editSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
           </button>
         </div>
       </form>
@@ -120,9 +206,21 @@ const categoryModal = ref(null)
 const newCategory = ref({
   name: '',
   price: null,
+  duration: null,
 })
 const saving = ref(false)
 const modalError = ref('')
+
+// ── Edit Category state ──────────────────────────────
+const editCategoryModal = ref(null)
+const editingCategory = ref({
+  id: null,
+  name: '',
+  price: null,
+  duration: null,
+})
+const editSaving = ref(false)
+const editModalError = ref('')
 
 const formattedInputPrice = computed({
   get() {
@@ -137,6 +235,24 @@ const formattedInputPrice = computed({
       newCategory.value.price = null
     } else {
       newCategory.value.price = parseInt(digits, 10)
+    }
+  }
+})
+
+// Two-way formatting for edit price
+const formattedEditPrice = computed({
+  get() {
+    if (editingCategory.value.price === null || editingCategory.value.price === undefined || isNaN(editingCategory.value.price)) {
+      return ''
+    }
+    return String(editingCategory.value.price).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  },
+  set(value) {
+    const digits = value.replace(/\D/g, '')
+    if (digits === '') {
+      editingCategory.value.price = null
+    } else {
+      editingCategory.value.price = parseInt(digits, 10)
     }
   }
 })
@@ -223,7 +339,7 @@ const fetchCategories = async () => {
 
 // ── Modal Actions ──────────────────────────────────
 const openModal = () => {
-  newCategory.value = { name: '', price: null }
+  newCategory.value = { name: '', price: null, duration: null }
   modalError.value = ''
   if (categoryModal.value) {
     categoryModal.value.showModal()
@@ -238,7 +354,7 @@ const closeModal = () => {
 
 const saveCategory = async () => {
   const nameTrimmed = newCategory.value.name.trim()
-  if (!nameTrimmed || newCategory.value.price === null || newCategory.value.price === undefined) {
+  if (!nameTrimmed || newCategory.value.price === null || newCategory.value.price === undefined || newCategory.value.duration === null || newCategory.value.duration === undefined) {
     modalError.value = 'Barcha maydonlarni to\'ldiring.'
     return
   }
@@ -248,7 +364,8 @@ const saveCategory = async () => {
   try {
     const payload = {
       name: nameTrimmed,
-      price: parseInt(newCategory.value.price)
+      price: parseInt(newCategory.value.price),
+      duration: parseFloat(newCategory.value.duration),
     }
     await api.post('/categories/', payload)
     closeModal()
@@ -264,6 +381,56 @@ const saveCategory = async () => {
     }
   } finally {
     saving.value = false
+  }
+}
+
+// ── Edit Actions ───────────────────────────────────
+const openEditModal = (cat) => {
+  editingCategory.value = {
+    id: cat.id,
+    name: cat.name,
+    price: cat.price,
+    duration: cat.duration,
+  }
+  editModalError.value = ''
+  if (editCategoryModal.value) {
+    editCategoryModal.value.showModal()
+  }
+}
+
+const closeEditModal = () => {
+  if (editCategoryModal.value) {
+    editCategoryModal.value.close()
+  }
+}
+
+const updateCategory = async () => {
+  const nameTrimmed = editingCategory.value.name.trim()
+  if (!nameTrimmed || editingCategory.value.price === null || editingCategory.value.price === undefined || editingCategory.value.duration === null || editingCategory.value.duration === undefined) {
+    editModalError.value = "Barcha maydonlarni to'ldiring."
+    return
+  }
+
+  editSaving.value = true
+  editModalError.value = ''
+  try {
+    const payload = {
+      name: nameTrimmed,
+      price: parseInt(editingCategory.value.price),
+      duration: parseFloat(editingCategory.value.duration),
+    }
+    await api.patch(`/categories/${editingCategory.value.id}/`, payload)
+    closeEditModal()
+    await fetchCategories()
+  } catch (err) {
+    console.error(err)
+    if (err.response?.data?.name) {
+      editModalError.value = 'Kategoriya nomi band yoki xato kiritilgan.'
+    } else {
+      editModalError.value = 'Saqlashda xatolik yuz berdi. Qayta urinib ko\'ring.'
+    }
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -284,6 +451,22 @@ onMounted(() => {
       )
       if (!isInside) {
         closeModal()
+      }
+    })
+  }
+
+  if (editCategoryModal.value && !('closedBy' in HTMLDialogElement.prototype)) {
+    editCategoryModal.value.addEventListener('click', (event) => {
+      if (event.target !== editCategoryModal.value) return
+      const rect = editCategoryModal.value.getBoundingClientRect()
+      const isInside = (
+        rect.top <= event.clientY &&
+        event.clientY <= rect.top + rect.height &&
+        rect.left <= event.clientX &&
+        event.clientX <= rect.left + rect.width
+      )
+      if (!isInside) {
+        closeEditModal()
       }
     })
   }
@@ -388,6 +571,28 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.btn-edit-cat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  color: #4B5563;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-top: 4px;
+}
+
+.btn-edit-cat:hover {
+  background: #E5E7EB;
+  color: #111827;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .cat-icon-wrap {

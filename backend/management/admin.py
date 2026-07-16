@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from management.models import Category, Student, User, Enrollment, Payment
+from management.models import Category, Student, User, Enrollment, Payment, Group
 
 
 @admin.register(User)
@@ -79,14 +79,24 @@ class CategoryAdmin(admin.ModelAdmin):
     fields = ("name", "price", "notes", "is_active", "created_at", "updated_at")
 
 
-@admin.register(Enrollment)
-class EnrollmentAdmin(admin.ModelAdmin):
-    list_display = ("id", "student", "category", "status", "enrolled_free", "enrolled_amount", "is_active", "notes", "created_at", "updated_at")
-    list_filter = ("status", "enrolled_free", "is_active", "created_at")
-    search_fields = ("student__full_name", "category__name")
+@admin.register(Group)
+class GroupAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "category", "started_at", "duration", "status", "is_active", "notes", "created_at", "updated_at")
+    list_filter = ("status", "category", "is_active", "started_at")
+    search_fields = ("name", "category__name")
     ordering = ("-created_at",)
     readonly_fields = ("id", "created_at", "updated_at")
-    fields = ("student", "category", "status", "enrolled_free", "enrolled_amount", "notes", "is_active", "created_at", "updated_at")
+    fields = ("name", "category", "started_at", "duration", "status", "notes", "is_active", "created_at", "updated_at")
+
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("id", "student", "category", "group", "instructor", "coordinator", "status", "enrolled_free", "enrolled_amount", "is_active", "notes", "created_at", "updated_at")
+    list_filter = ("status", "enrolled_free", "is_active", "created_at", "group")
+    search_fields = ("student__full_name", "category__name", "group__name")
+    ordering = ("-created_at",)
+    readonly_fields = ("id", "created_at", "updated_at")
+    fields = ("student", "category", "group", "instructor", "coordinator", "status", "enrolled_free", "enrolled_amount", "notes", "is_active", "created_at", "updated_at")
 
 
 @admin.register(Payment)
