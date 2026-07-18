@@ -3,7 +3,7 @@
 
     <!-- Top action row -->
     <div class="page-top">
-      <button class="btn-new" @click="openModal">Yangi Kategoriya</button>
+      <button v-if="authStore.isAdminOrSuperuser" class="btn-new" @click="openModal">Yangi Kategoriya</button>
     </div>
 
     <!-- Loading, error, or empty states -->
@@ -194,8 +194,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // ── State ───────────────────────────────────────────
 const categories = ref([])
@@ -339,6 +341,10 @@ const fetchCategories = async () => {
 
 // ── Modal Actions ──────────────────────────────────
 const openModal = () => {
+  if (!authStore.isAdminOrSuperuser) {
+    alert("Kategoriya yaratish faqat admin va superuser uchun ruxsat etilgan.")
+    return
+  }
   newCategory.value = { name: '', price: null, duration: null }
   modalError.value = ''
   if (categoryModal.value) {
@@ -353,6 +359,11 @@ const closeModal = () => {
 }
 
 const saveCategory = async () => {
+  if (!authStore.isAdminOrSuperuser) {
+    modalError.value = "Kategoriya yaratish faqat admin va superuser uchun ruxsat etilgan."
+    return
+  }
+
   const nameTrimmed = newCategory.value.name.trim()
   if (!nameTrimmed || newCategory.value.price === null || newCategory.value.price === undefined || newCategory.value.duration === null || newCategory.value.duration === undefined) {
     modalError.value = 'Barcha maydonlarni to\'ldiring.'
@@ -435,7 +446,10 @@ const updateCategory = async () => {
 }
 
 // ── Lifecycle & Listeners ──────────────────────────
-onMounted(() => {
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchCurrentUser()
+  }
   fetchCategories()
   
   // Light dismiss fallback

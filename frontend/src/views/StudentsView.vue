@@ -3,7 +3,7 @@
 
     <!-- Top action -->
     <div class="page-top">
-      <button class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
+      <button v-if="authStore.isAdminOrSuperuser" class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
     </div>
 
     <!-- Filter card -->
@@ -77,7 +77,7 @@
           <tr>
             <th>To'liq Ismi</th>
             <th>Kategoriya</th>
-            <th>Telefon Raqami</th>
+            <th class="th-phone">Telefon Raqami</th>
             <th>JSHSHR</th>
             <th>Passport Ma'lumotlari</th>
             <th>Ro'yxatdan o'tgan sana</th>
@@ -88,13 +88,13 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="filteredStudents.length === 0">
+          <tr v-if="students.length === 0">
             <td colspan="10" class="no-data">Ma'lumot topilmadi</td>
           </tr>
-          <tr v-for="s in filteredStudents" :key="s.id" class="stbl-row">
+          <tr v-for="s in students" :key="s.id" class="stbl-row">
             <td class="td-name">{{ s.name }}</td>
             <td class="td-cat">{{ s.category }}</td>
-            <td class="td-muted">
+            <td class="td-muted td-phone">
               <div>{{ s.phone }}</div>
               <div v-if="s.phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">
                 Qo'shimcha: {{ s.phone2 }}
@@ -444,6 +444,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 // ── Filter state ─────────────────────────────────────────────
 const filterStatus = ref('')
@@ -755,12 +758,16 @@ const fetchStudents = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/students/', {
-      params: {
-        page: currentPage.value,
-        page_size: pageSize
-      }
-    })
+    const params = {
+      page: currentPage.value,
+      page_size: pageSize
+    }
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterCategory.value) params.category = filterCategory.value
+    if (filterSearch.value) params.search = filterSearch.value.trim()
+    if (filterJshshr.value) params.jshshr = filterJshshr.value.trim()
+
+    const response = await api.get('/students/', { params })
     students.value = response.data.results.map(mapStudent)
     totalCount.value = response.data.count
   } catch (err) {
@@ -770,6 +777,14 @@ const fetchStudents = async () => {
     loading.value = false
   }
 }
+
+watch(
+  [filterStatus, filterCategory, filterSearch, filterJshshr],
+  () => {
+    currentPage.value = 1
+    fetchStudents()
+  }
+)
 
 const changePage = (page) => {
   if (page < 1 || page > totalPages.value) return
@@ -828,7 +843,10 @@ const formatPhoneDisplay = (p) => {
   return p
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchCurrentUser()
+  }
   fetchStudents()
   fetchCategories()
   
@@ -850,17 +868,7 @@ onMounted(() => {
   }
 })
 
-// ── Filtered computed ────────────────────────────────────────
-const filteredStudents = computed(() => {
-  return students.value.filter(s => {
-    const matchStatus = !filterStatus.value || s.status === filterStatus.value
-    const matchCategory = !filterCategory.value || s.category === filterCategory.value
-    const q = filterSearch.value.toLowerCase()
-    const matchSearch = !q || s.name.toLowerCase().includes(q) || s.phone.includes(q)
-    const matchJshshr = !filterJshshr.value || s.jshshr.includes(filterJshshr.value)
-    return matchStatus && matchCategory && matchSearch && matchJshshr
-  })
-})
+
 
 // ── Status badge class ───────────────────────────────────────
 function statusClass(status) {
@@ -872,6 +880,10 @@ function statusClass(status) {
 
 // ── Modal Actions ────────────────────────────────────────────
 const openModal = () => {
+  if (!authStore.isAdminOrSuperuser) {
+    alert("O'quvchini ro'yxatdan o'tkazish faqat admin va superuser uchun ruxsat etilgan.")
+    return
+  }
   newStudent.value = {
     full_name: '',
     phone: '',
@@ -899,6 +911,10 @@ const closeModal = () => {
 }
 
 const saveStudent = async () => {
+  if (!authStore.isAdminOrSuperuser) {
+    modalError.value = "O'quvchini ro'yxatdan o'tkazish faqat admin va superuser uchun ruxsat etilgan."
+    return
+  }
   const s = newStudent.value
   const phoneCleaned = s.phone.replace(/\D/g, '')
   
@@ -1407,6 +1423,14 @@ const saveStudent = async () => {
 .btn-page:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Strict phone column width */
+.th-phone, .td-phone {
+  width: 175px !important;
+  min-width: 175px !important;
+  max-width: 175px !important;
+  white-space: nowrap !important;
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */

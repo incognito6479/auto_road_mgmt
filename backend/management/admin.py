@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from management.models import Category, Student, User, Enrollment, Payment, Group
+from management.models import Category, Student, User, Enrollment, Payment, Group, LearningPlace
 
 
 @admin.register(User)
@@ -55,28 +55,28 @@ class UserAdmin(BaseUserAdmin):
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "full_name", "phone", "jshshr",
+        "id", "full_name", "phone", "phone2", "jshshr",
         "passport_serie", "passport_number",
         "is_active", "notes", "created_at", "updated_at"
     )
     list_filter = ("is_active", "created_at")
-    search_fields = ("full_name", "phone", "jshshr")
+    search_fields = ("full_name", "phone", "phone2", "jshshr")
     ordering = ("full_name",)
     readonly_fields = ("id", "created_at", "updated_at")
     fields = (
-        "full_name", "phone", "jshshr", "passport_serie",
+        "full_name", "phone", "phone2", "jshshr", "passport_serie",
         "passport_number", "notes", "is_active", "created_at", "updated_at"
     )
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "price", "is_active", "notes", "created_at", "updated_at")
+    list_display = ("id", "name", "price", "duration", "is_active", "notes", "created_at", "updated_at")
     list_filter = ("is_active", "created_at")
     search_fields = ("name",)
     ordering = ("name",)
     readonly_fields = ("id", "created_at", "updated_at")
-    fields = ("name", "price", "notes", "is_active", "created_at", "updated_at")
+    fields = ("name", "price", "duration", "notes", "is_active", "created_at", "updated_at")
 
 
 @admin.register(Group)
@@ -89,14 +89,32 @@ class GroupAdmin(admin.ModelAdmin):
     fields = ("name", "category", "started_at", "duration", "status", "notes", "is_active", "created_at", "updated_at")
 
 
+@admin.register(LearningPlace)
+class LearningPlaceAdmin(admin.ModelAdmin):
+    list_display = ("id", "place_name", "is_active", "created_at", "updated_at")
+    list_filter = ("is_active", "created_at")
+    search_fields = ("place_name",)
+    ordering = ("place_name",)
+    readonly_fields = ("id", "created_at", "updated_at")
+    fields = ("place_name", "is_active", "created_at", "updated_at")
+
+
 @admin.register(Enrollment)
 class EnrollmentAdmin(admin.ModelAdmin):
-    list_display = ("id", "student", "category", "group", "instructor", "coordinator", "status", "enrolled_free", "enrolled_amount", "is_active", "notes", "created_at", "updated_at")
-    list_filter = ("status", "enrolled_free", "is_active", "created_at", "group")
-    search_fields = ("student__full_name", "category__name", "group__name")
+    list_display = (
+        "id", "student", "category", "group", "instructor", "coordinator",
+        "learning_place", "learning_time", "learning_days",
+        "status", "enrolled_free", "enrolled_amount", "is_active", "notes", "created_at", "updated_at"
+    )
+    list_filter = ("status", "learning_days", "learning_place", "enrolled_free", "is_active", "created_at", "group")
+    search_fields = ("student__full_name", "category__name", "group__name", "learning_time")
     ordering = ("-created_at",)
     readonly_fields = ("id", "created_at", "updated_at")
-    fields = ("student", "category", "group", "instructor", "coordinator", "status", "enrolled_free", "enrolled_amount", "notes", "is_active", "created_at", "updated_at")
+    fields = (
+        "student", "category", "group", "instructor", "coordinator",
+        "learning_place", "learning_time", "learning_days",
+        "status", "enrolled_free", "enrolled_amount", "notes", "is_active", "created_at", "updated_at"
+    )
 
 
 @admin.register(Payment)

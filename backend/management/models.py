@@ -71,15 +71,21 @@ class User(AbstractUser):
     )
 
     jshshr = models.BigIntegerField(
+        null=True,
+        blank=True,
         help_text="Namuna: 29572006200016",
     )
 
     passport_serie = models.CharField(
         max_length=2,
+        blank=True,
+        null=True,
         help_text="Namuna: AB",
     )
 
     passport_number = models.IntegerField(
+        null=True,
+        blank=True,
         help_text="Namuna: 2275679",
     )
 
@@ -209,14 +215,33 @@ class Group(BaseModel):
         return f"{self.name} ({self.category.name})"
 
 
+class LearningPlace(BaseModel):
+    """Physical or online learning place / location."""
+
+    place_name = models.CharField(max_length=255, help_text="O'quv joyi nomi")
+
+    class Meta:
+        db_table = "learning_place"
+        verbose_name = "Learning Place"
+        verbose_name_plural = "Learning Places"
+
+    def __str__(self):
+        return self.place_name
+
+
 class Enrollment(BaseModel):
-    """Student enrollment in a driving license category."""
+    """Junction model: Student <-> Category within a Group context."""
 
     class Status(models.TextChoices):
         NEW = "new", "Yangi"
         ENROLLED = "enrolled", "Qabul qilingan"
         FINISHED = "finished", "Tugatgan"
         CANCELED = "canceled", "Bekor qilingan"
+
+    class LearningDays(models.TextChoices):
+        MWF = "Mo-Wed-Fri", "Mo-Wed-Fri"
+        TTS = "Tue-Thu-Sat", "Tue-Thu-Sat"
+        EVERYDAY = "everyday", "Everyday"
 
     student = models.ForeignKey(
         Student,
@@ -250,6 +275,25 @@ class Enrollment(BaseModel):
         null=True,
         blank=True,
         related_name="coordinator_enrollments",
+    )
+    learning_place = models.ForeignKey(
+        LearningPlace,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments",
+    )
+    learning_time = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Masalan: 09:00",
+    )
+    learning_days = models.CharField(
+        max_length=20,
+        choices=LearningDays.choices,
+        null=True,
+        blank=True,
     )
     status = models.CharField(
         max_length=20,
@@ -319,4 +363,5 @@ class Payment(BaseModel):
         verbose_name_plural = "To'lovlar"
 
     def __str__(self):
-        return f"{self.student.full_name if self.student else 'No Student'} - {self.amount} ({self.status})"
+        student_name = self.enrollment.student.full_name if (self.enrollment and self.enrollment.student) else 'No Student'
+        return f"{student_name} - {self.amount} ({self.status})"

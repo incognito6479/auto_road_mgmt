@@ -12,13 +12,13 @@
       </button>
       <div class="top-actions-right">
         <button
-          v-if="selectedStudentIds.length === 23 || selectedStudentIds.length === 24"
+          v-if="authStore.isAdminOrSuperuser && (selectedStudentIds.length === 23 || selectedStudentIds.length === 24)"
           class="btn-start-group"
           @click="openGroupConfirmModal"
         >
           Guruhni boshlash
         </button>
-        <button class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
+        <button v-if="authStore.isAdminOrSuperuser" class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
       </div>
     </div>
 
@@ -83,7 +83,7 @@
               <input type="checkbox" @change="toggleSelectAll" :checked="isAllSelected" class="th-chk" />
             </th>
             <th>To'liq Ismi</th>
-            <th>Telefon Raqami</th>
+            <th class="th-phone">Telefon Raqami</th>
             <th>JSHSHR</th>
             <th>Passport Ma'lumotlari</th>
             <th>Ro'yxatdan o'tgan sana</th>
@@ -102,7 +102,7 @@
               <input type="checkbox" :value="s.id" v-model="selectedStudentIds" class="td-chk" />
             </td>
             <td class="td-name">{{ s.name }}</td>
-            <td class="td-muted">
+            <td class="td-muted td-phone">
               <div>{{ s.phone }}</div>
               <div v-if="s.phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">
                 Qo'shimcha: {{ s.phone2 }}
@@ -488,9 +488,11 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 const categoryId = route.params.id
 
 // ── Filter State ─────────────────────────────────────
@@ -528,6 +530,10 @@ const toggleSelectAll = (e) => {
 }
 
 const openGroupConfirmModal = () => {
+  if (!authStore.isAdminOrSuperuser) {
+    alert("Guruh yaratish faqat admin va superuser uchun ruxsat etilgan.")
+    return
+  }
   groupForm.value = {
     name: category.value ? `${category.value.name} guruhi` : '',
     started_at: new Date().toISOString().substring(0, 10),
@@ -545,6 +551,11 @@ const closeGroupConfirmModal = () => {
 }
 
 const startGroup = async () => {
+  if (!authStore.isAdminOrSuperuser) {
+    alert("Guruh yaratish faqat admin va superuser uchun ruxsat etilgan.")
+    return
+  }
+
   if (!groupForm.value.name.trim() || !groupForm.value.started_at || groupForm.value.duration === null || groupForm.value.duration === undefined) {
     alert("Barcha maydonlarni to'ldiring.")
     return
@@ -932,8 +943,9 @@ const fetchData = async () => {
       api.get(`/categories/`)
     ])
     category.value = catRes.data
-    students.value = stdRes.data.map(mapStudent)
-    categories.value = allCatsRes.data
+    const stdList = Array.isArray(stdRes.data) ? stdRes.data : (stdRes.data?.results || [])
+    students.value = stdList.map(mapStudent)
+    categories.value = Array.isArray(allCatsRes.data) ? allCatsRes.data : (allCatsRes.data?.results || [])
   } catch (err) {
     console.error(err)
     error.value = "Ma'lumotlarni yuklashda xatolik yuz berdi."
@@ -978,7 +990,10 @@ const formatPhoneDisplay = (p) => {
   return p
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchCurrentUser()
+  }
   fetchData()
   
   // Light dismiss fallback
@@ -1001,6 +1016,10 @@ onMounted(() => {
 
 // ── Modal Actions ────────────────────────────────────────────
 const openModal = () => {
+  if (!authStore.isAdminOrSuperuser) {
+    alert("O'quvchini ro'yxatdan o'tkazish faqat admin va superuser uchun ruxsat etilgan.")
+    return
+  }
   newStudent.value = {
     full_name: '',
     phone: '',
@@ -1028,6 +1047,11 @@ const closeModal = () => {
 }
 
 const saveStudent = async () => {
+  if (!authStore.isAdminOrSuperuser) {
+    modalError.value = "O'quvchini ro'yxatdan o'tkazish faqat admin va superuser uchun ruxsat etilgan."
+    return
+  }
+
   const s = newStudent.value
   const phoneCleaned = s.phone.replace(/\D/g, '')
   
@@ -1643,6 +1667,14 @@ const saveStudent = async () => {
   height: 16px;
   cursor: pointer;
   accent-color: #2D6A4F;
+}
+
+/* Strict phone column width */
+.th-phone, .td-phone {
+  width: 175px !important;
+  min-width: 175px !important;
+  max-width: 175px !important;
+  white-space: nowrap !important;
 }
 
 @media (max-width: 900px) {

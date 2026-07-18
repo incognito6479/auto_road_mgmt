@@ -55,6 +55,18 @@ const routes = [
     component: () => import('@/views/PaymentsView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/users',
+    name: 'users',
+    component: () => import('@/views/UsersView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/learning-places',
+    name: 'learning-places',
+    component: () => import('@/views/LearningPlacesView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

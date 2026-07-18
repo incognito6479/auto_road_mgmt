@@ -8,7 +8,7 @@ from django.db import transaction
 from rest_framework import serializers
 from django.db.models import Sum
 
-from management.models import Category, Student, User, Enrollment, Payment, Group
+from management.models import Category, Student, User, Enrollment, Payment, Group, LearningPlace
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +47,10 @@ class UserSerializer(serializers.ModelSerializer):
         style={"input_type": "password"},
     )
 
+    jshshr = serializers.IntegerField(required=False, allow_null=True)
+    passport_serie = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    passport_number = serializers.IntegerField(required=False, allow_null=True)
+
     class Meta:
         model = User
         fields = [
@@ -62,9 +66,16 @@ class UserSerializer(serializers.ModelSerializer):
             "password",
             "is_active",
             "is_staff",
+            "is_superuser",
             "date_joined",
         ]
         read_only_fields = ["id", "date_joined"]
+        extra_kwargs = {
+            "password": {"write_only": True, "required": False},
+            "jshshr": {"required": False, "allow_null": True},
+            "passport_serie": {"required": False, "allow_blank": True, "allow_null": True},
+            "passport_number": {"required": False, "allow_null": True},
+        }
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
@@ -265,29 +276,47 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         return student
 
 
-# ---------------------------------------------------------------------------
-# Enrollment & Payment
-# ---------------------------------------------------------------------------
+class LearningPlaceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearningPlace
+        fields = ["id", "place_name", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
 
 class EnrollmentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.full_name", read_only=True)
     student_phone = serializers.CharField(source="student.phone", read_only=True)
     student_phone2 = serializers.CharField(source="student.phone2", read_only=True)
     student_jshshr = serializers.CharField(source="student.jshshr", read_only=True)
+    instructor_name = serializers.SerializerMethodField()
+    coordinator_name = serializers.SerializerMethodField()
+    learning_place_name = serializers.CharField(source="learning_place.place_name", read_only=True)
     paid_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Enrollment
         fields = [
             "id", "student", "student_name", "student_phone", "student_phone2", "student_jshshr",
-            "category", "group", "instructor", "coordinator", "status",
+            "category", "group", "instructor", "instructor_name", "coordinator", "coordinator_name",
+            "learning_place", "learning_place_name", "learning_time", "learning_days", "status",
             "enrolled_free", "enrolled_amount", "paid_amount", "notes",
             "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def get_instructor_name(self, obj):
+        if obj.instructor:
+            name = f"{obj.instructor.first_name} {obj.instructor.last_name}".strip()
+            return name or obj.instructor.phone
+        return None
+
+    def get_coordinator_name(self, obj):
+        if obj.coordinator:
+            name = f"{obj.coordinator.first_name} {obj.coordinator.last_name}".strip()
+            return name or obj.coordinator.phone
+        return None
+
     def get_paid_amount(self, obj):
-        from django.db.models import Sum
         result = obj.payments.filter(status="accepted", is_active=True).aggregate(total=Sum("amount"))
         return result["total"] or 0
 

@@ -117,19 +117,19 @@
                 <th>JSHSHR</th>
                 <th>Kategoriya</th>
                 <th>Sana</th>
-                <th>Kassir (Tel)</th>
+                <th class="th-cashier">Kassir (Tel)</th>
                 <th>Summa</th>
                 <th>To'lov turi</th>
                 <th>Holati</th>
                 <th>Izoh</th>
-                <th style="text-align: center; width: 80px;">Amallar</th>
+                <th v-if="authStore.isSuperuser" style="text-align: center; width: 80px;">Amallar</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="filteredPayments.length === 0">
-                <td colspan="11" class="td-empty">To'lovlar topilmadi.</td>
+              <tr v-if="payments.length === 0">
+                <td :colspan="authStore.isSuperuser ? 11 : 10" class="td-empty">To'lovlar topilmadi.</td>
               </tr>
-              <tr v-for="p in filteredPayments" :key="p.id">
+              <tr v-for="p in payments" :key="p.id">
                 <td class="td-id">#{{ p.id }}</td>
                 <td class="td-student">{{ p.student_name || '-' }}</td>
                 <td class="td-jshshr" style="font-family: monospace; font-size: 12px;">{{ p.student_jshshr || '-' }}</td>
@@ -144,7 +144,7 @@
                   </span>
                 </td>
                 <td class="td-notes" :title="p.notes">{{ p.notes || '-' }}</td>
-                <td style="text-align: center;">
+                <td v-if="authStore.isSuperuser" style="text-align: center;">
                   <button class="btn-edit" @click="openEditModal(p)" title="Tahrirlash">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align: middle;">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -252,10 +252,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
+const authStore = useAuthStore()
 const payments = ref([])
 const loading = ref(false)
 const error = ref('')
@@ -312,12 +314,19 @@ const fetchPayments = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/payments/', {
-      params: {
-        page: currentPage.value,
-        page_size: pageSize
-      }
-    })
+    const params = {
+      page: currentPage.value,
+      page_size: pageSize
+    }
+    if (filterDateFrom.value) params.date_from = filterDateFrom.value
+    if (filterDateTo.value) params.date_to = filterDateTo.value
+    if (filterMethod.value) params.method = filterMethod.value
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterCategory.value) params.category = filterCategory.value
+    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
+    if (filterJshshr.value) params.jshshr = filterJshshr.value.trim()
+
+    const response = await api.get('/payments/', { params })
     payments.value = response.data.results
     totalCount.value = response.data.count
   } catch (err) {
@@ -327,6 +336,14 @@ const fetchPayments = async () => {
     loading.value = false
   }
 }
+
+watch(
+  [filterDateFrom, filterDateTo, filterMethod, filterStatus, filterCategory, filterStudentName, filterJshshr],
+  () => {
+    currentPage.value = 1
+    fetchPayments()
+  }
+)
 
 const changePage = (page) => {
   if (page < 1 || page > totalPages.value) return
@@ -342,24 +359,6 @@ const fetchCategories = async () => {
     console.error('Error fetching categories:', err)
   }
 }
-
-const filteredPayments = computed(() => {
-  return payments.value.filter(p => {
-    const pDate = p.created_at ? p.created_at.substring(0, 10) : ''
-    const matchDateFrom = !filterDateFrom.value || pDate >= filterDateFrom.value
-    const matchDateTo = !filterDateTo.value || pDate <= filterDateTo.value
-    const matchMethod = !filterMethod.value || p.method === filterMethod.value
-    const matchStatus = !filterStatus.value || p.status === filterStatus.value
-    const matchCategory = !filterCategory.value || p.category_name === filterCategory.value
-    
-    const qName = filterStudentName.value.toLowerCase()
-    const matchStudentName = !filterStudentName.value || (p.student_name && p.student_name.toLowerCase().includes(qName))
-    
-    const matchJshshr = !filterJshshr.value || (p.student_jshshr && p.student_jshshr.includes(filterJshshr.value))
-    
-    return matchDateFrom && matchDateTo && matchMethod && matchStatus && matchCategory && matchStudentName && matchJshshr
-  })
-})
 
 const formatDateTime = (dateTimeStr) => {
   if (!dateTimeStr) return '-'
@@ -405,6 +404,10 @@ const statusClass = (status) => {
 
 // Edit Payment modals
 const openEditModal = (p) => {
+  if (!authStore.isSuperuser) {
+    alert("Faqat superuser to'lov ma'lumotlarini tahrirlashi mumkin.")
+    return
+  }
   editingPayment.value = {
     id: p.id,
     amount: p.amount,
@@ -425,6 +428,11 @@ const closeEditModal = () => {
 }
 
 const updatePayment = async () => {
+  if (!authStore.isSuperuser) {
+    editError.value = "Faqat superuser to'lov ma'lumotlarini tahrirlashi mumkin."
+    return
+  }
+
   if (editingPayment.value.amount === null || editingPayment.value.amount === undefined || editingPayment.value.amount <= 0) {
     editError.value = "To'g'ri to'lov summasini kiriting."
     return
@@ -450,7 +458,10 @@ const updatePayment = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchCurrentUser()
+  }
   fetchPayments()
   fetchCategories()
 
@@ -635,6 +646,14 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Strict phone column width */
+.th-cashier, .td-cashier {
+  width: 175px !important;
+  min-width: 175px !important;
+  max-width: 175px !important;
+  white-space: nowrap !important;
 }
 
 .td-empty {

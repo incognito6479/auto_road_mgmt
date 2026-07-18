@@ -1,22 +1,24 @@
 <template>
   <AppLayout>
 
-    <!-- Top Navigation & Title -->
+    <!-- Header navigation -->
     <div class="detail-header-nav">
-      <button class="btn-back" @click="router.push('/groups')">
+      <button class="btn-back" @click="router.back()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-          <line x1="19" y1="12" x2="5" y2="12"></line>
-          <polyline points="12 19 5 12 12 5"></polyline>
+          <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
-        Ortga
+        Orqaga
       </button>
-      <h2 class="page-title-text">{{ group?.name || 'Guruh yuklanmoqda...' }}</h2>
+      <div class="header-title-wrap">
+        <h2 class="group-title">{{ group ? group.name : 'Guruh yuklanmoqda...' }}</h2>
+        <span v-if="group" class="group-category-pill">{{ group.category_name }}</span>
+      </div>
     </div>
 
-    <!-- State containers -->
+    <!-- Loading / Error -->
     <div v-if="loading" class="state-container">
       <div class="spinner"></div>
-      <p class="state-text">Guruh tafsilotlari yuklanmoqda...</p>
+      <p class="state-text">Guruh ma'lumotlari yuklanmoqda...</p>
     </div>
 
     <div v-else-if="error" class="state-container state-error">
@@ -24,56 +26,60 @@
       <button class="btn-retry" @click="fetchGroupDetail">Qayta urinish</button>
     </div>
 
-    <div v-else-if="group">
+    <div v-else-if="group" class="detail-content">
 
-      <!-- Group Dashboard Stats Card -->
-      <div class="dashboard-stats-card">
-        <div class="stat-item">
-          <span class="stat-label">Kategoriya</span>
-          <span class="stat-val text-green">{{ group.category_name }}</span>
+      <!-- Group summary card -->
+      <div class="summary-card">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="summary-label">Guruh nomi</span>
+            <span class="summary-val font-bold">{{ group.name }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Kategoriya</span>
+            <span class="summary-val">{{ group.category_name }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Boshlangan sana</span>
+            <span class="summary-val">{{ formatDate(group.started_at) }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Davomiyligi</span>
+            <span class="summary-val">{{ group.duration ? group.duration + ' oy' : '-' }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">O'quvchilar soni</span>
+            <span class="summary-val font-bold">{{ group.student_count }} ta</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Holat</span>
+            <span class="summary-val">
+              <span class="status-badge" :class="statusClass(group.status)">
+                {{ statusText(group.status) }}
+              </span>
+            </span>
+          </div>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">Boshlanish sanasi</span>
-          <span class="stat-val">{{ formatDate(group.started_at) }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Davomiyligi</span>
-          <span class="stat-val">{{ group.duration ? group.duration + ' oy' : '-' }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">O'quvchilar soni</span>
-          <span class="stat-val highlight">{{ group.student_count }} ta</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Holati</span>
-          <span class="status-badge-inline" :class="statusClass(group.status)">
-            {{ statusText(group.status) }}
-          </span>
+        <div v-if="group.notes" class="notes-block">
+          <span class="notes-label">Izoh:</span> {{ group.notes }}
         </div>
       </div>
 
-      <div v-if="group.notes" class="group-notes-card">
-        <h4 class="notes-title">Guruh bo'yicha eslatma:</h4>
-        <p class="notes-content">{{ group.notes }}</p>
-      </div>
-
-      <!-- Students Table section -->
-      <div class="students-section">
-        <div class="section-top">
-          <h3 class="section-title">Guruhdagi o'quvchilar</h3>
-          
-          <!-- Search fields -->
-          <div class="search-filters">
+      <!-- Students table section -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <h3 class="section-title">A'zo o'quvchilar</h3>
+          <div class="search-wrap-flex">
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Ism yoki Telefon bo'yicha qidirish"
+              placeholder="Ism yoki telefon..."
               class="search-input"
             />
             <input
               v-model="searchJshshr"
               type="text"
-              placeholder="JSHSHR bo'yicha"
+              placeholder="JSHSHR..."
               class="search-input-jshshr"
             />
           </div>
@@ -83,19 +89,22 @@
           <table class="students-table">
             <thead>
               <tr>
-                <th>F.I.SH.</th>
-                <th>Telefon</th>
+                <th>O'quvchi F.I.SH.</th>
+                <th class="th-phone">Telefon</th>
                 <th>JSHSHR</th>
-                <th>Eslatma</th>
-                <th>Shartnoma summasi</th>
-                <th>To'langan</th>
-                <th>Qoldiq</th>
-                <th style="text-align: center;">Amallar</th>
+                <th>Eslatmasi</th>
+                <th>O'quv Joyi & Vaqti</th>
+                <th v-if="authStore.isSuperuser || authStore.isMechanic">Instruktor</th>
+                <th v-if="authStore.isSuperuser || authStore.isMechanic">Kordinator</th>
+                <th v-if="!authStore.isMechanic">Shartnoma summasi</th>
+                <th v-if="!authStore.isMechanic">To'langan</th>
+                <th v-if="!authStore.isMechanic">Qoldiq</th>
+                <th v-if="!authStore.isMechanic" style="text-align: center;">Amallar</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="filteredEnrollments.length === 0">
-                <td colspan="8" class="td-empty">Hech qanday o'quvchi topilmadi.</td>
+                <td :colspan="tableColspan" class="td-empty">Hech qanday o'quvchi topilmadi.</td>
               </tr>
               <tr v-for="e in filteredEnrollments" :key="e.id">
                 <td class="td-name">{{ e.student_name }}</td>
@@ -107,29 +116,85 @@
                 </td>
                 <td class="td-jshshr">{{ e.student_jshshr }}</td>
                 <td class="td-notes">{{ e.notes || '-' }}</td>
-                <td>
+
+                <!-- Learning Place & Time Column -->
+                <td class="td-assign">
+                  <div class="assign-cell">
+                    <template v-if="e.learning_place_name || e.learning_time || e.learning_days">
+                      <span class="assign-name">{{ formatSchedule(e) }}</span>
+                      <button class="btn-assign-edit" @click="openScheduleModal(e)" title="O'quv joyi va vaqtini o'zgartirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="btn-assign-plus" @click="openScheduleModal(e)" title="O'quv joyi va vaqtini biriktirish">+</button>
+                    </template>
+                  </div>
+                </td>
+
+                <!-- Instructor Column -->
+                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign">
+                  <div class="assign-cell">
+                    <template v-if="e.instructor_name">
+                      <span class="assign-name">{{ e.instructor_name }}</span>
+                      <button class="btn-assign-edit" @click="openAssignModal(e, 'instructor')" title="Instruktorni o'zgartirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="btn-assign-plus" @click="openAssignModal(e, 'instructor')" title="Instruktor biriktirish">+</button>
+                    </template>
+                  </div>
+                </td>
+
+                <!-- Coordinator Column -->
+                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign">
+                  <div class="assign-cell">
+                    <template v-if="e.coordinator_name">
+                      <span class="assign-name">{{ e.coordinator_name }}</span>
+                      <button class="btn-assign-edit" @click="openAssignModal(e, 'coordinator')" title="Kordinatorni o'zgartirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="btn-assign-plus" @click="openAssignModal(e, 'coordinator')" title="Kordinator biriktirish">+</button>
+                    </template>
+                  </div>
+                </td>
+
+                <!-- Payment Info Columns (Hidden for mechanic) -->
+                <td v-if="!authStore.isMechanic">
                   <span v-if="e.enrolled_free" class="free-badge">Tekin</span>
                   <span v-else>{{ formatMoney(e.enrolled_amount) }} so'm</span>
                 </td>
-                <td>
+                <td v-if="!authStore.isMechanic">
                   <span v-if="e.enrolled_free">-</span>
                   <span v-else class="paid-val">{{ formatMoney(e.paid_amount) }} so'm</span>
                 </td>
-                <td>
+                <td v-if="!authStore.isMechanic">
                   <span v-if="e.enrolled_free">-</span>
                   <span v-else :class="{'balance-warning': (e.enrolled_amount - e.paid_amount) > 0}">
                     {{ formatMoney(e.enrolled_amount - e.paid_amount) }} so'm
                   </span>
                 </td>
-                <td style="text-align: center;">
+                <td v-if="!authStore.isMechanic" style="text-align: center;">
                   <button
-                    v-if="!e.enrolled_free && e.paid_amount < e.enrolled_amount"
+                    v-if="authStore.isAdminOrSuperuser && !e.enrolled_free && e.paid_amount < e.enrolled_amount"
                     class="btn-pay"
                     @click="openPayModal(e)"
                   >
                     To'lash
                   </button>
-                  <span v-else-if="!e.enrolled_free" class="fully-paid-badge">To'liq to'langan</span>
+                  <span v-else-if="!e.enrolled_free && e.paid_amount >= e.enrolled_amount" class="fully-paid-badge">To'liq to'langan</span>
                   <span v-else>-</span>
                 </td>
               </tr>
@@ -140,40 +205,46 @@
 
     </div>
 
-    <!-- Pay Modal Dialog -->
-    <dialog ref="payModal" class="modal-dialog" closedby="any" aria-labelledby="pay-modal-title">
-      <form class="modal-form" @submit.prevent="submitPayment">
-        <h3 id="pay-modal-title" class="modal-title">To'lov qabul qilish</h3>
+    <!-- Payment Modal Dialog -->
+    <dialog ref="payModal" class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">To'lov Qabul Qilish</h3>
+        <button class="btn-close" @click="closePayModal">✕</button>
+      </div>
 
+      <form @submit.prevent="submitPayment" class="modal-form">
         <div v-if="payError" class="modal-error">
           {{ payError }}
         </div>
 
-        <div class="pay-info-summary" v-if="activeEnrollment">
+        <div v-if="activeEnrollment" class="pay-info-summary">
           <p>O'quvchi: <strong>{{ activeEnrollment.student_name }}</strong></p>
-          <p>Shartnoma summasi: <strong>{{ formatMoney(activeEnrollment.enrolled_amount) }} so'm</strong></p>
-          <p>Qoldiq: <strong class="balance-warning">{{ formatMoney(activeEnrollment.enrolled_amount - activeEnrollment.paid_amount) }} so'm</strong></p>
+          <p>Jami shartnoma: <strong>{{ formatMoney(activeEnrollment.enrolled_amount) }} so'm</strong></p>
+          <p>Shu vaqtgacha to'langan: <strong>{{ formatMoney(activeEnrollment.paid_amount) }} so'm</strong></p>
+          <p>Qolgan qarzdorlik: <strong class="balance-warning">{{ formatMoney(activeEnrollment.enrolled_amount - activeEnrollment.paid_amount) }} so'm</strong></p>
         </div>
 
         <div class="form-group">
-          <label for="pay-amount" class="form-label">To'lov summasi (so'm)</label>
+          <label class="form-label">To'lanayotgan summa (so'm) <span class="req">*</span></label>
           <input
-            id="pay-amount"
             v-model="formattedInputPrice"
             type="text"
+            placeholder="Summani kiriting..."
             required
             class="form-input"
-            placeholder="Masalan: 1 000 000"
           />
         </div>
 
         <div class="form-group">
-          <label for="pay-method" class="form-label">To'lov turi</label>
+          <label class="form-label">To'lov usuli <span class="req">*</span></label>
           <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
-            <select id="pay-method" v-model="paymentForm.method" required class="form-input select-input" style="width: 100%; appearance: none; -webkit-appearance: none;">
-              <option value="cash">Naqd</option>
-              <option value="card">Plastik karta</option>
-              <option value="bank">Bank o'tkazmasi</option>
+            <select v-model="paymentForm.method" required class="form-input select-input" style="width: 100%; appearance: none;">
+              <option value="cash">Naqd pullar (Cash)</option>
+              <option value="click">Click</option>
+              <option value="payme">Payme</option>
+              <option value="uzum">Uzum</option>
+              <option value="card">Bank kartasi (Terminal)</option>
+              <option value="transfer">Bank o'tkazmasi (Perevod)</option>
             </select>
             <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -182,13 +253,12 @@
         </div>
 
         <div class="form-group">
-          <label for="pay-notes" class="form-label">Eslatma</label>
+          <label class="form-label">Eslatma / Izoh</label>
           <textarea
-            id="pay-notes"
             v-model="paymentForm.notes"
-            placeholder="To'lov bo'yicha izoh"
-            class="form-input text-area-input"
             rows="3"
+            placeholder="Qo'shimcha izoh..."
+            class="form-input text-area-input"
           ></textarea>
         </div>
 
@@ -196,7 +266,120 @@
           <button type="button" class="btn-cancel" @click="closePayModal">Bekor qilish</button>
           <button type="submit" class="btn-save" :disabled="paySaving">
             <span v-if="paySaving" class="btn-spinner"></span>
-            {{ paySaving ? 'Kiritilmoqda...' : 'Tasdiqlash' }}
+            {{ paySaving ? 'Saqlanmoqda...' : 'Saqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Assign Instructor / Coordinator Modal Dialog -->
+    <dialog ref="assignModal" class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          {{ assignType === 'instructor' ? "Instruktor Biriktirish" : "Kordinator Biriktirish" }}
+        </h3>
+        <button class="btn-close" @click="closeAssignModal">✕</button>
+      </div>
+
+      <form @submit.prevent="submitAssign" class="modal-form">
+        <div v-if="assignError" class="modal-error">
+          {{ assignError }}
+        </div>
+
+        <div v-if="activeEnrollment" class="pay-info-summary">
+          <p>O'quvchi: <strong>{{ activeEnrollment.student_name }}</strong></p>
+          <p>Telefon: <strong>{{ formatPhone(activeEnrollment.student_phone) }}</strong></p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            {{ assignType === 'instructor' ? "Instruktorni tanlang" : "Kordinatorni tanlang" }}
+          </label>
+          <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
+            <select v-model="selectedAssignUserId" class="form-input select-input" style="width: 100%; appearance: none;">
+              <option :value="null">&lt; Biriktirilmagan &gt;</option>
+              <option v-for="u in assignUserOptions" :key="u.id" :value="u.id">
+                {{ getUserDisplayName(u) }}
+              </option>
+            </select>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="closeAssignModal">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="assignSaving">
+            <span v-if="assignSaving" class="btn-spinner"></span>
+            {{ assignSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Schedule Modal Dialog (Learning Place, Time & Days) -->
+    <dialog ref="scheduleModal" class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">O'quv Joyi va Vaqtini Belgilash</h3>
+        <button class="btn-close" @click="closeScheduleModal">✕</button>
+      </div>
+
+      <form @submit.prevent="submitSchedule" class="modal-form">
+        <div v-if="scheduleError" class="modal-error">
+          {{ scheduleError }}
+        </div>
+
+        <div v-if="activeEnrollment" class="pay-info-summary">
+          <p>O'quvchi: <strong>{{ activeEnrollment.student_name }}</strong></p>
+          <p>Telefon: <strong>{{ formatPhone(activeEnrollment.student_phone) }}</strong></p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">O'quv joyi (Filial / Xona)</label>
+          <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
+            <select v-model="scheduleForm.learning_place" class="form-input select-input" style="width: 100%; appearance: none;">
+              <option :value="null">&lt; Tanlanmagan &gt;</option>
+              <option v-for="p in learningPlaces" :key="p.id" :value="p.id">
+                {{ p.place_name }}
+              </option>
+            </select>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Dars vaqti</label>
+          <input
+            v-model="scheduleForm.learning_time"
+            type="text"
+            placeholder="Masalan: 09:00 yoki 14:00 - 16:00"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Dars kunlari</label>
+          <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
+            <select v-model="scheduleForm.learning_days" class="form-input select-input" style="width: 100%; appearance: none;">
+              <option :value="null">&lt; Tanlanmagan &gt;</option>
+              <option value="Mo-Wed-Fri">Mo-Wed-Fri (Dushanba - Chorshanba - Juma)</option>
+              <option value="Tue-Thu-Sat">Tue-Thu-Sat (Seshanba - Payshanba - Shanba)</option>
+              <option value="everyday">everyday (Har kuni)</option>
+            </select>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="closeScheduleModal">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="scheduleSaving">
+            <span v-if="scheduleSaving" class="btn-spinner"></span>
+            {{ scheduleSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
           </button>
         </div>
       </form>
@@ -210,14 +393,18 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 const groupId = route.params.id
 
 const group = ref(null)
 const loading = ref(false)
 const error = ref('')
+const allUsers = ref([])
+const learningPlaces = ref([])
 
 // Search state
 const searchQuery = ref('')
@@ -233,6 +420,48 @@ const paymentForm = ref({
   method: 'cash',
   notes: '',
 })
+
+// Assignment modal state
+const assignModal = ref(null)
+const assignType = ref('instructor') // 'instructor' or 'coordinator'
+const selectedAssignUserId = ref(null)
+const assignSaving = ref(false)
+const assignError = ref('')
+
+// Schedule modal state
+const scheduleModal = ref(null)
+const scheduleSaving = ref(false)
+const scheduleError = ref('')
+const scheduleForm = ref({
+  learning_place: null,
+  learning_time: '',
+  learning_days: null,
+})
+
+const tableColspan = computed(() => {
+  let count = 5 // Student Name, Phone, JSHSHR, Notes, Learning Place & Time
+  if (authStore.isSuperuser || authStore.isMechanic) count += 2 // Instructor, Coordinator
+  if (!authStore.isMechanic) count += 4 // Shartnoma, Paid, Qoldiq, Amallar
+  return count
+})
+
+const assignUserOptions = computed(() => {
+  return allUsers.value.filter(u => u.role === assignType.value)
+})
+
+const getUserDisplayName = (u) => {
+  if (!u) return ''
+  const name = `${u.first_name || ''} ${u.last_name || ''}`.trim()
+  return name ? `${name} (${formatPhone(u.phone)})` : formatPhone(u.phone)
+}
+
+const formatSchedule = (e) => {
+  const parts = []
+  if (e.learning_place_name) parts.push(e.learning_place_name)
+  if (e.learning_time) parts.push(e.learning_time)
+  if (e.learning_days) parts.push(e.learning_days)
+  return parts.join(' - ') || '-'
+}
 
 // Two-way space formatting for payment amount
 const formattedInputPrice = computed({
@@ -266,6 +495,24 @@ const fetchGroupDetail = async () => {
   }
 }
 
+const fetchUsers = async () => {
+  try {
+    const response = await api.get('/users/')
+    allUsers.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
+  } catch (err) {
+    console.error("Foydalanuvchilarni yuklashda xatolik:", err)
+  }
+}
+
+const fetchLearningPlaces = async () => {
+  try {
+    const response = await api.get('/learning-places/')
+    learningPlaces.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
+  } catch (err) {
+    console.error("O'quv joylarini yuklashda xatolik:", err)
+  }
+}
+
 const filteredEnrollments = computed(() => {
   if (!group.value?.enrollments) return []
   return group.value.enrollments.filter(e => {
@@ -275,7 +522,7 @@ const filteredEnrollments = computed(() => {
       e.student_phone.includes(q) ||
       (e.student_phone2 && e.student_phone2.includes(q))
     const matchJshshr = !searchJshshr.value || 
-      e.student_jshshr.includes(searchJshshr.value)
+      (e.student_jshshr && String(e.student_jshshr).includes(searchJshshr.value))
     return matchSearch && matchJshshr
   })
 })
@@ -315,6 +562,10 @@ const statusClass = (status) => {
 
 // Payment modal actions
 const openPayModal = (enrollment) => {
+  if (!authStore.isAdminOrSuperuser) {
+    alert("To'lovni qabul qilish faqat admin va superuser uchun ruxsat etilgan.")
+    return
+  }
   activeEnrollment.value = enrollment
   payError.value = ''
   paymentForm.value = {
@@ -335,6 +586,11 @@ const closePayModal = () => {
 }
 
 const submitPayment = async () => {
+  if (!authStore.isAdminOrSuperuser) {
+    payError.value = "To'lovni qabul qilish faqat admin va superuser uchun ruxsat etilgan."
+    return
+  }
+
   if (paymentForm.value.amount === null || paymentForm.value.amount === undefined || paymentForm.value.amount <= 0) {
     payError.value = "To'g'ri to'lov summasini kiriting."
     return
@@ -361,24 +617,116 @@ const submitPayment = async () => {
   }
 }
 
-onMounted(() => {
-  fetchGroupDetail()
-
-  if (payModal.value && !('closedBy' in HTMLDialogElement.prototype)) {
-    payModal.value.addEventListener('click', (event) => {
-      if (event.target !== payModal.value) return
-      const rect = payModal.value.getBoundingClientRect()
-      const isInside = (
-        rect.top <= event.clientY &&
-        event.clientY <= rect.top + rect.height &&
-        rect.left <= event.clientX &&
-        event.clientX <= rect.left + rect.width
-      )
-      if (!isInside) {
-        closePayModal()
-      }
-    })
+// Assign modal actions
+const openAssignModal = (enrollment, type) => {
+  activeEnrollment.value = enrollment
+  assignType.value = type
+  assignError.value = ''
+  if (type === 'instructor') {
+    selectedAssignUserId.value = enrollment.instructor || null
+  } else {
+    selectedAssignUserId.value = enrollment.coordinator || null
   }
+  if (assignModal.value) {
+    assignModal.value.showModal()
+  }
+}
+
+const closeAssignModal = () => {
+  if (assignModal.value) {
+    assignModal.value.close()
+  }
+}
+
+const submitAssign = async () => {
+  if (!activeEnrollment.value) return
+  assignSaving.value = true
+  assignError.value = ''
+  try {
+    const payload = {}
+    if (assignType.value === 'instructor') {
+      payload.instructor = selectedAssignUserId.value
+    } else {
+      payload.coordinator = selectedAssignUserId.value
+    }
+    await api.patch(`/enrollments/${activeEnrollment.value.id}/`, payload)
+    closeAssignModal()
+    await fetchGroupDetail()
+  } catch (err) {
+    console.error(err)
+    assignError.value = "Biriktirishda xatolik yuz berdi. Qayta urinib ko'ring."
+  } finally {
+    assignSaving.value = false
+  }
+}
+
+// Schedule modal actions
+const openScheduleModal = (enrollment) => {
+  activeEnrollment.value = enrollment
+  scheduleError.value = ''
+  scheduleForm.value = {
+    learning_place: enrollment.learning_place || null,
+    learning_time: enrollment.learning_time || '',
+    learning_days: enrollment.learning_days || null,
+  }
+  if (scheduleModal.value) {
+    scheduleModal.value.showModal()
+  }
+}
+
+const closeScheduleModal = () => {
+  if (scheduleModal.value) {
+    scheduleModal.value.close()
+  }
+}
+
+const submitSchedule = async () => {
+  if (!activeEnrollment.value) return
+  scheduleSaving.value = true
+  scheduleError.value = ''
+  try {
+    const payload = {
+      learning_place: scheduleForm.value.learning_place,
+      learning_time: scheduleForm.value.learning_time ? scheduleForm.value.learning_time.trim() : null,
+      learning_days: scheduleForm.value.learning_days,
+    }
+    await api.patch(`/enrollments/${activeEnrollment.value.id}/`, payload)
+    closeScheduleModal()
+    await fetchGroupDetail()
+  } catch (err) {
+    console.error(err)
+    scheduleError.value = "Saqlashda xatolik yuz berdi. Qayta urinib ko'ring."
+  } finally {
+    scheduleSaving.value = false
+  }
+}
+
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchCurrentUser()
+  }
+  fetchGroupDetail()
+  fetchUsers()
+  fetchLearningPlaces()
+
+  const dialogs = [payModal.value, assignModal.value, scheduleModal.value]
+  dialogs.forEach(dialog => {
+    if (dialog && !('closedBy' in HTMLDialogElement.prototype)) {
+      dialog.addEventListener('click', (event) => {
+        if (event.target !== dialog) return
+        const rect = dialog.getBoundingClientRect()
+        const isInside = (
+          rect.top <= event.clientY &&
+          event.clientY <= rect.top + rect.height &&
+          rect.left <= event.clientX &&
+          event.clientX <= rect.left + rect.width
+        )
+        if (!isInside) {
+          dialog.close()
+        }
+      })
+    }
+  })
 })
 </script>
 
@@ -405,185 +753,146 @@ onMounted(() => {
   transition: all 0.15s ease;
 }
 .btn-back:hover {
-  background: #F3F4F6;
-  transform: translateX(-2px);
+  background: #F9FAFB;
+  border-color: #D1D5DB;
+  color: #111827;
 }
-.page-title-text {
-  font-size: 20px;
+
+.header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.group-title {
+  margin: 0;
+  font-size: 22px;
   font-weight: 700;
   color: #111827;
-  margin: 0;
+}
+.group-category-pill {
+  background: #E8F5E9;
+  color: #2D6A4F;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
 }
 
-/* ── States ── */
-.state-container {
+/* ── Content Layout ── */
+.detail-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
+  gap: 24px;
+}
+
+/* Summary Card */
+.summary-card {
   background: white;
-  border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
-}
-.state-text {
-  font-size: 15px;
-  color: #6B7280;
-  font-weight: 500;
-  margin: 12px 0 0 0;
-}
-.state-error .state-text {
-  color: #DC2626;
-}
-.btn-retry {
-  margin-top: 16px;
-  padding: 8px 16px;
-  background: #2D6A4F;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-retry:hover { background: #245C43; }
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(45, 106, 79, 0.2);
-  border-top-color: #2D6A4F;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* ── Dashboard Card ── */
-.dashboard-stats-card {
+.summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 20px;
-  background: white;
-  border-radius: 14px;
-  padding: 22px 24px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
 }
 
-@media (max-width: 768px) {
-  .dashboard-stats-card {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 480px) {
-  .dashboard-stats-card {
-    grid-template-columns: 1fr;
-  }
-}
-
-.stat-item {
+.summary-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
-.stat-label {
+.summary-label {
   font-size: 12px;
   font-weight: 600;
   color: #6B7280;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.03em;
 }
 
-.stat-val {
-  font-size: 18px;
-  font-weight: 700;
+.summary-val {
+  font-size: 14.5px;
   color: #111827;
 }
 
-.stat-val.text-green {
-  color: #2D6A4F;
+.font-bold {
+  font-weight: 700;
 }
 
-.stat-val.highlight {
-  color: #2D6A4F;
-}
-
-/* Badges */
-.status-badge-inline {
-  align-self: flex-start;
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 20px;
 }
 
-.badge-started { background: #eff6ff; color: #1d4ed8; }
-.badge-finished { background: #f3f4f6; color: #4b5563; }
-.badge-canceled { background: #fef2f2; color: #b91c1c; }
+.badge-started {
+  background: #D1FAE5;
+  color: #065F46;
+}
 
-/* Group Notes */
-.group-notes-card {
-  background: #F9FAFB;
+.badge-finished {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.badge-canceled {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.notes-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #F3F4F6;
+  font-size: 13.5px;
+  color: #4B5563;
+}
+.notes-label {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* ── Table Card ── */
+.table-card {
+  background: white;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 24px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.notes-title {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: #374151;
-  margin: 0 0 6px 0;
-}
-
-.notes-content {
-  font-size: 13px;
-  color: #4B5563;
-  margin: 0;
-  line-height: 1.5;
-}
-
-/* ── Students List Section ── */
-.students-section {
-  background: white;
-  border-radius: 14px;
-  padding: 24px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
-}
-
-.section-top {
+.table-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .section-title {
-  font-size: 16.5px;
+  margin: 0;
+  font-size: 17px;
   font-weight: 700;
   color: #111827;
-  margin: 0;
 }
 
-.search-filters {
+.search-wrap-flex {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .search-input, .search-input-jshshr {
   padding: 8px 14px;
+  font-size: 13px;
   border: 1px solid #D1D5DB;
   border-radius: 8px;
-  font-size: 13px;
-  width: 250px;
+  width: 220px;
   outline: none;
   transition: border-color 0.15s;
 }
@@ -616,6 +925,7 @@ onMounted(() => {
   font-weight: 600;
   color: #374151;
   border-bottom: 1px solid #E5E7EB;
+  white-space: nowrap;
 }
 
 .students-table td {
@@ -634,13 +944,22 @@ onMounted(() => {
   color: #111827;
 }
 
-.td-phone, .td-jshshr {
+.th-phone, .td-phone {
+  width: 175px !important;
+  min-width: 175px !important;
+  max-width: 175px !important;
+  white-space: nowrap !important;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.td-jshshr {
   font-family: monospace;
   font-size: 12px;
 }
 
 .td-notes {
-  max-width: 200px;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -651,6 +970,58 @@ onMounted(() => {
   padding: 40px;
   color: #9CA3AF;
   font-weight: 500;
+}
+
+/* Assignment Cells */
+.td-assign {
+  white-space: nowrap;
+}
+.assign-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.assign-name {
+  font-weight: 500;
+  color: #111827;
+  font-size: 13px;
+}
+.btn-assign-plus {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px dashed #2D6A4F;
+  background: #ECFDF5;
+  color: #2D6A4F;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-assign-plus:hover {
+  background: #2D6A4F;
+  color: white;
+  border-style: solid;
+}
+.btn-assign-edit {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: #F3F4F6;
+  color: #4B5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-assign-edit:hover {
+  background: #E5E7EB;
+  color: #111827;
 }
 
 /* Pay Button */
@@ -734,6 +1105,7 @@ onMounted(() => {
   background: white;
   max-height: 90vh;
   overflow-y: auto;
+  margin: auto;
 }
 .modal-dialog::backdrop {
   background: rgba(0, 0, 0, 0.4);
@@ -747,14 +1119,29 @@ onMounted(() => {
   gap: 20px;
 }
 
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 14px 24px;
+  border-bottom: 1px solid #E5E7EB;
+}
+
 .modal-title {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   color: #111827;
-  border-bottom: 1px solid #E5E7EB;
-  padding-bottom: 12px;
 }
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #9CA3AF;
+  cursor: pointer;
+}
+.btn-close:hover { color: #111827; }
 
 .modal-error {
   padding: 10px 12px;
@@ -842,5 +1229,33 @@ onMounted(() => {
   border-top-color: white;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+/* States */
+.state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  gap: 12px;
+}
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #E5E7EB;
+  border-top-color: #2D6A4F;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.state-text { color: #6B7280; font-size: 14px; }
+.state-error { color: #DC2626; }
+.btn-retry {
+  padding: 8px 16px;
+  background: #2D6A4F;
+  color: white;
+  border-radius: 6px;
+  font-size: 13px;
 }
 </style>
