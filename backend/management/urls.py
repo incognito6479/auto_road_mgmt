@@ -18,6 +18,8 @@ router.register(r"enrollments", views.EnrollmentViewSet, basename="enrollment")
 router.register(r"payments", views.PaymentViewSet, basename="payment")
 router.register(r"groups", views.GroupViewSet, basename="group")
 router.register(r"learning-places", views.LearningPlaceViewSet, basename="learning-place")
+router.register(r"agents", views.AgentViewSet, basename="agent")
+router.register(r"holidays", views.HolidaysViewSet, basename="holiday")
 
 urlpatterns = [
     path("", include(router.urls)),

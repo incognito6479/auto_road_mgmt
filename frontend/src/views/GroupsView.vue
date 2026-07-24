@@ -51,12 +51,20 @@
             <span class="detail-value">{{ formatDate(g.started_at) }}</span>
           </div>
           <div class="detail-row">
+            <span class="detail-label">Ish kunlari:</span>
+            <span class="detail-value font-semibold">{{ g.working_days ? g.working_days + ' kun' : '-' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Dars kunlari:</span>
+            <span class="detail-value">{{ weekendsText(g.working_weekends) }}</span>
+          </div>
+          <div class="detail-row">
             <span class="detail-label">Davomiyligi:</span>
-            <span class="detail-value">{{ g.duration ? g.duration + ' oy' : '-' }}</span>
+            <span class="detail-value highlight">{{ g.duration ? g.duration + ' oy' : '-' }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">O'quvchilar soni:</span>
-            <span class="detail-value highlight">{{ g.student_count }} ta o'quvchi</span>
+            <span class="detail-value">{{ g.student_count }} ta o'quvchi</span>
           </div>
         </div>
 
@@ -105,15 +113,28 @@
         </div>
 
         <div class="form-group">
-          <label for="edit-grp-duration" class="form-label">Davomiyligi (oylar)</label>
+          <label for="edit-grp-working-days" class="form-label">Ish kunlari soni</label>
           <input
-            id="edit-grp-duration"
-            v-model="editingGroup.duration"
+            id="edit-grp-working-days"
+            v-model="editingGroup.working_days"
             type="number"
-            step="0.1"
-            required
+            placeholder="68"
             class="form-input"
           />
+        </div>
+
+        <div class="form-group">
+          <label for="edit-grp-weekends" class="form-label">Dars kunlari jadvali</label>
+          <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
+            <select id="edit-grp-weekends" v-model="editingGroup.working_weekends" required class="form-input select-input" style="width: 100%; appearance: none; -webkit-appearance: none;">
+              <option value="everyday">Har kuni (Mon-Sat)</option>
+              <option value="mon-wed-fri">Dushanba - Chorshanba - Juma (Mo-Wed-Fri)</option>
+              <option value="tue-wed-sat">Seshanba - Payshanba - Shanba (Tue-Thu-Sat)</option>
+            </select>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+            </svg>
+          </div>
         </div>
 
         <div class="form-group">
@@ -161,6 +182,8 @@ const editingGroup = ref({
   id: null,
   name: '',
   started_at: '',
+  working_days: 68,
+  working_weekends: 'mon-wed-fri',
   duration: null,
   status: 'started',
 })
@@ -171,8 +194,8 @@ const fetchGroups = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/groups/')
-    groups.value = response.data
+    const response = await api.get('/groups/?page_size=100')
+    groups.value = response.data.results ? response.data.results : response.data
   } catch (err) {
     console.error(err)
     error.value = "Guruhlarni yuklashda xatolik yuz berdi."
@@ -184,6 +207,15 @@ const fetchGroups = async () => {
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleDateString('uz-UZ')
+}
+
+const weekendsText = (w) => {
+  switch (w) {
+    case 'everyday': return 'Har kuni (Mon-Sat)'
+    case 'mon-wed-fri': return 'Dush-Chorsh-Juma'
+    case 'tue-wed-sat': return 'Ses-Paysh-Shanba'
+    default: return w || '-'
+  }
 }
 
 const statusText = (status) => {
@@ -207,6 +239,8 @@ const openEditModal = (g) => {
     id: g.id,
     name: g.name,
     started_at: g.started_at || '',
+    working_days: g.working_days || 68,
+    working_weekends: g.working_weekends || 'mon-wed-fri',
     duration: g.duration,
     status: g.status,
   }
@@ -223,7 +257,7 @@ const closeEditModal = () => {
 }
 
 const updateGroup = async () => {
-  if (!editingGroup.value.name.trim() || !editingGroup.value.started_at || editingGroup.value.duration === null || editingGroup.value.duration === undefined) {
+  if (!editingGroup.value.name.trim() || !editingGroup.value.started_at) {
     editModalError.value = "Barcha maydonlarni to'ldiring."
     return
   }
@@ -234,7 +268,8 @@ const updateGroup = async () => {
     const payload = {
       name: editingGroup.value.name.trim(),
       started_at: editingGroup.value.started_at,
-      duration: parseFloat(editingGroup.value.duration),
+      working_days: Number(editingGroup.value.working_days) || 68,
+      working_weekends: editingGroup.value.working_weekends,
       status: editingGroup.value.status,
     }
     await api.patch(`/groups/${editingGroup.value.id}/`, payload)

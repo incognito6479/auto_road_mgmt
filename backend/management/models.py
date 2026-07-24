@@ -45,7 +45,7 @@ class BaseModel(models.Model):
 class User(AbstractUser):
     """
     Custom user model using phone number as the login identifier.
-    Roles: superuser, admin, mechanic, instructor, coordinator.
+    Roles: superuser, admin, mechanic, instructor, coordinator, student.
     """
 
     class Role(models.TextChoices):
@@ -53,7 +53,8 @@ class User(AbstractUser):
         ADMIN = "admin", "Admin"
         MECHANIC = "mechanic", "Mexanik"
         INSTRUCTOR = "instructor", "Instruktor"
-        COORDINATOR = "coordinator", "Kordinator"
+        COORDINATOR = "coordinator", "O'qituvchi"
+        STUDENT = "student", "O'quvchi"
 
     # Remove username — phone is the login field
     username = None
@@ -70,6 +71,13 @@ class User(AbstractUser):
         help_text="Namuna: 998909009090",
     )
 
+    phone2 = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Qo'shimcha telefon raqami (namuna: 998909009090)",
+    )
+
     jshshr = models.BigIntegerField(
         null=True,
         blank=True,
@@ -87,6 +95,19 @@ class User(AbstractUser):
         null=True,
         blank=True,
         help_text="Namuna: 2275679",
+    )
+
+    full_name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="To'liq ismi",
+    )
+
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Qo'shimcha eslatmalar",
     )
 
     USERNAME_FIELD = "phone"
@@ -100,48 +121,49 @@ class User(AbstractUser):
         verbose_name_plural = "Users"
         unique_together = ["phone", "jshshr"]
 
+    def save(self, *args, **kwargs):
+        if not self.full_name and (self.first_name or self.last_name):
+            self.full_name = f"{self.first_name or ''} {self.last_name or ''}".strip()
+        elif self.full_name and not (self.first_name or self.last_name):
+            parts = self.full_name.strip().split(" ", 1)
+            self.first_name = parts[0] if len(parts) > 0 else ""
+            self.last_name = parts[1] if len(parts) > 1 else ""
+        if not self.password and self.jshshr:
+            self.set_password(str(self.jshshr))
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.phone} ({self.role})"
+        name_str = self.full_name or f"{self.first_name or ''} {self.last_name or ''}".strip() or self.phone
+        return f"{name_str} ({self.role})"
 
 
-class Student(BaseModel):
-    """Driving school student."""
+class Holidays(BaseModel):
+    """Holidays and official days off."""
 
-    full_name = models.CharField(max_length=255)
-
-    phone = models.CharField(
-        max_length=20,
-        help_text="Namuna: 998909009090",
+    holiday_name = models.CharField(
+        max_length=255,
+        help_text="Bayram / Dam olish kuni nomi",
     )
-
-    phone2 = models.CharField(
-        max_length=20,
+    start_date = models.DateField(
+        help_text="Boshlanish sanasi",
+    )
+    end_date = models.DateField(
+        help_text="Tugash sanasi",
+    )
+    note = models.TextField(
         blank=True,
         null=True,
-        help_text="Qo'shimcha telefon raqami (namuna: 998909009090)",
-    )
-
-    jshshr = models.BigIntegerField(
-        help_text="Namuna: 29572006200016",
-    )
-
-    passport_serie = models.CharField(
-        max_length=2,
-        help_text="Namuna: AB",
-    )
-
-    passport_number = models.IntegerField(
-        help_text="Namuna: 2275679",
+        help_text="Qo'shimcha izoh",
     )
 
     class Meta:
-        db_table = "student"
-        verbose_name = "Student"
-        verbose_name_plural = "Students"
-        unique_together = ["phone", "jshshr"]
+        db_table = "holidays"
+        verbose_name = "Bayram"
+        verbose_name_plural = "Bayramlar"
+        ordering = ["-start_date"]
 
     def __str__(self):
-        return self.full_name
+        return f"{self.holiday_name} ({self.start_date} - {self.end_date})"
 
 
 class Category(BaseModel):
@@ -157,10 +179,9 @@ class Category(BaseModel):
         help_text="Namuna: 4500000",
     )
 
-    duration = models.FloatField(
-        blank=True,
-        null=True,
-        help_text="Davomiyligi (oylar, masalan, 3.5 yoki 4)",
+    duration = models.PositiveIntegerField(
+        default=68,
+        help_text="Ish kunlari (masalan: 68)",
     )
 
     class Meta:
@@ -181,6 +202,11 @@ class Group(BaseModel):
         FINISHED = "finished", "Tugatgan"
         CANCELED = "canceled", "Bekor qilingan"
 
+    class WorkingWeekends(models.TextChoices):
+        EVERYDAY = "everyday", "Har kuni (Mon-Sat)"
+        MWF = "mon-wed-fri", "Dushanba - Chorshanba - Juma (Mo-Wed-Fri)"
+        TTS = "tue-wed-sat", "Seshanba - Payshanba - Shanba (Tue-Thu-Sat)"
+
     category = models.ForeignKey(
         Category,
         on_delete=models.PROTECT,
@@ -195,10 +221,21 @@ class Group(BaseModel):
         blank=True,
         help_text="Boshlanish sanasi",
     )
+    working_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Ish kunlari soni (kategoriyadan olinadi)",
+    )
+    working_weekends = models.CharField(
+        max_length=20,
+        choices=WorkingWeekends.choices,
+        default=WorkingWeekends.MWF,
+        help_text="Dars kunlari jadvali",
+    )
     duration = models.FloatField(
         blank=True,
         null=True,
-        help_text="Davomiyligi (oylar, masalan, 3.5 yoki 4)",
+        help_text="Davomiyligi (oylar, masalan, 3.2 yoki 3.4)",
     )
     status = models.CharField(
         max_length=20,
@@ -229,6 +266,22 @@ class LearningPlace(BaseModel):
         return self.place_name
 
 
+class Agent(BaseModel):
+    """Agent model for student recruiters/referrals."""
+
+    full_name = models.CharField(max_length=255, help_text="Agent F.I.SH.")
+    phone = models.CharField(max_length=20, unique=True, help_text="Telefon raqami")
+    phone2 = models.CharField(max_length=20, blank=True, null=True, help_text="Qo'shimcha telefon raqami")
+
+    class Meta:
+        db_table = "agent"
+        verbose_name = "Agent"
+        verbose_name_plural = "Agentlar"
+
+    def __str__(self):
+        return f"{self.full_name} ({self.phone})"
+
+
 class Enrollment(BaseModel):
     """Junction model: Student <-> Category within a Group context."""
 
@@ -244,8 +297,9 @@ class Enrollment(BaseModel):
         EVERYDAY = "everyday", "Everyday"
 
     student = models.ForeignKey(
-        Student,
+        User,
         on_delete=models.PROTECT,
+        limit_choices_to={"role": User.Role.STUDENT},
         related_name="enrollments",
     )
     category = models.ForeignKey(
@@ -275,6 +329,13 @@ class Enrollment(BaseModel):
         null=True,
         blank=True,
         related_name="coordinator_enrollments",
+    )
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments",
     )
     learning_place = models.ForeignKey(
         LearningPlace,
@@ -326,6 +387,8 @@ class Payment(BaseModel):
         ACCEPTED = "accepted", "Qabul qilingan"
         RETURNED = "returned", "Qaytarilgan"
         PAID = "paid", "To'langan"
+        BONUS = "bonus", "Bonus"
+        BANK = "bank", "Bank"
 
     class Method(models.TextChoices):
         CASH = "cash", "Naqd"
@@ -341,6 +404,13 @@ class Payment(BaseModel):
     enrollment = models.ForeignKey(
         Enrollment,
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payments",
+    )
+    agent = models.ForeignKey(
+        "Agent",
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="payments",

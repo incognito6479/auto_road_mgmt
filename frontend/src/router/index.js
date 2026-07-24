@@ -38,6 +38,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/students/:id',
+    name: 'student-detail',
+    component: () => import('@/views/StudentDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/groups',
     name: 'groups',
     component: () => import('@/views/GroupsView.vue'),
@@ -62,9 +68,33 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/users/:id',
+    name: 'user-detail',
+    component: () => import('@/views/UserDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/learning-places',
     name: 'learning-places',
     component: () => import('@/views/LearningPlacesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/agents',
+    name: 'agents',
+    component: () => import('@/views/AgentsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/agents/:id',
+    name: 'agent-detail',
+    component: () => import('@/views/AgentDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/holidays',
+    name: 'holidays',
+    component: () => import('@/views/HolidaysView.vue'),
     meta: { requiresAuth: true },
   },
 ]

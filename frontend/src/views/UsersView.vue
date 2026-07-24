@@ -4,8 +4,8 @@
     <!-- Top Action Bar -->
     <div class="page-top">
       <div class="top-title-wrap">
-        <h2 class="page-main-title">Foydalanuvchilar Boshqaruvi</h2>
-        <p class="page-sub-title">Tizim xodimlari, instruktorlar va adminlar ro'yxati</p>
+        <h2 class="page-main-title">{{ rolePageTitle }}</h2>
+        <p class="page-sub-title">{{ rolePageSub }}</p>
       </div>
       <button v-if="authStore.isSuperuser" class="btn-add" @click="openCreateModal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" style="margin-right: 6px;">
@@ -34,21 +34,10 @@
         </div>
       </div>
 
-      <div class="filter-field">
-        <label class="filter-label">Roli bo'yicha saralash</label>
-        <div class="select-wrap">
-          <select v-model="filterRole" class="filter-select">
-            <option value="">Barchasi</option>
-            <option value="superuser">Superuser</option>
-            <option value="admin">Admin</option>
-            <option value="instructor">Instruktor</option>
-            <option value="mechanic">Mexanik</option>
-            <option value="coordinator">Kordinator</option>
-          </select>
-          <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-          </svg>
-        </div>
+      <!-- Active role badge indicator -->
+      <div v-if="filterRole" class="filter-role-badge">
+        <span class="role-badge" :class="roleClass(filterRole, false)">{{ roleMeta[filterRole]?.title }}</span>
+        <span class="filter-role-hint">bo'yicha ko'rsatilmoqda</span>
       </div>
     </div>
 
@@ -82,10 +71,10 @@
             <tr v-if="filteredUsers.length === 0">
               <td :colspan="authStore.isSuperuser ? 8 : 7" class="td-empty">Foydalanuvchilar topilmadi.</td>
             </tr>
-            <tr v-for="u in filteredUsers" :key="u.id" class="table-row">
+            <tr v-for="u in filteredUsers" :key="u.id" class="table-row clickable" @click="goToUserDetail(u.id)">
               <td class="td-id">#{{ u.id }}</td>
               <td class="td-name">
-                <div class="user-fullname">{{ getUserFullName(u) }}</div>
+                <div class="user-fullname user-link-title">{{ getUserFullName(u) }}</div>
                 <div v-if="u.email" class="user-email">{{ u.email }}</div>
               </td>
               <td class="td-phone">{{ formatPhone(u.phone) }}</td>
@@ -97,15 +86,15 @@
               <td class="td-jshshr">{{ u.jshshr || '-' }}</td>
               <td class="td-passport">{{ formatPassport(u.passport_serie, u.passport_number) }}</td>
               <td class="td-date">{{ formatDate(u.date_joined) }}</td>
-              <td v-if="authStore.isSuperuser" style="text-align: center;">
+              <td v-if="authStore.isSuperuser" style="text-align: center;" @click.stop>
                 <div class="action-btn-group">
-                  <button class="btn-action btn-edit" @click="openEditModal(u)" title="Tahrirlash">
+                  <button class="btn-action btn-edit" @click.stop="openEditModal(u)" title="Tahrirlash">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button class="btn-action btn-delete" @click="openDeleteModal(u)" title="O'chirish (is_active=false)">
+                  <button class="btn-action btn-delete" @click.stop="openDeleteModal(u)" title="O'chirish (is_active=false)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -157,20 +146,38 @@
         <div class="form-section">
           <div class="section-tag">Asosiy Ma'lumotlar</div>
 
-          <div class="form-group">
-            <label class="form-label">Telefon raqami (Login) <span class="req">*</span></label>
-            <div class="input-icon-wrap">
-              <svg class="field-ico" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-              </svg>
-              <input
-                v-model="userForm.phone"
-                type="text"
-                placeholder="+998 90 123 45 67"
-                required
-                class="form-input with-icon"
-                @input="onPhoneInput"
-              />
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Telefon raqami (Login) <span class="req">*</span></label>
+              <div class="input-icon-wrap">
+                <svg class="field-ico" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                <input
+                  v-model="userForm.phone"
+                  type="text"
+                  placeholder="+998 90 123 45 67"
+                  required
+                  class="form-input with-icon"
+                  @input="onPhoneInput"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Qo'shimcha telefon</label>
+              <div class="input-icon-wrap">
+                <svg class="field-ico" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                <input
+                  v-model="userForm.phone2"
+                  type="text"
+                  placeholder="+998 90 123 45 67"
+                  class="form-input with-icon"
+                  @input="onPhone2Input"
+                />
+              </div>
             </div>
           </div>
 
@@ -211,15 +218,18 @@
 
         <!-- Section 2: Visual Role Cards Selector -->
         <div class="form-section">
-          <div class="section-tag">Foydalanuvchi Roli <span class="req">*</span></div>
+          <div class="section-tag">
+            Foydalanuvchi Roli <span class="req">*</span>
+            <span v-if="isRoleLocked" class="role-locked-note">— navlink orqali belgilangan</span>
+          </div>
 
           <div class="role-cards-grid">
             <div
-              v-for="r in roleOptions"
+              v-for="r in modalRoleOptions"
               :key="r.key"
               class="role-card-item"
-              :class="{ 'selected': userForm.role === r.key }"
-              @click="userForm.role = r.key"
+              :class="{ 'selected': userForm.role === r.key, 'locked': isRoleLocked }"
+              @click="!isRoleLocked && (userForm.role = r.key)"
             >
               <div class="role-card-left">
                 <div class="role-icon-avatar" :class="'role-avatar-' + r.key" v-html="r.icon"></div>
@@ -376,19 +386,36 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 const users = ref([])
 const loading = ref(false)
 const error = ref('')
 
-// Filters
+function goToUserDetail(id) {
+  if (id) router.push(`/users/${id}`)
+}
+
+// Filters — filterRole is driven by route query
 const filterSearch = ref('')
-const filterRole = ref('')
+const filterRole = computed(() => route.query.role || '')
+
+// Role page title/subtitle mapping
+const roleMeta = {
+  coordinator: { title: "O'qituvchilar",  sub: "Nazariy dars o'qituvchilari ro'yxati" },
+  instructor:  { title: 'Instruktorlar',   sub: "Amaliy dars instruktorlari ro'yxati" },
+  mechanic:    { title: 'Mexaniklar',      sub: "Mexaniklar ro'yxati" },
+  admin:       { title: 'Adminlar',        sub: "Admin va superuser foydalanuvchilar ro'yxati" },
+}
+const rolePageTitle = computed(() => roleMeta[filterRole.value]?.title ?? 'Foydalanuvchilar Boshqaruvi')
+const rolePageSub   = computed(() => roleMeta[filterRole.value]?.sub   ?? "Tizim xodimlari, instruktorlar va adminlar ro'yxati")
 
 // User modal state
 const userModal = ref(null)
@@ -397,8 +424,9 @@ const editingId = ref(null)
 const saving = ref(false)
 const modalError = ref('')
 const showPassword = ref(false)
-const userForm = ref({
+const defaultUserForm = () => ({
   phone: '',
+  phone2: '',
   first_name: '',
   last_name: '',
   role: 'coordinator',
@@ -407,12 +435,13 @@ const userForm = ref({
   passport_number: '',
   password: '',
 })
+const userForm = ref(defaultUserForm())
 
 // Role options for visual selector
 const roleOptions = [
   {
     key: 'coordinator',
-    title: 'Kordinator',
+    title: "O'qituvchi",
     badgeClass: 'badge-coordinator',
     desc: "Nazariy darslar",
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
@@ -439,6 +468,13 @@ const roleOptions = [
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
   },
   {
+    key: 'student',
+    title: "O'quvchi",
+    badgeClass: 'badge-student',
+    desc: "Avtomaktab o'quvchisi",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`
+  },
+  {
     key: 'superuser',
     title: 'Superuser',
     badgeClass: 'badge-superuser',
@@ -446,6 +482,17 @@ const roleOptions = [
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
   },
 ]
+
+// When creating via a navlink (filterRole is set), show only that role card.
+// When editing or no role filter is active, show all options.
+const modalRoleOptions = computed(() => {
+  if (!isEditing.value && filterRole.value) {
+    return roleOptions.filter(r => r.key === filterRole.value)
+  }
+  return roleOptions
+})
+
+const isRoleLocked = computed(() => !isEditing.value && filterRole.value !== '')
 
 // Delete modal state
 const deleteModal = ref(null)
@@ -469,13 +516,19 @@ const fetchUsers = async () => {
 
 const filteredUsers = computed(() => {
   return users.value.filter(u => {
-    const matchRole = !filterRole.value || u.role === filterRole.value || (filterRole.value === 'superuser' && u.is_superuser)
+    const role = filterRole.value
+    // admin filter also includes superusers
+    const matchRole = !role ||
+      u.role === role ||
+      (role === 'superuser' && u.is_superuser) ||
+      (role === 'admin' && (u.role === 'admin' || u.is_superuser))
     const q = filterSearch.value.toLowerCase().trim()
     const fullName = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
     const phoneClean = (u.phone || '').replace(/\D/g, '')
+    const phone2Clean = (u.phone2 || '').replace(/\D/g, '')
     const qClean = q.replace(/\D/g, '')
     
-    const matchSearch = !q || fullName.includes(q) || (u.phone && u.phone.toLowerCase().includes(q)) || (qClean && phoneClean.includes(qClean))
+    const matchSearch = !q || fullName.includes(q) || (u.phone && u.phone.toLowerCase().includes(q)) || (qClean && (phoneClean.includes(qClean) || phone2Clean.includes(qClean)))
     return matchRole && matchSearch
   })
 })
@@ -511,7 +564,8 @@ const roleText = (role, isSuperuser) => {
   if (role === 'admin') return 'Admin'
   if (role === 'instructor') return 'Instruktor'
   if (role === 'mechanic') return 'Mexanik'
-  if (role === 'coordinator') return 'Kordinator'
+  if (role === 'coordinator') return "O'qituvchi"
+  if (role === 'student') return "O'quvchi"
   return role || 'Xodim'
 }
 
@@ -520,6 +574,7 @@ const roleClass = (role, isSuperuser) => {
   if (role === 'admin') return 'badge-admin'
   if (role === 'instructor') return 'badge-instructor'
   if (role === 'mechanic') return 'badge-mechanic'
+  if (role === 'student') return 'badge-student'
   return 'badge-coordinator'
 }
 
@@ -546,6 +601,30 @@ const onPhoneInput = (e) => {
   userForm.value.phone = formatted
 }
 
+const onPhone2Input = (e) => {
+  let val = e.target.value
+  let digits = val.replace(/\D/g, '')
+  if (!digits) {
+    userForm.value.phone2 = ''
+    return
+  }
+  if (!digits.startsWith('998')) {
+    if ('998'.startsWith(digits)) {
+      digits = '998'
+    } else {
+      digits = '998' + digits
+    }
+  }
+  digits = digits.substring(0, 12)
+  
+  let formatted = '+' + digits.substring(0, 3)
+  if (digits.length > 3) formatted += ' ' + digits.substring(3, 5)
+  if (digits.length > 5) formatted += ' ' + digits.substring(5, 8)
+  if (digits.length > 8) formatted += ' ' + digits.substring(8, 10)
+  if (digits.length > 10) formatted += ' ' + digits.substring(10, 12)
+  userForm.value.phone2 = formatted
+}
+
 const onJshshrInput = (e) => {
   userForm.value.jshshr = e.target.value.replace(/\D/g, '')
 }
@@ -560,11 +639,13 @@ const openCreateModal = () => {
   editingId.value = null
   modalError.value = ''
   showPassword.value = false
+  // Pre-select the role matching the active nav filter (default: coordinator)
+  const defaultRole = filterRole.value && filterRole.value !== '' ? filterRole.value : 'coordinator'
   userForm.value = {
     phone: '+998 ',
     first_name: '',
     last_name: '',
-    role: 'coordinator',
+    role: defaultRole,
     jshshr: '',
     passport_serie: '',
     passport_number: '',
@@ -736,6 +817,11 @@ onMounted(async () => {
     }
   })
 })
+
+// Re-fetch when route query role changes
+watch(() => route.query.role, () => {
+  filterSearch.value = ''
+})
 </script>
 
 <style scoped>
@@ -778,6 +864,7 @@ onMounted(async () => {
 /* Filter Card */
 .filter-card {
   display: flex;
+  align-items: center;
   gap: 16px;
   background: white;
   border-radius: 12px;
@@ -785,6 +872,18 @@ onMounted(async () => {
   margin-bottom: 20px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   border: 1px solid #E5E7EB;
+}
+.filter-role-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.filter-role-hint {
+  font-size: 12.5px;
+  color: #6B7280;
+  white-space: nowrap;
 }
 .filter-field {
   display: flex;
@@ -864,8 +963,19 @@ onMounted(async () => {
   color: #1F2937;
   vertical-align: middle;
 }
-.table-row:hover {
-  background: #F9FAFB;
+.table-row.clickable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.table-row.clickable:hover {
+  background: #F0FDF4;
+}
+.user-link-title {
+  color: #2D6A4F;
+  font-weight: 600;
+}
+.user-link-title:hover {
+  text-decoration: underline;
 }
 .td-id {
   color: #6B7280;
@@ -923,6 +1033,10 @@ onMounted(async () => {
 .badge-coordinator {
   background: #E0E7FF;
   color: #3730A3;
+}
+.badge-student {
+  background: #EFF6FF;
+  color: #1D4ED8;
 }
 
 /* Action Buttons */
@@ -1093,6 +1207,17 @@ onMounted(async () => {
   height: 1px;
   background: #E5E7EB;
 }
+.role-locked-note {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #9CA3AF;
+  background: #F3F4F6;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
 
 .form-row {
   display: flex;
@@ -1181,6 +1306,17 @@ onMounted(async () => {
   border-color: #2D6A4F;
   background: #ECFDF5;
   box-shadow: 0 4px 14px rgba(45, 106, 79, 0.14);
+}
+.role-card-item.locked {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.95;
+}
+.role-card-item.locked:hover {
+  transform: none;
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.14);
+  border-color: #2D6A4F;
+  background: #ECFDF5;
 }
 .role-card-left {
   display: flex;

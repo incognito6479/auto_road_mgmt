@@ -44,8 +44,16 @@
             <span class="summary-val">{{ formatDate(group.started_at) }}</span>
           </div>
           <div class="summary-item">
+            <span class="summary-label">Ish kunlari</span>
+            <span class="summary-val font-bold">{{ group.working_days ? group.working_days + ' kun' : '-' }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Dars kunlari</span>
+            <span class="summary-val">{{ weekendsText(group.working_weekends) }}</span>
+          </div>
+          <div class="summary-item">
             <span class="summary-label">Davomiyligi</span>
-            <span class="summary-val">{{ group.duration ? group.duration + ' oy' : '-' }}</span>
+            <span class="summary-val font-bold">{{ group.duration ? group.duration + ' oy' : '-' }}</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">O'quvchilar soni</span>
@@ -95,7 +103,7 @@
                 <th>Eslatmasi</th>
                 <th>O'quv Joyi & Vaqti</th>
                 <th v-if="authStore.isSuperuser || authStore.isMechanic">Instruktor</th>
-                <th v-if="authStore.isSuperuser || authStore.isMechanic">Kordinator</th>
+                <th v-if="authStore.isSuperuser || authStore.isMechanic">O'qituvchi</th>
                 <th v-if="!authStore.isMechanic">Shartnoma summasi</th>
                 <th v-if="!authStore.isMechanic">To'langan</th>
                 <th v-if="!authStore.isMechanic">Qoldiq</th>
@@ -106,7 +114,7 @@
               <tr v-if="filteredEnrollments.length === 0">
                 <td :colspan="tableColspan" class="td-empty">Hech qanday o'quvchi topilmadi.</td>
               </tr>
-              <tr v-for="e in filteredEnrollments" :key="e.id">
+              <tr v-for="e in filteredEnrollments" :key="e.id" class="stbl-row clickable-row" @click="goToStudentDetail(e.student)">
                 <td class="td-name">{{ e.student_name }}</td>
                 <td class="td-phone">
                   <div>{{ formatPhone(e.student_phone) }}</div>
@@ -118,11 +126,11 @@
                 <td class="td-notes">{{ e.notes || '-' }}</td>
 
                 <!-- Learning Place & Time Column -->
-                <td class="td-assign">
+                <td class="td-assign" @click.stop>
                   <div class="assign-cell">
                     <template v-if="e.learning_place_name || e.learning_time || e.learning_days">
                       <span class="assign-name">{{ formatSchedule(e) }}</span>
-                      <button class="btn-assign-edit" @click="openScheduleModal(e)" title="O'quv joyi va vaqtini o'zgartirish">
+                      <button class="btn-assign-edit" @click.stop="openScheduleModal(e)" title="O'quv joyi va vaqtini o'zgartirish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                           <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -130,17 +138,17 @@
                       </button>
                     </template>
                     <template v-else>
-                      <button class="btn-assign-plus" @click="openScheduleModal(e)" title="O'quv joyi va vaqtini biriktirish">+</button>
+                      <button class="btn-assign-plus" @click.stop="openScheduleModal(e)" title="O'quv joyi va vaqtini biriktirish">+</button>
                     </template>
                   </div>
                 </td>
 
                 <!-- Instructor Column -->
-                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign">
+                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
                   <div class="assign-cell">
                     <template v-if="e.instructor_name">
                       <span class="assign-name">{{ e.instructor_name }}</span>
-                      <button class="btn-assign-edit" @click="openAssignModal(e, 'instructor')" title="Instruktorni o'zgartirish">
+                      <button class="btn-assign-edit" @click.stop="openAssignModal(e, 'instructor')" title="Instruktorni o'zgartirish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                           <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -148,17 +156,17 @@
                       </button>
                     </template>
                     <template v-else>
-                      <button class="btn-assign-plus" @click="openAssignModal(e, 'instructor')" title="Instruktor biriktirish">+</button>
+                      <button class="btn-assign-plus" @click.stop="openAssignModal(e, 'instructor')" title="Instruktor biriktirish">+</button>
                     </template>
                   </div>
                 </td>
 
                 <!-- Coordinator Column -->
-                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign">
+                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
                   <div class="assign-cell">
                     <template v-if="e.coordinator_name">
                       <span class="assign-name">{{ e.coordinator_name }}</span>
-                      <button class="btn-assign-edit" @click="openAssignModal(e, 'coordinator')" title="Kordinatorni o'zgartirish">
+                      <button class="btn-assign-edit" @click.stop="openAssignModal(e, 'coordinator')" title="O'qituvchini o'zgartirish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                           <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -166,7 +174,7 @@
                       </button>
                     </template>
                     <template v-else>
-                      <button class="btn-assign-plus" @click="openAssignModal(e, 'coordinator')" title="Kordinator biriktirish">+</button>
+                      <button class="btn-assign-plus" @click.stop="openAssignModal(e, 'coordinator')" title="O'qituvchi biriktirish">+</button>
                     </template>
                   </div>
                 </td>
@@ -186,11 +194,11 @@
                     {{ formatMoney(e.enrolled_amount - e.paid_amount) }} so'm
                   </span>
                 </td>
-                <td v-if="!authStore.isMechanic" style="text-align: center;">
+                <td v-if="!authStore.isMechanic" style="text-align: center;" @click.stop>
                   <button
                     v-if="authStore.isAdminOrSuperuser && !e.enrolled_free && e.paid_amount < e.enrolled_amount"
                     class="btn-pay"
-                    @click="openPayModal(e)"
+                    @click.stop="openPayModal(e)"
                   >
                     To'lash
                   </button>
@@ -276,7 +284,7 @@
     <dialog ref="assignModal" class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title">
-          {{ assignType === 'instructor' ? "Instruktor Biriktirish" : "Kordinator Biriktirish" }}
+          {{ assignType === 'instructor' ? "Instruktor Biriktirish" : "O'qituvchi Biriktirish" }}
         </h3>
         <button class="btn-close" @click="closeAssignModal">✕</button>
       </div>
@@ -293,7 +301,7 @@
 
         <div class="form-group">
           <label class="form-label">
-            {{ assignType === 'instructor' ? "Instruktorni tanlang" : "Kordinatorni tanlang" }}
+            {{ assignType === 'instructor' ? "Instruktorni tanlang" : "O'qituvchini tanlang" }}
           </label>
           <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
             <select v-model="selectedAssignUserId" class="form-input select-input" style="width: 100%; appearance: none;">
@@ -400,11 +408,26 @@ const route = useRoute()
 const authStore = useAuthStore()
 const groupId = route.params.id
 
+const goToStudentDetail = (studentId) => {
+  if (studentId) {
+    router.push(`/students/${studentId}`)
+  }
+}
+
 const group = ref(null)
 const loading = ref(false)
 const error = ref('')
 const allUsers = ref([])
 const learningPlaces = ref([])
+
+const weekendsText = (w) => {
+  switch (w) {
+    case 'everyday': return 'Har kuni (Mon-Sat)'
+    case 'mon-wed-fri': return 'Dush-Chorsh-Juma'
+    case 'tue-wed-sat': return 'Ses-Paysh-Shanba'
+    default: return w || '-'
+  }
+}
 
 // Search state
 const searchQuery = ref('')
@@ -935,6 +958,8 @@ onMounted(async () => {
   vertical-align: middle;
 }
 
+.students-table tbody tr { cursor: pointer; }
+.students-table tbody tr:hover td { background: #FAFAFA; }
 .students-table tr:last-child td {
   border-bottom: none;
 }

@@ -64,6 +64,8 @@
               <option value="accepted">Qabul qilingan</option>
               <option value="returned">Qaytarilgan</option>
               <option value="paid">To'langan</option>
+              <option value="bonus">Bonus</option>
+              <option value="bank">Bank</option>
             </select>
             <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -104,6 +106,20 @@
             </svg>
           </div>
         </div>
+        <div class="filter-field">
+          <label class="filter-label">Agent bo'yicha</label>
+          <div class="select-wrap">
+            <select v-model="filterAgent" class="filter-select">
+              <option value="">Barcha agentlar</option>
+              <option v-for="a in agents" :key="a.id" :value="a.id">
+                {{ a.full_name }}
+              </option>
+            </select>
+            <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        </div>
       </div>
 
       <!-- Payments Table Card -->
@@ -116,6 +132,7 @@
                 <th>O'quvchi</th>
                 <th>JSHSHR</th>
                 <th>Kategoriya</th>
+                <th>Agent</th>
                 <th>Sana</th>
                 <th class="th-cashier">Kassir (Tel)</th>
                 <th>Summa</th>
@@ -127,13 +144,14 @@
             </thead>
             <tbody>
               <tr v-if="payments.length === 0">
-                <td :colspan="authStore.isSuperuser ? 11 : 10" class="td-empty">To'lovlar topilmadi.</td>
+                <td :colspan="authStore.isSuperuser ? 12 : 11" class="td-empty">To'lovlar topilmadi.</td>
               </tr>
               <tr v-for="p in payments" :key="p.id">
                 <td class="td-id">#{{ p.id }}</td>
                 <td class="td-student">{{ p.student_name || '-' }}</td>
                 <td class="td-jshshr" style="font-family: monospace; font-size: 12px;">{{ p.student_jshshr || '-' }}</td>
                 <td class="td-cat">{{ p.category_name || '-' }}</td>
+                <td class="td-agent">{{ p.agent_name || '-' }}</td>
                 <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
                 <td class="td-cashier">{{ formatPhone(p.cashier_name) }}</td>
                 <td class="td-amount">{{ formatMoney(p.amount) }} so'm</td>
@@ -220,6 +238,8 @@
               <option value="accepted">Qabul qilingan</option>
               <option value="returned">Qaytarilgan</option>
               <option value="paid">To'langan</option>
+              <option value="bonus">Bonus</option>
+              <option value="bank">Bank</option>
             </select>
             <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -268,11 +288,13 @@ const filterDateTo = ref('')
 const filterMethod = ref('')
 const filterStatus = ref('')
 
-// New category/student search/Jshshr filters
+// New category/student search/Jshshr/agent filters
 const categories = ref([])
+const agents = ref([])
 const filterCategory = ref('')
 const filterStudentName = ref('')
 const filterJshshr = ref('')
+const filterAgent = ref('')
 
 // Pagination state
 const currentPage = ref(1)
@@ -321,14 +343,20 @@ const fetchPayments = async () => {
     if (filterDateFrom.value) params.date_from = filterDateFrom.value
     if (filterDateTo.value) params.date_to = filterDateTo.value
     if (filterMethod.value) params.method = filterMethod.value
-    if (filterStatus.value) params.status = filterStatus.value
     if (filterCategory.value) params.category = filterCategory.value
     if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
     if (filterJshshr.value) params.jshshr = filterJshshr.value.trim()
 
+    if (filterAgent.value) {
+      params.agent = filterAgent.value
+      params.status = 'bonus'
+    } else if (filterStatus.value) {
+      params.status = filterStatus.value
+    }
+
     const response = await api.get('/payments/', { params })
-    payments.value = response.data.results
-    totalCount.value = response.data.count
+    payments.value = response.data.results || response.data
+    totalCount.value = response.data.count || payments.value.length
   } catch (err) {
     console.error(err)
     error.value = "To'lovlar ro'yxatini yuklashda xatolik yuz berdi."
@@ -337,8 +365,14 @@ const fetchPayments = async () => {
   }
 }
 
+watch(filterAgent, (newVal) => {
+  if (newVal) {
+    filterStatus.value = 'bonus'
+  }
+})
+
 watch(
-  [filterDateFrom, filterDateTo, filterMethod, filterStatus, filterCategory, filterStudentName, filterJshshr],
+  [filterDateFrom, filterDateTo, filterMethod, filterStatus, filterCategory, filterStudentName, filterJshshr, filterAgent],
   () => {
     currentPage.value = 1
     fetchPayments()
@@ -353,10 +387,14 @@ const changePage = (page) => {
 
 const fetchCategories = async () => {
   try {
-    const response = await api.get('/categories/')
-    categories.value = response.data
+    const [cRes, aRes] = await Promise.all([
+      api.get('/categories/?page_size=100'),
+      api.get('/agents/?page_size=100')
+    ])
+    categories.value = cRes.data.results ? cRes.data.results : cRes.data
+    agents.value = aRes.data.results ? aRes.data.results : aRes.data
   } catch (err) {
-    console.error('Error fetching categories:', err)
+    console.error('Error fetching categories and agents:', err)
   }
 }
 
@@ -391,6 +429,8 @@ const statusText = (status) => {
   if (status === 'accepted') return 'Qabul qilingan'
   if (status === 'returned') return 'Qaytarilgan'
   if (status === 'paid') return "To'langan"
+  if (status === 'bonus') return 'Bonus'
+  if (status === 'bank') return 'Bank'
   return status
 }
 
@@ -399,6 +439,8 @@ const statusClass = (status) => {
     'badge-accepted': status === 'accepted',
     'badge-returned': status === 'returned',
     'badge-paid': status === 'paid',
+    'badge-bonus': status === 'bonus',
+    'badge-bank': status === 'bank',
   }
 }
 
@@ -707,6 +749,18 @@ onMounted(async () => {
   background: #E3F2FD;
   color: #1565C0;
   border: 1px solid #BBDEFB;
+}
+
+.badge-bonus {
+  background: #F3E8FF;
+  color: #7E22CE;
+  border: 1px solid #E9D5FF;
+}
+
+.badge-bank {
+  background: #E0F2FE;
+  color: #0369A1;
+  border: 1px solid #BAE6FD;
 }
 
 /* ── States ── */

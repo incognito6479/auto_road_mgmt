@@ -28,18 +28,45 @@
       <!-- Main navigation -->
       <nav class="sidebar-nav">
 
-        <!-- Bosh sahifa + sub-item -->
-        <!-- All nav items -->
-        <button
-          v-for="item in allNavItems"
-          :key="item.path"
-          class="nav-btn"
-          :class="{ active: route.path === item.path }"
-          @click="go(item.path)"
-        >
-          <span class="nav-ico" v-html="item.icon"></span>
-          <span class="nav-label" v-if="!isSidebarCollapsed">{{ item.label }}</span>
-        </button>
+        <template v-for="item in allNavItems" :key="item.path || item.label">
+          <!-- Dropdown group -->
+          <div v-if="item.children" class="nav-group">
+            <button
+              class="nav-btn nav-btn-parent"
+              :class="{ 'group-active': item.children.some(c => route.path + (route.query.role ? '?role=' + route.query.role : '') === c.path + (c.role ? '?role=' + c.role : '')) || isGroupOpen(item.label) }"
+              @click="toggleGroup(item.label)"
+            >
+              <span class="nav-ico" v-html="item.icon"></span>
+              <span class="nav-label" v-if="!isSidebarCollapsed">{{ item.label }}</span>
+              <span v-if="!isSidebarCollapsed" class="nav-arrow" :class="{ 'rotated': isGroupOpen(item.label) }">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+              </span>
+            </button>
+            <div v-if="isGroupOpen(item.label) && !isSidebarCollapsed" class="nav-children">
+              <button
+                v-for="child in item.children"
+                :key="child.label"
+                class="nav-sub-btn"
+                :class="{ 'sub-active': route.path === child.path && route.query.role === child.role }"
+                @click="goRole(child.path, child.role)"
+              >
+                <span class="sub-dot"></span>
+                {{ child.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Regular item -->
+          <button
+            v-else
+            class="nav-btn"
+            :class="{ active: route.path === item.path }"
+            @click="go(item.path)"
+          >
+            <span class="nav-ico" v-html="item.icon"></span>
+            <span class="nav-label" v-if="!isSidebarCollapsed">{{ item.label }}</span>
+          </button>
+        </template>
 
       </nav>
 
@@ -141,6 +168,26 @@ function go(path) {
   router.push(path)
 }
 
+function goRole(path, role) {
+  router.push({ path, query: role ? { role } : undefined })
+}
+
+// ── Nav group (dropdown) state ───────────────────────────────
+const openGroups = ref(new Set(JSON.parse(localStorage.getItem('nav_open_groups') || '[]')))
+
+function isGroupOpen(label) {
+  return openGroups.value.has(label)
+}
+
+function toggleGroup(label) {
+  if (openGroups.value.has(label)) {
+    openGroups.value.delete(label)
+  } else {
+    openGroups.value.add(label)
+  }
+  localStorage.setItem('nav_open_groups', JSON.stringify([...openGroups.value]))
+}
+
 // ── Dynamic page title ───────────────────────────────────────
 const pageTitles = {
   '/':                  "Ko'rinish",
@@ -152,11 +199,28 @@ const pageTitles = {
   '/lessons':           "Darslar",
   '/billing':           "To'lovlar",
   '/users':             "Foydalanuvchilar",
+  '/learning-places':   "O'quv Joylari",
+  '/agents':            "Agentlar Boshqaruvi",
+  '/holidays':          "Bayramlar Boshqaruvi",
   '/reports':           "Hisobotlar",
   '/settings':          "Sozlamalar",
 }
 
-const pageTitle = computed(() => pageTitles[route.path] ?? "Ko'rinish")
+const roleTitles = {
+  coordinator: "O'qituvchilar",
+  instructor: 'Instruktorlar',
+  mechanic: 'Mexaniklar',
+  admin: 'Adminlar',
+}
+
+const pageTitle = computed(() => {
+  if (route.path === '/users' && route.query.role && roleTitles[route.query.role]) {
+    return roleTitles[route.query.role]
+  }
+  if (route.path.startsWith('/users/')) return "Foydalanuvchi Ma'lumotlari"
+  if (route.path.startsWith('/agents/')) return "Agent Ma'lumotlari"
+  return pageTitles[route.path] ?? "Ko'rinish"
+})
 
 // ── User dropdown ────────────────────────────────────────────
 const showDropdown = ref(false)
@@ -190,6 +254,8 @@ const icons = {
   groups:    `<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 2.01 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>`,
   users:     `<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`,
   learningPlaces: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`,
+  agents: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`,
+  holidays: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path></svg>`,
 }
 
 const allNavItems = [
@@ -198,9 +264,19 @@ const allNavItems = [
   { path: '/students',          label: 'Talabalar',        icon: icons.students },
   { path: '/groups',            label: 'Guruhlar',         icon: icons.groups },
   { path: '/billing',           label: "To'lovlar",        icon: icons.billing },
-  { path: '/users',             label: 'Foydalanuvchilar', icon: icons.users },
+  {
+    label: 'Xodimlar',
+    icon: icons.users,
+    children: [
+      { label: "O'qituvchilar",  path: '/users', role: 'coordinator' },
+      { label: 'Instruktorlar',  path: '/users', role: 'instructor' },
+      { label: 'Mexaniklar',     path: '/users', role: 'mechanic' },
+      { label: 'Adminlar',       path: '/users', role: 'admin' },
+    ]
+  },
   { path: '/learning-places',   label: "O'quv Joylari",    icon: icons.learningPlaces },
-  { path: '/instructors',       label: 'Instruktorlar',    icon: icons.instructors },
+  { path: '/agents',            label: 'Agentlar',         icon: icons.agents },
+  { path: '/holidays',          label: 'Bayramlar',        icon: icons.holidays },
   { path: '/vehicles',          label: 'Avtomobillar',     icon: icons.vehicles },
   { path: '/lessons',           label: 'Darslar',          icon: icons.lessons },
   { path: '/reports',           label: 'Hisobotlar',       icon: icons.reports },
@@ -314,8 +390,38 @@ button { cursor: pointer; background: none; border: none; font-family: inherit; 
 }
 .nav-btn:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.9); }
 .nav-btn.active { background: #2D6A4F; color: white; }
+.nav-btn.group-active { color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.05); }
 
 .nav-ico { display: flex; align-items: center; flex-shrink: 0; opacity: 0.9; }
+
+/* Nav dropdown arrow */
+.nav-arrow {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  opacity: 0.5;
+  transition: transform 0.2s ease;
+}
+.nav-arrow.rotated {
+  transform: rotate(180deg);
+  opacity: 0.8;
+}
+
+/* Nav children (sub-items under dropdown parent) */
+.nav-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 2px 4px;
+  border-left: 2px solid rgba(255,255,255,0.08);
+  margin-left: 14px;
+  overflow: hidden;
+  animation: slideDown 0.15s ease;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 .brand-left {
   display: flex;

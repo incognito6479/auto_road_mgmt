@@ -1,30 +1,30 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from management.models import Category, Student, User, Enrollment, Payment, Group, LearningPlace
+from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     # Columns shown in the list view
     list_display = (
-        "id", "phone", "role", "first_name", "last_name", "email",
-        "jshshr", "passport_serie", "passport_number",
+        "id", "full_name", "phone", "phone2", "role", "first_name", "last_name", "email",
+        "jshshr", "passport_serie", "passport_number", "notes",
         "is_staff", "is_superuser", "is_active", "date_joined", "last_login"
     )
     list_filter = ("role", "is_staff", "is_superuser", "is_active")
-    search_fields = ("phone", "first_name", "last_name", "jshshr")
+    search_fields = ("full_name", "phone", "phone2", "first_name", "last_name", "jshshr", "notes")
     ordering = ("phone",)
 
     # All fields editable on the change form
     fieldsets = (
         (None, {
-            "fields": ("phone", "password"),
+            "fields": ("phone", "phone2", "password"),
         }),
         ("Shaxsiy ma'lumotlar", {
             "fields": (
-                "first_name", "last_name", "email",
-                "jshshr", "passport_serie", "passport_number",
+                "full_name", "first_name", "last_name", "email",
+                "jshshr", "passport_serie", "passport_number", "notes",
             ),
         }),
         ("Rol va ruxsatlar", {
@@ -43,29 +43,12 @@ class UserAdmin(BaseUserAdmin):
         (None, {
             "classes": ("wide",),
             "fields": (
-                "phone", "password1", "password2",
-                "first_name", "last_name", "email",
-                "role", "jshshr", "passport_serie", "passport_number",
+                "phone", "phone2", "password1", "password2",
+                "full_name", "first_name", "last_name", "email",
+                "role", "jshshr", "passport_serie", "passport_number", "notes",
                 "is_active", "is_staff", "is_superuser",
             ),
         }),
-    )
-
-
-@admin.register(Student)
-class StudentAdmin(admin.ModelAdmin):
-    list_display = (
-        "id", "full_name", "phone", "phone2", "jshshr",
-        "passport_serie", "passport_number",
-        "is_active", "notes", "created_at", "updated_at"
-    )
-    list_filter = ("is_active", "created_at")
-    search_fields = ("full_name", "phone", "phone2", "jshshr")
-    ordering = ("full_name",)
-    readonly_fields = ("id", "created_at", "updated_at")
-    fields = (
-        "full_name", "phone", "phone2", "jshshr", "passport_serie",
-        "passport_number", "notes", "is_active", "created_at", "updated_at"
     )
 
 
@@ -99,19 +82,29 @@ class LearningPlaceAdmin(admin.ModelAdmin):
     fields = ("place_name", "is_active", "created_at", "updated_at")
 
 
+@admin.register(Agent)
+class AgentAdmin(admin.ModelAdmin):
+    list_display = ("id", "full_name", "phone", "phone2", "is_active", "notes", "created_at", "updated_at")
+    list_filter = ("is_active", "created_at")
+    search_fields = ("full_name", "phone", "phone2", "notes")
+    ordering = ("full_name",)
+    readonly_fields = ("id", "created_at", "updated_at")
+    fields = ("full_name", "phone", "phone2", "notes", "is_active", "created_at", "updated_at")
+
+
 @admin.register(Enrollment)
 class EnrollmentAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "student", "category", "group", "instructor", "coordinator",
+        "id", "student", "category", "group", "instructor", "coordinator", "agent",
         "learning_place", "learning_time", "learning_days",
         "status", "enrolled_free", "enrolled_amount", "is_active", "notes", "created_at", "updated_at"
     )
-    list_filter = ("status", "learning_days", "learning_place", "enrolled_free", "is_active", "created_at", "group")
-    search_fields = ("student__full_name", "category__name", "group__name", "learning_time")
+    list_filter = ("status", "learning_days", "learning_place", "agent", "enrolled_free", "is_active", "created_at", "group")
+    search_fields = ("student__first_name", "student__last_name", "student__phone", "agent__full_name", "agent__phone", "category__name", "group__name", "learning_time")
     ordering = ("-created_at",)
     readonly_fields = ("id", "created_at", "updated_at")
     fields = (
-        "student", "category", "group", "instructor", "coordinator",
+        "student", "category", "group", "instructor", "coordinator", "agent",
         "learning_place", "learning_time", "learning_days",
         "status", "enrolled_free", "enrolled_amount", "notes", "is_active", "created_at", "updated_at"
     )
@@ -121,7 +114,7 @@ class EnrollmentAdmin(admin.ModelAdmin):
 class PaymentAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "enrollment", "amount", "status", "method", "is_active", "notes", "created_at", "updated_at")
     list_filter = ("status", "method", "is_active", "created_at")
-    search_fields = ("enrollment__student__full_name", "user__phone")
+    search_fields = ("enrollment__student__first_name", "enrollment__student__last_name", "user__phone")
     ordering = ("-created_at",)
     readonly_fields = ("id", "created_at", "updated_at")
     fields = ("enrollment", "user", "amount", "status", "method", "notes", "is_active", "created_at", "updated_at")

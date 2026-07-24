@@ -201,7 +201,7 @@ const fetchPlaces = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/learning-places/')
+    const response = await api.get('/learning-places/?page_size=100')
     places.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
   } catch (err) {
     console.error(err)

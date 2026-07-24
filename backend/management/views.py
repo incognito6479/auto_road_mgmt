@@ -4,12 +4,13 @@ management/views.py
 All application views for the Driving School Management app live here.
 """
 
+from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
-from management.models import Category, Student, User, Enrollment, Payment, Group, LearningPlace
+from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays
 from management.serializers import (
     CategorySerializer,
     StudentSerializer,
@@ -19,6 +20,8 @@ from management.serializers import (
     PaymentSerializer,
     GroupSerializer,
     LearningPlaceSerializer,
+    AgentSerializer,
+    HolidaysSerializer,
 )
 
 
@@ -46,13 +49,40 @@ class SoftDeleteModelViewSet(viewsets.ModelViewSet):
 class StandardPagination(PageNumberPagination):
     page_size = 50
     page_size_query_param = "page_size"
-    max_page_size = 100
+    max_page_size = 1000
 
 
 def is_admin_or_superuser(user):
     if not user or not user.is_authenticated:
         return False
     return user.is_superuser or user.role in [User.Role.ADMIN, User.Role.SUPERUSER]
+
+
+# ---------------------------------------------------------------------------
+# Holidays
+# ---------------------------------------------------------------------------
+
+class HolidaysViewSet(SoftDeleteModelViewSet):
+    """CRUD for holidays and official days off."""
+
+    queryset = Holidays.objects.filter(is_active=True).order_by("-start_date")
+    serializer_class = HolidaysSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(holiday_name__icontains=search.strip())
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        if not is_admin_or_superuser(request.user):
+            return Response(
+                {"detail": "Bayram yaratish faqat admin va superuser uchun ruxsat etilgan."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().create(request, *args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +94,7 @@ class CategoryViewSet(SoftDeleteModelViewSet):
 
     queryset = Category.objects.filter(is_active=True).order_by("name")
     serializer_class = CategorySerializer
+    pagination_class = StandardPagination
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
@@ -83,6 +114,23 @@ class UserViewSet(SoftDeleteModelViewSet):
 
     queryset = User.objects.filter(is_active=True).order_by("phone")
     serializer_class = UserSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        role = self.request.query_params.get("role")
+        search = self.request.query_params.get("search")
+
+        if role:
+            qs = qs.filter(role=role)
+        if search:
+            qs = qs.filter(
+                Q(full_name__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(phone__icontains=search)
+            )
+        return qs
 
     @action(detail=False, methods=["get"])
     def me(self, request):
@@ -123,13 +171,13 @@ class UserViewSet(SoftDeleteModelViewSet):
 
 
 # ---------------------------------------------------------------------------
-# Student
+# Student (User model with role=STUDENT)
 # ---------------------------------------------------------------------------
 
 class StudentViewSet(SoftDeleteModelViewSet):
-    """CRUD for driving school students."""
+    """CRUD for driving school students (User model with role=student)."""
 
-    queryset = Student.objects.filter(is_active=True).order_by("full_name")
+    queryset = User.objects.filter(role=User.Role.STUDENT, is_active=True).order_by("first_name", "last_name")
     serializer_class = StudentSerializer
     pagination_class = StandardPagination
 
@@ -149,7 +197,7 @@ class StudentViewSet(SoftDeleteModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         category = self.request.query_params.get("category")
-        status = self.request.query_params.get("status")
+        status_param = self.request.query_params.get("status")
         search = self.request.query_params.get("search")
         jshshr = self.request.query_params.get("jshshr")
 
@@ -158,17 +206,22 @@ class StudentViewSet(SoftDeleteModelViewSet):
                 queryset = queryset.filter(enrollments__category_id=category, enrollments__is_active=True)
             else:
                 queryset = queryset.filter(enrollments__category__name=category, enrollments__is_active=True)
-        if status:
+        if status_param:
             status_map = {
                 'Yangi': Enrollment.Status.NEW,
                 'Qabul qilingan': Enrollment.Status.ENROLLED,
                 'Tugatgan': Enrollment.Status.FINISHED,
             }
-            mapped_status = status_map.get(status, status)
+            mapped_status = status_map.get(status_param, status_param)
             queryset = queryset.filter(enrollments__status=mapped_status, enrollments__is_active=True)
         if search:
-            from django.db.models import Q
-            queryset = queryset.filter(Q(full_name__icontains=search) | Q(phone__icontains=search) | Q(phone2__icontains=search))
+            queryset = queryset.filter(
+                Q(full_name__icontains=search) | 
+                Q(first_name__icontains=search) | 
+                Q(last_name__icontains=search) | 
+                Q(phone__icontains=search) | 
+                Q(phone2__icontains=search)
+            )
         if jshshr:
             queryset = queryset.filter(jshshr__icontains=jshshr)
 
@@ -184,6 +237,33 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
 
     queryset = Enrollment.objects.filter(is_active=True).order_by("-created_at")
     serializer_class = EnrollmentSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        student = self.request.query_params.get("student")
+        category = self.request.query_params.get("category")
+        status = self.request.query_params.get("status")
+        instructor = self.request.query_params.get("instructor")
+        coordinator = self.request.query_params.get("coordinator")
+        agent = self.request.query_params.get("agent")
+        group = self.request.query_params.get("group")
+
+        if student:
+            queryset = queryset.filter(student_id=student)
+        if category:
+            queryset = queryset.filter(category_id=category)
+        if status:
+            queryset = queryset.filter(status=status)
+        if instructor:
+            queryset = queryset.filter(instructor_id=instructor)
+        if coordinator:
+            queryset = queryset.filter(coordinator_id=coordinator)
+        if agent:
+            queryset = queryset.filter(agent_id=agent)
+        if group:
+            queryset = queryset.filter(group_id=group)
+        return queryset
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +286,16 @@ class PaymentViewSet(SoftDeleteModelViewSet):
         jshshr = self.request.query_params.get("jshshr")
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
+        enrollment = self.request.query_params.get("enrollment")
+        student = self.request.query_params.get("student")
+        agent = self.request.query_params.get("agent")
 
+        if enrollment:
+            queryset = queryset.filter(enrollment_id=enrollment)
+        if student:
+            queryset = queryset.filter(enrollment__student_id=student)
+        if agent:
+            queryset = queryset.filter(Q(agent_id=agent) | Q(enrollment__agent_id=agent))
         if status:
             queryset = queryset.filter(status=status)
         if method:
@@ -269,6 +358,7 @@ class GroupViewSet(SoftDeleteModelViewSet):
 
     queryset = Group.objects.filter(is_active=True).order_by("-created_at")
     serializer_class = GroupSerializer
+    pagination_class = StandardPagination
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
@@ -288,6 +378,7 @@ class LearningPlaceViewSet(SoftDeleteModelViewSet):
 
     queryset = LearningPlace.objects.filter(is_active=True).order_by("-created_at")
     serializer_class = LearningPlaceSerializer
+    pagination_class = StandardPagination
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
@@ -297,3 +388,34 @@ class LearningPlaceViewSet(SoftDeleteModelViewSet):
             )
         return super().create(request, *args, **kwargs)
 
+
+# ---------------------------------------------------------------------------
+# Agent
+# ---------------------------------------------------------------------------
+
+class AgentViewSet(SoftDeleteModelViewSet):
+    """CRUD for Agents (Student recruiters / referrals)."""
+
+    queryset = Agent.objects.filter(is_active=True).order_by("-created_at")
+    serializer_class = AgentSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get("search", None)
+        if search:
+            search_cleaned = search.strip().lower()
+            qs = qs.filter(
+                Q(full_name__icontains=search_cleaned) |
+                Q(phone__icontains=search_cleaned) |
+                Q(phone2__icontains=search_cleaned)
+            )
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        if not is_admin_or_superuser(request.user):
+            return Response(
+                {"detail": "Agent yaratish faqat admin va superuser uchun ruxsat etilgan."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().create(request, *args, **kwargs)

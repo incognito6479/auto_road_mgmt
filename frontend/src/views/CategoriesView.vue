@@ -58,7 +58,7 @@
             <circle cx="12" cy="12" r="10"></circle>
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
-          <span>Davomiyligi: <strong style="color: #111827;">{{ cat.duration ? cat.duration + ' oy' : 'Belgilanmagan' }}</strong></span>
+          <span>Ish kunlari: <strong style="color: #111827;">{{ cat.duration ? cat.duration + ' kun' : 'Belgilanmagan' }}</strong></span>
         </div>
 
         <!-- Progress bar -->
@@ -107,13 +107,12 @@
         </div>
 
         <div class="form-group">
-          <label for="cat-duration" class="form-label">Davomiyligi (oylar)</label>
+          <label for="cat-duration" class="form-label">Ish kunlari (masalan: 68)</label>
           <input
             id="cat-duration"
             v-model="newCategory.duration"
             type="number"
-            step="0.1"
-            placeholder="Masalan: 3.5"
+            placeholder="68"
             required
             class="form-input"
           />
@@ -164,13 +163,12 @@
         </div>
 
         <div class="form-group">
-          <label for="edit-cat-duration" class="form-label">Davomiyligi (oylar)</label>
+          <label for="edit-cat-duration" class="form-label">Ish kunlari (masalan: 68)</label>
           <input
             id="edit-cat-duration"
             v-model="editingCategory.duration"
             type="number"
-            step="0.1"
-            placeholder="Masalan: 3.5"
+            placeholder="68"
             required
             class="form-input"
           />
@@ -329,8 +327,8 @@ const fetchCategories = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/categories/')
-    categories.value = response.data
+    const response = await api.get('/categories/?page_size=100')
+    categories.value = response.data.results ? response.data.results : response.data
   } catch (err) {
     console.error(err)
     error.value = 'Kategoriyalarni yuklashda xatolik yuz berdi.'
