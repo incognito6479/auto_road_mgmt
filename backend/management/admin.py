@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent
+from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, DrivingLessons, Notification
 
 
 @admin.register(User)
@@ -118,3 +118,39 @@ class PaymentAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
     readonly_fields = ("id", "created_at", "updated_at")
     fields = ("enrollment", "user", "amount", "status", "method", "notes", "is_active", "created_at", "updated_at")
+
+
+@admin.register(Holidays)
+class HolidaysAdmin(admin.ModelAdmin):
+    list_display = ("id", "holiday_name", "start_date", "end_date", "is_active", "note", "created_at", "updated_at")
+    list_filter = ("is_active", "start_date", "end_date")
+    search_fields = ("holiday_name", "note")
+    ordering = ("-start_date",)
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(Car)
+class CarAdmin(admin.ModelAdmin):
+    list_display = ("id", "car_name", "status", "manufact_year", "policy_date", "tech_inspection_date", "is_active", "notes", "created_at", "updated_at")
+    list_filter = ("status", "manufact_year", "is_active")
+    search_fields = ("car_name", "notes")
+    ordering = ("car_name",)
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(DrivingLessons)
+class DrivingLessonsAdmin(admin.ModelAdmin):
+    list_display = ("id", "student", "instructor", "car", "lesson_date", "is_active", "notes", "created_at", "updated_at")
+    list_filter = ("lesson_date", "is_active")
+    search_fields = ("student__full_name", "instructor__full_name", "car__car_name", "notes")
+    ordering = ("-lesson_date", "-created_at")
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "status", "user", "is_read", "date", "is_active", "created_at", "updated_at")
+    list_filter = ("status", "is_read", "is_active", "date")
+    search_fields = ("title", "note")
+    ordering = ("-date", "-created_at")
+    readonly_fields = ("id", "created_at", "updated_at")

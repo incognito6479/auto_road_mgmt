@@ -9,7 +9,7 @@ from rest_framework import serializers
 from django.db.models import Sum
 
 from datetime import timedelta
-from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays
+from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, DrivingLessons, Notification
 
 
 def compute_group_duration(started_at, working_days, working_weekends_choice):
@@ -498,13 +498,15 @@ class PaymentSerializer(serializers.ModelSerializer):
     student_jshshr = serializers.CharField(source="enrollment.student.jshshr", read_only=True)
     category_name = serializers.CharField(source="enrollment.category.name", read_only=True)
     cashier_name = serializers.CharField(source="user.phone", read_only=True)
+    user_full_name = serializers.CharField(source="user.full_name", read_only=True)
+    user_phone = serializers.CharField(source="user.phone", read_only=True)
     agent_name = serializers.CharField(source="agent.full_name", read_only=True)
     agent_phone = serializers.CharField(source="agent.phone", read_only=True)
 
     class Meta:
         model = Payment
         fields = [
-            "id", "user", "cashier_name", "enrollment", "student_name", "student_jshshr", "category_name",
+            "id", "user", "user_full_name", "user_phone", "cashier_name", "enrollment", "student_name", "student_jshshr", "category_name",
             "agent", "agent_name", "agent_phone",
             "amount", "status", "method", "notes", "is_active", "created_at", "updated_at"
         ]
@@ -580,3 +582,41 @@ class GroupSerializer(serializers.ModelSerializer):
                 validated_data["duration"] = computed_dur
 
         return super().update(instance, validated_data)
+
+
+class CarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Car
+        fields = [
+            "id", "car_name", "manufact_year", "policy_date",
+            "tech_inspection_date", "status", "notes", "is_active", "created_at", "updated_at"
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class DrivingLessonsSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    instructor_name = serializers.CharField(source="instructor.full_name", read_only=True)
+    car_name = serializers.CharField(source="car.car_name", read_only=True)
+
+    class Meta:
+        model = DrivingLessons
+        fields = [
+            "id", "student", "student_name", "instructor", "instructor_name",
+            "car", "car_name", "lesson_date", "notes", "is_active", "created_at", "updated_at"
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = [
+            "id", "user", "user_name", "title", "date", "note", "is_read",
+            "status", "is_active", "created_at", "updated_at"
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+

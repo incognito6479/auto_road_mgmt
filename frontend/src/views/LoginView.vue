@@ -269,7 +269,11 @@ async function handleLogin() {
   const cleanedPhone = phone.value.replace(/\D/g, '')
   try {
     await authStore.login(cleanedPhone, password.value, remember.value)
-    router.push({ name: 'home' })
+    if (authStore.user && authStore.user.role === 'student') {
+      router.push({ name: 'student-detail', params: { id: authStore.user.id } })
+    } else {
+      router.push({ name: 'home' })
+    }
   } catch (err) {
     if (err.response?.status === 401) {
       errorMsg.value = 'Telefon raqami yoki parol noto\'g\'ri.'

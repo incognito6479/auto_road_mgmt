@@ -57,8 +57,52 @@ const routes = [
   },
   {
     path: '/billing',
-    name: 'billing',
-    component: () => import('@/views/PaymentsView.vue'),
+    redirect: '/finances/accepted',
+  },
+  {
+    path: '/finances',
+    redirect: '/finances/accepted',
+  },
+  {
+    path: '/finances/accepted',
+    name: 'finances-accepted',
+    component: () => import('@/views/finances/FinancesAcceptedView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/finances/payments',
+    name: 'finances-payments',
+    component: () => import('@/views/finances/FinancesPaidView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/finances/returned',
+    name: 'finances-returned',
+    component: () => import('@/views/finances/FinancesReturnedView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/finances/bonus',
+    name: 'finances-bonus',
+    component: () => import('@/views/finances/FinancesBonusView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/finances/bank',
+    name: 'finances-bank',
+    component: () => import('@/views/finances/FinancesBankView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/finances/teachers',
+    name: 'finances-teachers',
+    component: () => import('@/views/finances/FinancesTeachersView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/finances/debts',
+    name: 'finances-debts',
+    component: () => import('@/views/finances/FinancesDebtsView.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -97,6 +141,28 @@ const routes = [
     component: () => import('@/views/HolidaysView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/vehicles',
+    name: 'vehicles',
+    component: () => import('@/views/CarsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/cars',
+    redirect: '/vehicles',
+  },
+  {
+    path: '/lessons',
+    name: 'lessons',
+    component: () => import('@/views/LessonsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/notifications',
+    name: 'notifications',
+    component: () => import('@/views/NotificationsView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({
@@ -105,15 +171,32 @@ const router = createRouter({
 })
 
 // Navigation guard
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    // Not logged in → redirect to login
     next({ name: 'login' })
-  } else if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    // Already logged in → redirect to home
-    next({ name: 'home' })
+    return
+  }
+
+  if (authStore.isAuthenticated && !authStore.user) {
+    await authStore.fetchCurrentUser()
+  }
+
+  if (authStore.isStudent && authStore.user) {
+    const studentDetailPath = `/students/${authStore.user.id}`
+    if (to.path !== studentDetailPath && to.name !== 'login') {
+      next({ name: 'student-detail', params: { id: authStore.user.id } })
+      return
+    }
+  }
+
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    if (authStore.isStudent && authStore.user) {
+      next({ name: 'student-detail', params: { id: authStore.user.id } })
+    } else {
+      next({ name: 'home' })
+    }
   } else {
     next()
   }

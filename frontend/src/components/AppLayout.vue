@@ -27,60 +27,58 @@
 
       <!-- Main navigation -->
       <nav class="sidebar-nav">
+        <template v-if="!authStore.isStudent">
+          <template v-for="item in allNavItems" :key="item.path || item.label">
+            <!-- Dropdown group -->
+            <div v-if="item.children" class="nav-group">
+              <button
+                class="nav-btn nav-btn-parent"
+                :class="{ 'group-active': item.children.some(c => route.path + (route.query.role ? '?role=' + route.query.role : '') === c.path + (c.role ? '?role=' + c.role : '')) || isGroupOpen(item.label) }"
+                @click="toggleGroup(item.label)"
+              >
+                <span class="nav-ico" v-html="item.icon"></span>
+                <span class="nav-label" v-if="!isSidebarCollapsed">{{ item.label }}</span>
+                <span v-if="!isSidebarCollapsed" class="nav-arrow" :class="{ 'rotated': isGroupOpen(item.label) }">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+                </span>
+              </button>
+              <div v-if="isGroupOpen(item.label) && !isSidebarCollapsed" class="nav-children">
+                <button
+                  v-for="child in item.children"
+                  :key="child.label"
+                  class="nav-sub-btn"
+                  :class="{ 'sub-active': route.path === child.path && route.query.role === child.role }"
+                  @click="goRole(child.path, child.role)"
+                >
+                  <span class="sub-dot"></span>
+                  {{ child.label }}
+                </button>
+              </div>
+            </div>
 
-        <template v-for="item in allNavItems" :key="item.path || item.label">
-          <!-- Dropdown group -->
-          <div v-if="item.children" class="nav-group">
+            <!-- Regular item -->
             <button
-              class="nav-btn nav-btn-parent"
-              :class="{ 'group-active': item.children.some(c => route.path + (route.query.role ? '?role=' + route.query.role : '') === c.path + (c.role ? '?role=' + c.role : '')) || isGroupOpen(item.label) }"
-              @click="toggleGroup(item.label)"
+              v-else
+              class="nav-btn"
+              :class="{ active: route.path === item.path }"
+              @click="go(item.path)"
             >
               <span class="nav-ico" v-html="item.icon"></span>
               <span class="nav-label" v-if="!isSidebarCollapsed">{{ item.label }}</span>
-              <span v-if="!isSidebarCollapsed" class="nav-arrow" :class="{ 'rotated': isGroupOpen(item.label) }">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-              </span>
             </button>
-            <div v-if="isGroupOpen(item.label) && !isSidebarCollapsed" class="nav-children">
-              <button
-                v-for="child in item.children"
-                :key="child.label"
-                class="nav-sub-btn"
-                :class="{ 'sub-active': route.path === child.path && route.query.role === child.role }"
-                @click="goRole(child.path, child.role)"
-              >
-                <span class="sub-dot"></span>
-                {{ child.label }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Regular item -->
-          <button
-            v-else
-            class="nav-btn"
-            :class="{ active: route.path === item.path }"
-            @click="go(item.path)"
-          >
-            <span class="nav-ico" v-html="item.icon"></span>
-            <span class="nav-label" v-if="!isSidebarCollapsed">{{ item.label }}</span>
-          </button>
+          </template>
         </template>
 
+        <template v-else>
+          <button
+            class="nav-btn active"
+            @click="go(`/students/${authStore.user?.id}`)"
+          >
+            <span class="nav-ico" v-html="icons.students"></span>
+            <span class="nav-label" v-if="!isSidebarCollapsed">Mening Profilim</span>
+          </button>
+        </template>
       </nav>
-
-      <!-- Bottom: Settings -->
-      <div class="sidebar-bottom">
-        <button
-          class="nav-btn"
-          :class="{ active: route.path === '/settings' }"
-          @click="go('/settings')"
-        >
-          <span class="nav-ico" v-html="icons.settings"></span>
-          <span class="nav-label" v-if="!isSidebarCollapsed">Sozlamalar</span>
-        </button>
-      </div>
 
     </aside>
 
@@ -93,7 +91,7 @@
 
         <div class="topbar-end">
           <!-- Search -->
-          <div class="search-wrap">
+          <div class="search-wrap" v-if="!authStore.isStudent">
             <svg viewBox="0 0 20 20" fill="none" stroke="#9ca3af" stroke-width="2" width="16" height="16">
               <circle cx="8.5" cy="8.5" r="5.5"/>
               <line x1="13" y1="13" x2="18" y2="18"/>
@@ -102,19 +100,19 @@
           </div>
 
           <!-- Notification -->
-          <button class="notif-btn" aria-label="Bildirishnomalar">
+          <button class="notif-btn" aria-label="Bildirishnomalar" @click="go('/notifications')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             </svg>
-            <span class="notif-dot"></span>
+            <span v-if="unreadNotifCount > 0" class="notif-badge-num">{{ unreadNotifCount > 99 ? '99+' : unreadNotifCount }}</span>
           </button>
 
           <!-- User dropdown -->
           <div class="user-wrap" ref="userWrapRef">
             <button id="user-menu-btn" class="user-trigger" @click="showDropdown = !showDropdown">
-              <img src="/car-icon.jpg" alt="Admin" class="user-ava" />
-              <span class="user-greeting">Xush kelibsiz, Admin</span>
+              <img src="/car-icon.jpg" alt="User" class="user-ava" />
+              <span class="user-greeting">{{ currentUserDisplayName }}</span>
               <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"
                    :style="{ transform: showDropdown ? 'rotate(180deg)' : '', transition: 'transform 0.2s' }">
                 <path fill-rule="evenodd"
@@ -150,7 +148,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -196,12 +194,22 @@ const pageTitles = {
   '/groups':            "Guruhlar Boshqaruvi",
   '/instructors':       "Instruktorlar",
   '/vehicles':          "Avtomobillar",
+  '/cars':              "Avtomobillar",
   '/lessons':           "Darslar",
-  '/billing':           "To'lovlar",
+  '/billing':           "Moliya Boshqaruvi",
+  '/finances/accepted': "Tushumlar (Qabul qilingan to'lovlar)",
+  '/finances/payments': "To'lovlar (To'langan statusda)",
+  '/finances/returned': "Pul Qaytarish (Qaytarilgan statusda)",
+  '/finances/bonus':    "Agent Bonuslari (Bonus statusda)",
+  '/finances/bank':     "Bank uchun To'lovlar (Bank statusda)",
+  '/finances/teachers': "O'qituvchilar To'lovlari",
+  '/finances/debts':    "Qarzdorlar Ro'yxati",
   '/users':             "Foydalanuvchilar",
   '/learning-places':   "O'quv Joylari",
   '/agents':            "Agentlar Boshqaruvi",
   '/holidays':          "Bayramlar Boshqaruvi",
+  '/vehicles':          "Avtomobillar",
+  '/notifications':     "Bildirishnomalar",
   '/reports':           "Hisobotlar",
   '/settings':          "Sozlamalar",
 }
@@ -225,6 +233,16 @@ const pageTitle = computed(() => {
 // ── User dropdown ────────────────────────────────────────────
 const showDropdown = ref(false)
 const userWrapRef = ref(null)
+const unreadNotifCount = ref(0)
+
+const currentUserDisplayName = computed(() => {
+  const u = authStore.user
+  if (!u) return 'Xush kelibsiz'
+  if (u.full_name && u.full_name.trim()) return u.full_name.trim()
+  if (u.first_name || u.last_name) return `${u.first_name || ''} ${u.last_name || ''}`.trim()
+  if (u.phone) return u.phone
+  return 'Xush kelibsiz'
+})
 
 function handleOutsideClick(e) {
   if (userWrapRef.value && !userWrapRef.value.contains(e.target)) {
@@ -232,8 +250,34 @@ function handleOutsideClick(e) {
   }
 }
 
-onMounted(() => document.addEventListener('click', handleOutsideClick))
-onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
+async function fetchUnreadCount() {
+  try {
+    const res = await api.get('/notifications/unread_count/')
+    unreadNotifCount.value = res.data.unread_count || 0
+  } catch (err) {
+    console.error("Unread notifications count Error:", err)
+  }
+}
+
+let unreadTimer = null
+
+watch(() => route.path, () => {
+  fetchUnreadCount()
+})
+
+watch(() => authStore.user, () => {
+  fetchUnreadCount()
+}, { immediate: true })
+
+onMounted(() => {
+  document.addEventListener('click', handleOutsideClick)
+  fetchUnreadCount()
+  unreadTimer = setInterval(fetchUnreadCount, 5000)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', handleOutsideClick)
+  if (unreadTimer) clearInterval(unreadTimer)
+})
 
 function handleLogout() {
   authStore.logout()
@@ -263,7 +307,19 @@ const allNavItems = [
   { path: '/categories',        label: 'Kategoriyalar',   icon: icons.pending },
   { path: '/students',          label: 'Talabalar',        icon: icons.students },
   { path: '/groups',            label: 'Guruhlar',         icon: icons.groups },
-  { path: '/billing',           label: "To'lovlar",        icon: icons.billing },
+  {
+    label: 'Moliya',
+    icon: icons.billing,
+    children: [
+      { label: 'Tushumlar',       path: '/finances/accepted' },
+      { label: "Xarajatlar",       path: '/finances/payments' },
+      { label: 'Pul qaytarish',   path: '/finances/returned' },
+      { label: 'Agentlar',        path: '/finances/bonus' },
+      { label: 'Bank uchun',      path: '/finances/bank' },
+      { label: "O'qituvchilar",   path: '/finances/teachers' },
+      { label: 'Qarzdorlar',      path: '/finances/debts' },
+    ]
+  },
   {
     label: 'Xodimlar',
     icon: icons.users,
@@ -279,7 +335,6 @@ const allNavItems = [
   { path: '/holidays',          label: 'Bayramlar',        icon: icons.holidays },
   { path: '/vehicles',          label: 'Avtomobillar',     icon: icons.vehicles },
   { path: '/lessons',           label: 'Darslar',          icon: icons.lessons },
-  { path: '/reports',           label: 'Hisobotlar',       icon: icons.reports },
 ]
 </script>
 
@@ -540,28 +595,40 @@ button { cursor: pointer; background: none; border: none; font-family: inherit; 
 
 .notif-btn {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: #F9FAFB;
-  border: 1px solid #E5E7EB;
+  border: 1.5px solid #E5E7EB;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6B7280;
-  transition: background 0.15s;
+  color: #4B5563;
+  cursor: pointer;
+  overflow: visible !important;
+  transition: all 0.2s ease;
 }
-.notif-btn:hover { background: #F3F4F6; }
+.notif-btn:hover { background: #F3F4F6; border-color: #CBD5E1; color: #1F2937; }
 
-.notif-dot {
+.notif-badge-num {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #ef4444;
-  border: 1.5px solid white;
+  top: -5px;
+  right: -5px;
+  background: #EF4444;
+  color: white;
+  font-size: 10.5px;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+  z-index: 10;
 }
 
 .user-wrap { position: relative; }

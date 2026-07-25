@@ -20,6 +20,7 @@ export const useAuthStore = defineStore('auth', {
     isAdminOrSuperuser: (state) => !!(state.user && (state.user.is_superuser || state.user.role === 'superuser' || state.user.role === 'admin')),
     isStaff: (state) => !!(state.user && (state.user.is_staff || state.user.is_superuser || state.user.role === 'admin' || state.user.role === 'superuser')),
     isMechanic: (state) => !!(state.user && state.user.role === 'mechanic'),
+    isStudent: (state) => !!(state.user && state.user.role === 'student'),
   },
 
   actions: {

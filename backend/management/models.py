@@ -435,3 +435,123 @@ class Payment(BaseModel):
     def __str__(self):
         student_name = self.enrollment.student.full_name if (self.enrollment and self.enrollment.student) else 'No Student'
         return f"{student_name} - {self.amount} ({self.status})"
+
+
+class Car(BaseModel):
+    """Driving school vehicle model."""
+
+    class Status(models.TextChoices):
+        AVAILABLE = "available", "Mavjud"
+        REPAIRING = "repairing", "Ta'mirlashda"
+        NOT_AVAILABLE = "not_available", "Mavjud emas"
+
+    car_name = models.CharField(
+        max_length=255,
+        help_text="Avtomobil nomi va davlat raqami (masalan: Cobalt 01 A 777 AA)",
+    )
+    manufact_year = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Ishlab chiqarilgan yili (masalan: 2022)",
+    )
+    policy_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Sug'urta amal qilish muddati",
+    )
+    tech_inspection_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Texnik ko'rik muddati",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.AVAILABLE,
+        help_text="Avtomobil holati: available, repairing, not_available",
+    )
+
+    class Meta:
+        db_table = "car"
+        verbose_name = "Avtomobil"
+        verbose_name_plural = "Avtomobillar"
+        ordering = ["car_name"]
+
+    def __str__(self):
+        return f"{self.car_name} ({self.status})"
+
+
+class DrivingLessons(BaseModel):
+    """Driving lesson confirmation model."""
+
+    student = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": User.Role.STUDENT},
+        related_name="driving_lessons",
+    )
+    instructor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": User.Role.INSTRUCTOR},
+        related_name="instructor_lessons",
+    )
+    car = models.ForeignKey(
+        Car,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="driving_lessons",
+    )
+    lesson_date = models.DateField(
+        default=timezone.now,
+        help_text="Amaliy dars sanasi",
+    )
+
+    class Meta:
+        db_table = "driving_lessons"
+        verbose_name = "Amaliy Haydash Darsi"
+        verbose_name_plural = "Amaliy Haydash Darslari"
+        ordering = ["-lesson_date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.instructor.full_name} ({self.lesson_date})"
+
+
+class Notification(BaseModel):
+    """System notifications model."""
+
+    class Status(models.TextChoices):
+        DRIVING_LESSON = "driving_lesson", "Amaliy Haydash Darsi"
+        CERTIFICATE_UPLOAD = "certificate_upload", "Sertifikat Yuklash"
+        PAYMENT = "payment", "To'lov"
+        AGENT_PAYMENT = "agent_payment", "Agent To'lovi"
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+        help_text="Qabul qiluvchi (null bo'lsa adminlar uchun)",
+    )
+    title = models.CharField(max_length=255, help_text="Bildirishnoma sarlavhasi")
+    date = models.DateTimeField(default=timezone.now, help_text="Bildirishnoma sanasi")
+    note = models.TextField(blank=True, null=True, help_text="Batafsil izoh")
+    is_read = models.BooleanField(default=False, db_index=True, help_text="O'qilganlik holati")
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.DRIVING_LESSON,
+    )
+
+    class Meta:
+        db_table = "notification"
+        verbose_name = "Bildirishnoma"
+        verbose_name_plural = "Bildirishnomalar"
+        ordering = ["-date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.status})"
+
+

@@ -148,7 +148,7 @@
                         {{ statusText(e.status) }}
                       </span>
                     </td>
-                    <td>{{ e.learning_days || '-' }}</td>
+                    <td>{{ formatLessonDays(e.learning_days) }}</td>
                     <td>{{ e.learning_time || '-' }}</td>
                     <td>{{ e.learning_place_name || '-' }}</td>
                   </tr>
@@ -360,6 +360,18 @@ function roleText(role, isSuperuser) {
     case 'coordinator': return "O'qituvchi"
     case 'mechanic': return 'Mexanik'
     default: return role
+  }
+}
+
+const formatLessonDays = (days) => {
+  if (!days) return '-'
+  switch (days) {
+    case 'everyday': return 'Har kuni (Dush-Shanba)'
+    case 'Mo-Wed-Fri':
+    case 'mon-wed-fri': return 'Dushanba - Chorshanba - Juma'
+    case 'Tue-Thu-Sat':
+    case 'tue-wed-sat': return 'Seshanba - Payshanba - Shanba'
+    default: return days
   }
 }
 
@@ -727,16 +739,17 @@ onMounted(() => {
 
 .modal-dialog {
   border: none;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 0;
   width: 100%;
   max-width: 520px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   background: white;
+  overflow: hidden;
 
   &::backdrop {
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(2px);
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(6px);
   }
 }
 
@@ -745,34 +758,119 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #E5E7EB;
+  background: linear-gradient(180deg, #F0FDF4 0%, #FFFFFF 100%);
+  border-bottom: 1px solid #F3F4F6;
 }
 
 .header-badge-wrap {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .header-badge-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: #E8F5E9;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 12px rgba(45, 106, 79, 0.2);
+
+  svg {
+    stroke: white;
+  }
 }
 
 .user-modal-title { font-size: 17px; font-weight: 700; color: #111827; }
-.user-modal-sub { font-size: 12px; color: #6B7280; }
+.user-modal-sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
 .user-btn-close { background: none; border: none; font-size: 18px; color: #9CA3AF; cursor: pointer; }
 .user-modal-form { padding: 24px; }
-.form-group { margin-bottom: 16px; }
+.form-group { margin-bottom: 18px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
-.form-input { width: 100%; padding: 10px 14px; border: 1px solid #D1D5DB; border-radius: 8px; font-size: 14px; }
-.user-modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
-.btn-cancel { padding: 10px 18px; border: 1px solid #D1D5DB; background: white; border-radius: 8px; font-weight: 600; font-size: 13px; color: #374151; }
-.btn-submit { padding: 10px 20px; background: #2D6A4F; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; }
+
+.form-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+
+  &.required::after {
+    content: " *";
+    color: #EF4444;
+  }
+}
+
+.form-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 10px;
+  font-size: 14px;
+  background-color: #FAFAFA;
+  color: #111827;
+  outline: none;
+  transition: all 0.2s ease;
+
+  &:focus {
+    border-color: #2D6A4F;
+    background-color: white;
+    box-shadow: 0 0 0 3.5px rgba(45, 106, 79, 0.12);
+  }
+}
+
+select.form-input {
+  cursor: pointer;
+}
+
+.form-textarea {
+  resize: vertical;
+}
+
+.user-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.btn-cancel {
+  padding: 10px 18px;
+  border: 1px solid #D1D5DB;
+  background: white;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: #F9FAFB;
+  }
+}
+
+.btn-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 22px;
+  background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(45, 106, 79, 0.25);
+  transition: all 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(45, 106, 79, 0.35);
+  }
+}
 </style>

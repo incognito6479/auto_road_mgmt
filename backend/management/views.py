@@ -10,7 +10,7 @@ from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
-from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays
+from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, DrivingLessons, Notification
 from management.serializers import (
     CategorySerializer,
     StudentSerializer,
@@ -22,6 +22,9 @@ from management.serializers import (
     LearningPlaceSerializer,
     AgentSerializer,
     HolidaysSerializer,
+    CarSerializer,
+    DrivingLessonsSerializer,
+    NotificationSerializer,
 )
 
 
@@ -306,7 +309,13 @@ class PaymentViewSet(SoftDeleteModelViewSet):
             else:
                 queryset = queryset.filter(enrollment__category__name=category)
         if student_name:
-            queryset = queryset.filter(enrollment__student__full_name__icontains=student_name)
+            queryset = queryset.filter(
+                Q(enrollment__student__full_name__icontains=student_name) |
+                Q(agent__full_name__icontains=student_name) |
+                Q(user__first_name__icontains=student_name) |
+                Q(user__last_name__icontains=student_name) |
+                Q(notes__icontains=student_name)
+            )
         if jshshr:
             queryset = queryset.filter(enrollment__student__jshshr__icontains=jshshr)
         if date_from:
@@ -419,3 +428,103 @@ class AgentViewSet(SoftDeleteModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().create(request, *args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Car
+# ---------------------------------------------------------------------------
+
+class CarViewSet(SoftDeleteModelViewSet):
+    """CRUD for driving school vehicles."""
+
+    queryset = Car.objects.filter(is_active=True).order_by("-created_at")
+    serializer_class = CarSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        car_name = self.request.query_params.get("car_name") or self.request.query_params.get("search")
+        status_param = self.request.query_params.get("status")
+        if car_name:
+            queryset = queryset.filter(car_name__icontains=car_name)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        return queryset
+
+
+# ---------------------------------------------------------------------------
+# DrivingLessons
+# ---------------------------------------------------------------------------
+
+class DrivingLessonsViewSet(SoftDeleteModelViewSet):
+    """CRUD for driving lesson confirmations."""
+
+    queryset = DrivingLessons.objects.filter(is_active=True).order_by("-lesson_date", "-created_at")
+    serializer_class = DrivingLessonsSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        student = self.request.query_params.get("student")
+        instructor = self.request.query_params.get("instructor")
+        car = self.request.query_params.get("car")
+        if student:
+            qs = qs.filter(student_id=student)
+        if instructor:
+            qs = qs.filter(instructor_id=instructor)
+        if car:
+            qs = qs.filter(car_id=car)
+        return qs
+
+
+# ---------------------------------------------------------------------------
+# Notification
+# ---------------------------------------------------------------------------
+
+class NotificationViewSet(SoftDeleteModelViewSet):
+    """CRUD & Actions for notifications."""
+
+    queryset = Notification.objects.filter(is_active=True).order_by("-date", "-created_at")
+    serializer_class = NotificationSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        status_param = self.request.query_params.get("status")
+        is_read_param = self.request.query_params.get("is_read")
+        user_param = self.request.query_params.get("user")
+
+        if status_param:
+            qs = qs.filter(status=status_param)
+        if is_read_param is not None:
+            is_read_bool = is_read_param.lower() in ["true", "1"]
+            qs = qs.filter(is_read=is_read_bool)
+        if user_param:
+            qs = qs.filter(Q(user_id=user_param) | Q(user__isnull=True))
+        return qs
+
+    @action(detail=False, methods=["get"])
+    def unread_count(self, request):
+        """Returns total unread count for notifications."""
+        user = request.user if request.user and request.user.is_authenticated else None
+        qs = Notification.objects.filter(is_active=True, is_read=False)
+        if user and not (user.is_superuser or user.role in ["superuser", "admin"]):
+            qs = qs.filter(Q(user=user) | Q(user__isnull=True))
+        count = qs.count()
+        return Response({"unread_count": count})
+
+    @action(detail=True, methods=["post"])
+    def mark_as_read(self, request, pk=None):
+        """Mark single notification as read."""
+        notif = self.get_object()
+        notif.is_read = True
+        notif.save(update_fields=["is_read", "updated_at"])
+        return Response({"status": "marked as read", "is_read": True})
+
+    @action(detail=False, methods=["post"])
+    def mark_all_read(self, request):
+        """Mark all unread notifications as read."""
+        Notification.objects.filter(is_active=True, is_read=False).update(is_read=True)
+        return Response({"status": "all marked as read"})
+
+

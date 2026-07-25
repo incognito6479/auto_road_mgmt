@@ -365,29 +365,56 @@
 
           <form @submit.prevent="saveAgent" class="modal-form-body">
             <div v-if="editModalError" class="modal-error-alert">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="flex-shrink: 0;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
               <span>{{ editModalError }}</span>
             </div>
 
             <div class="form-field-group">
               <label class="field-label required">Agent F.I.SH.</label>
-              <input v-model="editForm.full_name" type="text" class="field-input" required />
+              <div class="input-with-addon">
+                <div class="input-icon-left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="2" width="18" height="18">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </div>
+                <input v-model="editForm.full_name" type="text" class="field-input input-has-icon" placeholder="Masalan: Samandar Qodirov" required />
+              </div>
             </div>
 
             <div class="form-two-cols">
               <div class="form-field-group">
                 <label class="field-label required">Telefon raqami</label>
-                <input v-model="editForm.phone" type="text" class="field-input" required />
+                <div class="input-with-addon">
+                  <div class="input-icon-left">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" width="18" height="18">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                    </svg>
+                  </div>
+                  <input v-model="editForm.phone" type="text" class="field-input input-has-icon" placeholder="+998 90 123 45 67" required />
+                </div>
               </div>
 
               <div class="form-field-group">
                 <label class="field-label">Qo'shimcha telefon</label>
-                <input v-model="editForm.phone2" type="text" class="field-input" />
+                <div class="input-with-addon">
+                  <div class="input-icon-left">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" width="18" height="18">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                    </svg>
+                  </div>
+                  <input v-model="editForm.phone2" type="text" class="field-input input-has-icon" placeholder="+998 90 987 65 43" />
+                </div>
               </div>
             </div>
 
             <div class="form-field-group">
               <label class="field-label">Izoh / Eslatma</label>
-              <textarea v-model="editForm.notes" rows="3" class="field-input field-textarea"></textarea>
+              <textarea v-model="editForm.notes" rows="3" class="field-input field-textarea" placeholder="Agent bo'yicha qo'shimcha izohlar..."></textarea>
             </div>
 
             <div class="modal-footer-actions">

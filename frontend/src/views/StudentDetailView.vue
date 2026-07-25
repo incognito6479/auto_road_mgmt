@@ -3,7 +3,7 @@
 
     <!-- ───────────────────── HEADER ───────────────────── -->
     <div class="detail-header">
-      <button class="btn-back" @click="$router.back()">
+      <button class="btn-back" v-if="!authStore.isStudent" @click="$router.back()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
@@ -27,14 +27,21 @@
       </div>
 
       <div class="header-actions" v-if="student">
-        <button class="btn-payment" v-if="!enrollment?.enrolled_free" @click="openPaymentModal">
+        <button class="btn-confirm-lesson" @click="openLessonModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          Amaliy haydash darsini tasdiqlash
+        </button>
+        <button class="btn-payment" v-if="!authStore.isStudent && !enrollment?.enrolled_free" @click="openPaymentModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <rect x="2" y="5" width="20" height="14" rx="2"/>
             <line x1="2" y1="10" x2="22" y2="10"/>
           </svg>
           To'lov qabul qilish
         </button>
-        <button class="btn-edit-main" @click="openEditModal">
+        <button class="btn-edit-main" v-if="!authStore.isStudent" @click="openEditModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -148,7 +155,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </span>
             <h2 class="card-title">To'lov Holati</h2>
-            <button class="btn-add-payment" v-if="!enrollment?.enrolled_free" @click="openPaymentModal">
+            <button class="btn-add-payment" v-if="!authStore.isStudent && !enrollment?.enrolled_free" @click="openPaymentModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               To'lov
             </button>
@@ -187,6 +194,63 @@
                   <td><span class="method-badge">{{ methodText(p.method) }}</span></td>
                   <td><span class="pay-status-badge" :class="payStatusClass(p.status)">{{ payStatusText(p.status) }}</span></td>
                   <td class="td-notes">{{ p.notes || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Driving Lessons History -->
+        <div class="detail-card margin-top-card">
+          <div class="card-header">
+            <span class="card-icon card-icon-purple">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </span>
+            <h2 class="card-title">Amaliy Haydash Darslari Tarixi</h2>
+            <button class="btn-add-payment btn-add-lesson" @click="openLessonModal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Dars tasdiqlash
+            </button>
+          </div>
+
+          <div v-if="loadingLessons" class="mini-state">
+            <div class="spinner spinner-sm"></div>
+            <span>Yuklanmoqda...</span>
+          </div>
+
+          <div v-else-if="drivingLessons.length === 0" class="mini-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5" width="32" height="32">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>Tasdiqlangan amaliy darslar mavjud emas</span>
+          </div>
+
+          <div v-else class="pay-table-wrap">
+            <table class="pay-table">
+              <thead>
+                <tr>
+                  <th>Sana</th>
+                  <th>Instruktor</th>
+                  <th>Avtomobil</th>
+                  <th>Holat</th>
+                  <th>Izoh</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="l in drivingLessons" :key="l.id" class="pay-row">
+                  <td class="td-date font-bold">📅 {{ formatDate(l.lesson_date) }}</td>
+                  <td><span class="instructor-chip font-bold">👤 {{ l.instructor_name || '-' }}</span></td>
+                  <td><span class="car-chip font-bold">🚘 {{ l.car_name || '-' }}</span></td>
+                  <td><span class="pay-status-badge pstatus-accepted">✓ Tasdiqlangan</span></td>
+                  <td class="td-notes">{{ l.notes || '-' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -277,6 +341,72 @@
       </form>
     </dialog>
 
+    <!-- DRIVING LESSON CONFIRMATION MODAL -->
+    <dialog ref="lessonModal" class="modal-dialog" closedby="any">
+      <form class="modal-form" @submit.prevent="submitLessonConfirmation">
+        <div class="modal-head">
+          <h3 class="modal-title">🏎️ Amaliy Haydash Darsini Tasdiqlash</h3>
+          <button type="button" class="btn-close" @click="lessonModal?.close()">✕</button>
+        </div>
+        <div v-if="lessonError" class="modal-error">{{ lessonError }}</div>
+        <div v-if="lessonSuccess" class="alert-success-box">{{ lessonSuccess }}</div>
+
+        <div class="form-section">
+          <div class="form-grid-2">
+
+            <!-- Student (Disabled) -->
+            <div class="form-group fg-full">
+              <label class="form-label">O'quvchi F.I.SH. (Cheklangan)</label>
+              <input :value="student?.full_name" type="text" class="form-input disabled-input" disabled />
+            </div>
+
+            <!-- Instructor (Disabled) -->
+            <div class="form-group">
+              <label class="form-label">Instruktor (Cheklangan)</label>
+              <input :value="enrollment?.instructor_name || 'Instruktor biriktirilmagan'" type="text" class="form-input disabled-input" disabled />
+            </div>
+
+            <!-- Date (Disabled) -->
+            <div class="form-group">
+              <label class="form-label">Dars Sanasi (Cheklangan)</label>
+              <input :value="todayDateFormatted" type="text" class="form-input disabled-input" disabled />
+            </div>
+
+            <!-- Available Car Select -->
+            <div class="form-group fg-full">
+              <label class="form-label">Avtomobilni Tanlang <span class="req">*</span></label>
+              <div class="select-wrap">
+                <select v-model="lessonForm.car" class="form-input form-select" required>
+                  <option value="">Avtomobilni tanlang...</option>
+                  <option v-for="car in availableCars" :key="car.id" :value="car.id">
+                    🚘 {{ car.car_name }} ({{ car.manufact_year || '-' }})
+                  </option>
+                </select>
+                <svg class="sel-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-group fg-full">
+              <label class="form-label">Izoh / Eslatma</label>
+              <input v-model="lessonForm.notes" type="text" class="form-input" placeholder="Amaliy dars bo'yicha qo'shimcha izoh..." />
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="lessonModal?.close()">Bekor qilish</button>
+          <button type="submit" class="btn-save btn-green" :disabled="lessonSaving">
+            <span v-if="lessonSaving" class="btn-spinner"></span>
+            {{ lessonSaving ? 'Tasdiqlanmoqda...' : 'Darsni Tasdiqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
   </AppLayout>
 </template>
 
@@ -300,13 +430,89 @@ const error      = ref('')
 
 const editModal    = ref(null)
 const paymentModal = ref(null)
+const lessonModal  = ref(null)
+
 const editError    = ref('')
 const editSaving   = ref(false)
 const payError     = ref('')
 const paySaving    = ref(false)
+const lessonError  = ref('')
+const lessonSuccess= ref('')
+const lessonSaving = ref(false)
+
+const availableCars = ref([])
+const lessonForm    = ref({ car: '', notes: '' })
 
 const editForm = ref({ full_name: '', phone: '', phone2: '', jshshr: '', passport_serie: '', passport_number: '', status: 'enrolled', notes: '' })
 const payForm  = ref({ amountFormatted: '', amount: 0, method: 'cash', status: 'accepted', notes: '' })
+
+const todayDateFormatted = computed(() => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${day}.${month}.${year}`
+})
+
+const openLessonModal = async () => {
+  lessonError.value = ''
+  lessonSuccess.value = ''
+  lessonForm.value = { car: '', notes: '' }
+  try {
+    const res = await api.get('/cars/', { params: { status: 'available', page_size: 100 } })
+    availableCars.value = res.data.results || res.data || []
+  } catch (err) {
+    console.error("Avtomobillarni yuklashda xatolik:", err)
+  }
+  lessonModal.value?.showModal()
+}
+
+const submitLessonConfirmation = async () => {
+  if (!lessonForm.value.car) {
+    lessonError.value = "Avtomobilni tanlang."
+    return
+  }
+  if (!enrollment.value?.instructor) {
+    lessonError.value = "Ushbu o'quvchiga instruktor biriktirilmagan."
+    return
+  }
+  lessonSaving.value = true
+  lessonError.value = ''
+  lessonSuccess.value = ''
+
+  try {
+    const todayISO = new Date().toISOString().split('T')[0]
+    const carObj = availableCars.value.find(c => c.id === Number(lessonForm.value.car))
+    const carName = carObj ? carObj.car_name : 'Avtomobil'
+
+    // 1. Create DrivingLessons record
+    await api.post('/driving-lessons/', {
+      student: student.value.id,
+      instructor: enrollment.value.instructor,
+      car: lessonForm.value.car,
+      lesson_date: todayISO,
+      notes: lessonForm.value.notes || ''
+    })
+
+    // 2. Create Notification for admins
+    await api.post('/notifications/', {
+      title: `Yangi amaliy dars tasdiqlandi: ${student.value.full_name}`,
+      note: `O'quvchi: ${student.value.full_name} | Instruktor: ${enrollment.value.instructor_name || '-'} | Avtomobil: ${carName} | Sana: ${todayDateFormatted.value}`,
+      status: 'driving_lesson'
+    })
+
+    await fetchDrivingLessons()
+    lessonSuccess.value = "Amaliy dars muvaffaqiyatli tasdiqlandi va adminlarga bildirishnoma yuborildi!"
+    setTimeout(() => {
+      lessonModal.value?.close()
+    }, 1500)
+  } catch (err) {
+    console.error("Darsni tasdiqlashda xatolik:", err)
+    lessonError.value = err.response?.data?.detail || "Darsni tasdiqlashda xatolik yuz berdi."
+  } finally {
+    lessonSaving.value = false
+  }
+}
 
 const initials = computed(() => {
   const name = student.value?.full_name || ''
@@ -333,6 +539,24 @@ const progressPct = computed(() => {
   return Math.min(100, Math.round((paidTotal.value / amt) * 100))
 })
 
+const drivingLessons = ref([])
+const loadingLessons = ref(false)
+
+const fetchDrivingLessons = async () => {
+  if (!student.value) return
+  loadingLessons.value = true
+  try {
+    const studentId = Number(student.value.id)
+    const res = await api.get('/driving-lessons/', { params: { student: studentId, page_size: 100 } })
+    const list = Array.isArray(res.data) ? res.data : (res.data.results || [])
+    drivingLessons.value = list
+  } catch (err) {
+    console.error("Amaliy darslarni yuklashda xatolik:", err)
+  } finally {
+    loadingLessons.value = false
+  }
+}
+
 const fetchAll = async () => {
   loading.value = true; error.value = ''
   try {
@@ -350,7 +574,10 @@ const fetchAll = async () => {
     } else {
       group.value = null
     }
-    await fetchPayments()
+    await Promise.all([
+      fetchPayments(),
+      fetchDrivingLessons()
+    ])
   } catch (err) {
     console.error(err); error.value = "Ma'lumotlarni yuklashda xatolik yuz berdi."
   } finally { loading.value = false }
@@ -527,6 +754,24 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .btn-edit-main:hover{background:#F9FAFB;border-color:#D1D5DB}
 .btn-payment{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:8px;font-size:13.5px;font-weight:600;color:white;background:#2D6A4F;transition:background 0.15s;box-shadow:0 2px 8px rgba(45,106,79,0.25)}
 .btn-payment:hover{background:#1B4332}
+
+.btn-save{display:inline-flex;align-items:center;gap:6px;padding:10px 22px;border-radius:8px;font-size:13.5px;font-weight:600;color:white;background:#2D6A4F;transition:background 0.15s;box-shadow:0 2px 6px rgba(45,106,79,0.25)}
+.btn-save:hover{background:#1B4332}
+
+.btn-confirm-lesson { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: white; background: linear-gradient(135deg, #10B981, #059669); border: none; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); }
+.btn-confirm-lesson:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35); }
+
+.disabled-input { background: #E2E8F0 !important; color: #475569 !important; font-weight: 600; cursor: not-allowed; }
+.alert-success-box { margin: 12px 24px 0; padding: 12px 16px; background: #DCFCE7; border-left: 4px solid #10B981; color: #15803D; font-size: 13px; font-weight: 600; border-radius: 8px; }
+.btn-green { background: #10B981 !important; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3) !important; }
+.btn-green:hover { background: #059669 !important; }
+
+.margin-top-card { margin-top: 20px; }
+.card-icon-purple { background: #F3E8FF; color: #7E22CE; }
+.instructor-chip { font-size: 12px; color: #4338CA; background: #EEF2FF; padding: 2px 8px; border-radius: 6px; }
+.car-chip { font-size: 12px; color: #065F46; background: #ECFDF5; padding: 2px 8px; border-radius: 6px; }
+.btn-add-lesson { background: #7E22CE !important; box-shadow: 0 2px 6px rgba(126, 34, 206, 0.25) !important; }
+.btn-add-lesson:hover { background: #6B21A8 !important; }
 
 .state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 20px;color:#6B7280;font-size:14px}
 .state-error{color:#EF4444}

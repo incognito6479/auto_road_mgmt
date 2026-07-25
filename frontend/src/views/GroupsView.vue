@@ -1,6 +1,38 @@
 <template>
   <AppLayout>
 
+    <!-- Toolbar: Search and Category Filter -->
+    <div class="groups-toolbar">
+      <div class="search-box">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
+          <circle cx="8.5" cy="8.5" r="5.5"/>
+          <line x1="13" y1="13" x2="18" y2="18"/>
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Guruh nomi yoki kategoriya bo'yicha qidirish..."
+          class="search-input"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Kategoriya:</label>
+        <div class="select-wrap">
+          <select v-model="selectedCategory" class="filter-select">
+            <option value="">Barcha kategoriyalar</option>
+            <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+              {{ cat.name }} kategoriyasi
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="total-count">
+        Jami: <strong>{{ filteredGroups.length }}</strong> ta guruh
+      </div>
+    </div>
+
     <!-- Loading, error, or empty states -->
     <div v-if="loading" class="state-container">
       <div class="spinner"></div>
@@ -12,13 +44,13 @@
       <button class="btn-retry" @click="fetchGroups">Qayta urinish</button>
     </div>
 
-    <div v-else-if="groups.length === 0" class="state-container">
-      <p class="state-text">Hech qanday guruh topilmadi. O'quvchilar ro'yxatidan yangi guruh boshlang.</p>
+    <div v-else-if="filteredGroups.length === 0" class="state-container">
+      <p class="state-text">Mos guruhlar topilmadi.</p>
     </div>
 
     <!-- Groups cards grid -->
     <div v-else class="cards-grid">
-      <div class="group-card" v-for="g in groups" :key="g.id">
+      <div class="group-card" v-for="g in filteredGroups" :key="g.id">
 
         <!-- Card Header -->
         <div class="group-header" style="justify-content: space-between; align-items: flex-start; width: 100%;">
@@ -165,7 +197,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
@@ -173,6 +205,10 @@ import api from '@/services/api'
 const router = useRouter()
 
 const groups = ref([])
+const categories = ref([])
+const searchQuery = ref('')
+const selectedCategory = ref('')
+
 const loading = ref(false)
 const error = ref('')
 
@@ -189,6 +225,24 @@ const editingGroup = ref({
 })
 const editSaving = ref(false)
 const editModalError = ref('')
+
+const filteredGroups = computed(() => {
+  return groups.value.filter(g => {
+    const q = searchQuery.value.toLowerCase().trim()
+    const matchCat = !selectedCategory.value || String(g.category) === String(selectedCategory.value) || (g.category_name && g.category_name.toLowerCase() === String(selectedCategory.value).toLowerCase())
+    const nameMatch = !q || (g.name || '').toLowerCase().includes(q) || (g.category_name || '').toLowerCase().includes(q)
+    return matchCat && nameMatch
+  })
+})
+
+const fetchCategories = async () => {
+  try {
+    const res = await api.get('/categories/')
+    categories.value = Array.isArray(res.data) ? res.data : (res.data.results || [])
+  } catch (err) {
+    console.error('Failed to fetch categories:', err)
+  }
+}
 
 const fetchGroups = async () => {
   loading.value = true
@@ -286,6 +340,7 @@ const updateGroup = async () => {
 // Light dismiss listener fallback
 onMounted(() => {
   fetchGroups()
+  fetchCategories()
   
   if (editGroupModal.value && !('closedBy' in HTMLDialogElement.prototype)) {
     editGroupModal.value.addEventListener('click', (event) => {
@@ -306,6 +361,88 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.groups-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: white;
+  padding: 14px 20px;
+  border-radius: 14px;
+  border: 1px solid #E5E7EB;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  flex-wrap: wrap;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #F9FAFB;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 8px 14px;
+  flex: 1;
+  min-width: 260px;
+  transition: all 0.2s;
+}
+
+.search-box:focus-within {
+  border-color: #2D6A4F;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+}
+
+.search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13.5px;
+  width: 100%;
+  color: #111827;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4B5563;
+}
+
+.select-wrap {
+  position: relative;
+}
+
+.filter-select {
+  padding: 8px 14px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 10px;
+  background: #F9FAFB;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+
+  &:focus {
+    border-color: #2D6A4F;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+  }
+}
+
+.total-count {
+  font-size: 13.5px;
+  color: #6B7280;
+}
+
 /* ── States ─────────────────────────────────────────── */
 .state-container {
   display: flex;
