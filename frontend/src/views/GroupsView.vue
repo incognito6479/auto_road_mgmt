@@ -202,7 +202,10 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 
+import { useBranchStore } from '@/stores/branch'
+
 const router = useRouter()
+const branchStore = useBranchStore()
 
 const groups = ref([])
 const categories = ref([])
@@ -231,7 +234,8 @@ const filteredGroups = computed(() => {
     const q = searchQuery.value.toLowerCase().trim()
     const matchCat = !selectedCategory.value || String(g.category) === String(selectedCategory.value) || (g.category_name && g.category_name.toLowerCase() === String(selectedCategory.value).toLowerCase())
     const nameMatch = !q || (g.name || '').toLowerCase().includes(q) || (g.category_name || '').toLowerCase().includes(q)
-    return matchCat && nameMatch
+    const matchBranch = branchStore.isBranchMatch(g)
+    return matchCat && nameMatch && matchBranch
   })
 })
 

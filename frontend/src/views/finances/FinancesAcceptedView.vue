@@ -359,11 +359,12 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
-import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatDate } from '@/utils/formatters'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 const payments = ref([])
 const enrollments = ref([])
@@ -394,7 +395,7 @@ const monthNameStr = computed(() => new Date().toLocaleDateString('uz-UZ', { mon
 
 const todayMetrics = computed(() => {
   const today = new Date().toISOString().split('T')[0]
-  const todayPayments = allAcceptedPayments.value.filter(p => p.created_at && p.created_at.startsWith(today))
+  const todayPayments = allAcceptedPayments.value.filter(p => p.created_at && p.created_at.startsWith(today) && branchStore.isBranchMatch(p))
   const cash = todayPayments.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
   const card = todayPayments.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
   const transfer = todayPayments.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
@@ -405,7 +406,7 @@ const todayMetrics = computed(() => {
 const monthMetrics = computed(() => {
   const now = new Date()
   const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const monthPayments = allAcceptedPayments.value.filter(p => p.created_at && p.created_at.startsWith(yearMonth))
+  const monthPayments = allAcceptedPayments.value.filter(p => p.created_at && p.created_at.startsWith(yearMonth) && branchStore.isBranchMatch(p))
   const cash = monthPayments.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
   const card = monthPayments.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
   const transfer = monthPayments.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
@@ -420,8 +421,18 @@ const filteredEnrollments = computed(() => {
 })
 
 const filteredPayments = computed(() => {
-  if (!filterCategory.value) return payments.value
-  return payments.value.filter(p => String(p.category) === String(filterCategory.value) || p.category_name?.toLowerCase() === filterCategory.value.toLowerCase())
+  return payments.value.filter(p => {
+    if (!branchStore.isBranchMatch(p)) return false
+    const catVal = filterCategory.value
+    if (!catVal) return true
+    const catObj = categories.value.find(c => String(c.id) === String(catVal))
+    const catName = catObj ? catObj.name.toLowerCase() : ''
+
+    return String(p.category) === String(catVal) ||
+      String(p.category_id) === String(catVal) ||
+      (p.category_name && p.category_name.toLowerCase() === catVal.toString().toLowerCase()) ||
+      (catName && p.category_name && p.category_name.toLowerCase() === catName)
+  })
 })
 
 async function fetchCategories() {
@@ -446,6 +457,7 @@ async function fetchPayments() {
     if (filterDateFrom.value) params.date_from = filterDateFrom.value
     if (filterDateTo.value) params.date_to = filterDateTo.value
     if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
+    if (filterCategory.value) params.category = filterCategory.value
 
     const res = await api.get('/payments/', { params })
     payments.value = res.data.results || res.data
@@ -460,7 +472,7 @@ async function fetchEnrollments() {
   } catch (err) { console.error(err) }
 }
 
-watch([filterStudentName, filterMethod, filterDateFrom, filterDateTo], () => { fetchPayments() })
+watch([filterStudentName, filterCategory, filterMethod, filterDateFrom, filterDateTo], () => { fetchPayments() })
 
 function selectEnrollment(e) {
   form.value.enrollment = e.id

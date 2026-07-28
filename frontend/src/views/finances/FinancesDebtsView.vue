@@ -255,10 +255,12 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatPhone } from '@/utils/formatters'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 const enrollments = ref([])
 const categories = ref([])
@@ -288,7 +290,7 @@ const getDebt = (e) => {
 }
 
 const debtEnrollments = computed(() => {
-  return enrollments.value.filter(e => getDebt(e) > 0)
+  return enrollments.value.filter(e => getDebt(e) > 0 && branchStore.isBranchMatch(e))
 })
 
 const totalDebtSum = computed(() => {
@@ -308,11 +310,17 @@ const filteredDebtEnrollments = computed(() => {
       (e.student_name || '').toLowerCase().includes(q) ||
       (e.student_jshshr || '').toLowerCase().includes(q) ||
       (e.student_phone || '').toLowerCase().includes(q) ||
-      (e.group_name || '').toLowerCase().includes(q)
+      (e.group_name || '').toLowerCase().includes(q) ||
+      (e.category_name || '').toLowerCase().includes(q)
 
-    const matchCategory = !filterCategory.value ||
-      String(e.category) === String(filterCategory.value) ||
-      (e.category_name && e.category_name.toLowerCase() === filterCategory.value.toLowerCase())
+    const catVal = filterCategory.value
+    const catObj = categories.value.find(c => String(c.id) === String(catVal))
+    const catName = catObj ? catObj.name.toLowerCase() : ''
+
+    const matchCategory = !catVal ||
+      String(e.category) === String(catVal) ||
+      (e.category_name && e.category_name.toLowerCase() === catVal.toString().toLowerCase()) ||
+      (catName && e.category_name && e.category_name.toLowerCase() === catName)
 
     return matchSearch && matchCategory
   })

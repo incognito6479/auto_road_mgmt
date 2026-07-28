@@ -64,7 +64,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(agent, index) in agents" :key="agent.id" class="table-row clickable" @click="goToAgentDetail(agent.id)">
+            <tr v-for="(agent, index) in displayedAgents" :key="agent.id" class="table-row clickable" @click="goToAgentDetail(agent.id)">
               <td class="td-muted">{{ (currentPage - 1) * pageSize + index + 1 }}</td>
               <td>
                 <div class="agent-user-cell">
@@ -182,13 +182,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -197,6 +199,7 @@ function goToAgentDetail(id) {
 }
 
 const agents = ref([])
+const displayedAgents = computed(() => agents.value.filter(a => branchStore.isBranchMatch(a)))
 const loading = ref(false)
 const saving = ref(false)
 const searchQuery = ref('')

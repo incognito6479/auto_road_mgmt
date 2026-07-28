@@ -42,6 +42,25 @@ class BaseModel(models.Model):
         abstract = True
 
 
+class Branch(BaseModel):
+    """Branch / Filial model."""
+
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Filial nomi",
+    )
+
+    class Meta:
+        db_table = "branch"
+        verbose_name = "Filial"
+        verbose_name_plural = "Filiallar"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class User(AbstractUser):
     """
     Custom user model using phone number as the login identifier.
@@ -110,6 +129,28 @@ class User(AbstractUser):
         help_text="Qo'shimcha eslatmalar",
     )
 
+    image = models.FileField(
+        upload_to="users/",
+        blank=True,
+        null=True,
+        help_text="Foydalanuvchi rasmi",
+    )
+
+    pass_img = models.FileField(
+        upload_to="passports/",
+        blank=True,
+        null=True,
+        help_text="Pasport nusxasi / rasmi (faqat talabalar uchun)",
+    )
+
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="users",
+    )
+
     USERNAME_FIELD = "phone"
     REQUIRED_FIELDS = []
 
@@ -169,6 +210,13 @@ class Holidays(BaseModel):
 class Category(BaseModel):
     """Driving license category (e.g. A, B, BC)."""
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="categories",
+    )
     name = models.CharField(
         max_length=10,
         unique=True,
@@ -207,6 +255,13 @@ class Group(BaseModel):
         MWF = "mon-wed-fri", "Dushanba - Chorshanba - Juma (Mo-Wed-Fri)"
         TTS = "tue-wed-sat", "Seshanba - Payshanba - Shanba (Tue-Thu-Sat)"
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="groups",
+    )
     category = models.ForeignKey(
         Category,
         on_delete=models.PROTECT,
@@ -255,6 +310,13 @@ class Group(BaseModel):
 class LearningPlace(BaseModel):
     """Physical or online learning place / location."""
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="learning_places",
+    )
     place_name = models.CharField(max_length=255, help_text="O'quv joyi nomi")
 
     class Meta:
@@ -269,6 +331,13 @@ class LearningPlace(BaseModel):
 class Agent(BaseModel):
     """Agent model for student recruiters/referrals."""
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="agents",
+    )
     full_name = models.CharField(max_length=255, help_text="Agent F.I.SH.")
     phone = models.CharField(max_length=20, unique=True, help_text="Telefon raqami")
     phone2 = models.CharField(max_length=20, blank=True, null=True, help_text="Qo'shimcha telefon raqami")
@@ -296,6 +365,13 @@ class Enrollment(BaseModel):
         TTS = "Tue-Thu-Sat", "Tue-Thu-Sat"
         EVERYDAY = "everyday", "Everyday"
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments",
+    )
     student = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -396,6 +472,13 @@ class Payment(BaseModel):
         QR_CODE = "qr_code", "QR code"
         TRANSFER = "transfer", "O'tkazma"
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payments",
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -449,6 +532,12 @@ class Car(BaseModel):
         max_length=255,
         help_text="Avtomobil nomi va davlat raqami (masalan: Cobalt 01 A 777 AA)",
     )
+    image = models.FileField(
+        upload_to="cars/",
+        blank=True,
+        null=True,
+        help_text="Avtomobil rasmi",
+    )
     manufact_year = models.IntegerField(
         null=True,
         blank=True,
@@ -484,6 +573,13 @@ class Car(BaseModel):
 class DrivingLessons(BaseModel):
     """Driving lesson confirmation model."""
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="driving_lessons",
+    )
     student = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -527,6 +623,13 @@ class Notification(BaseModel):
         PAYMENT = "payment", "To'lov"
         AGENT_PAYMENT = "agent_payment", "Agent To'lovi"
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

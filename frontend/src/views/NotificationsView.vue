@@ -140,16 +140,21 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+import { useBranchStore } from '@/stores/branch'
 
+const branchStore = useBranchStore()
 const notifications = ref([])
 const loading = ref(true)
 const activeStatusFilter = ref('')
 
-const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
+const unreadCount = computed(() => notifications.value.filter(n => !n.is_read && branchStore.isBranchMatch(n)).length)
 
 const filteredNotifications = computed(() => {
-  if (!activeStatusFilter.value) return notifications.value
-  return notifications.value.filter(n => n.status === activeStatusFilter.value)
+  return notifications.value.filter(n => {
+    if (!branchStore.isBranchMatch(n)) return false
+    if (!activeStatusFilter.value) return true
+    return n.status === activeStatusFilter.value
+  })
 })
 
 async function fetchNotifications() {

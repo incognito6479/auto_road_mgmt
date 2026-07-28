@@ -10,8 +10,9 @@ from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
-from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, DrivingLessons, Notification
+from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, DrivingLessons, Notification
 from management.serializers import (
+    BranchSerializer,
     CategorySerializer,
     StudentSerializer,
     UserSerializer,
@@ -59,6 +60,39 @@ def is_admin_or_superuser(user):
     if not user or not user.is_authenticated:
         return False
     return user.is_superuser or user.role in [User.Role.ADMIN, User.Role.SUPERUSER]
+
+
+def filter_by_branch(queryset, request, branch_field="branch"):
+    branch = request.query_params.get("branch")
+    if branch:
+        if branch.isdigit():
+            kw_id = {f"{branch_field}_id": branch}
+            kw_null = {f"{branch_field}__isnull": True}
+            queryset = queryset.filter(Q(**kw_id) | Q(**kw_null))
+        else:
+            kw_name = {f"{branch_field}__name__iexact": branch.strip()}
+            kw_null = {f"{branch_field}__isnull": True}
+            queryset = queryset.filter(Q(**kw_name) | Q(**kw_null))
+    return queryset
+
+
+# ---------------------------------------------------------------------------
+# Branch
+# ---------------------------------------------------------------------------
+
+class BranchViewSet(SoftDeleteModelViewSet):
+    """CRUD for branches / filials."""
+
+    queryset = Branch.objects.filter(is_active=True).order_by("name")
+    serializer_class = BranchSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(name__icontains=search.strip())
+        return qs
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +167,7 @@ class UserViewSet(SoftDeleteModelViewSet):
                 Q(last_name__icontains=search) |
                 Q(phone__icontains=search)
             )
-        return qs
+        return filter_by_branch(qs, self.request, "branch")
 
     @action(detail=False, methods=["get"])
     def me(self, request):
@@ -228,6 +262,7 @@ class StudentViewSet(SoftDeleteModelViewSet):
         if jshshr:
             queryset = queryset.filter(jshshr__icontains=jshshr)
 
+        queryset = filter_by_branch(queryset, self.request, "branch")
         return queryset.distinct()
 
 
@@ -266,7 +301,7 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(agent_id=agent)
         if group:
             queryset = queryset.filter(group_id=group)
-        return queryset
+        return filter_by_branch(queryset, self.request, "branch")
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +346,7 @@ class PaymentViewSet(SoftDeleteModelViewSet):
         if student_name:
             queryset = queryset.filter(
                 Q(enrollment__student__full_name__icontains=student_name) |
+                Q(enrollment__category__name__icontains=student_name) |
                 Q(agent__full_name__icontains=student_name) |
                 Q(user__first_name__icontains=student_name) |
                 Q(user__last_name__icontains=student_name) |
@@ -322,6 +358,13 @@ class PaymentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(created_at__gte=date_from)
         if date_to:
             queryset = queryset.filter(created_at__lte=f"{date_to} 23:59:59.999999")
+
+        branch = self.request.query_params.get("branch")
+        if branch:
+            if branch.isdigit():
+                queryset = queryset.filter(Q(branch_id=branch) | Q(enrollment__branch_id=branch) | Q(branch__isnull=True))
+            else:
+                queryset = queryset.filter(Q(branch__name__iexact=branch.strip()) | Q(enrollment__branch__name__iexact=branch.strip()) | Q(branch__isnull=True))
 
         return queryset
 
@@ -369,6 +412,10 @@ class GroupViewSet(SoftDeleteModelViewSet):
     serializer_class = GroupSerializer
     pagination_class = StandardPagination
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return filter_by_branch(qs, self.request, "branch")
+
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
             return Response(
@@ -388,6 +435,10 @@ class LearningPlaceViewSet(SoftDeleteModelViewSet):
     queryset = LearningPlace.objects.filter(is_active=True).order_by("-created_at")
     serializer_class = LearningPlaceSerializer
     pagination_class = StandardPagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return filter_by_branch(qs, self.request, "branch")
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
@@ -419,7 +470,7 @@ class AgentViewSet(SoftDeleteModelViewSet):
                 Q(phone__icontains=search_cleaned) |
                 Q(phone2__icontains=search_cleaned)
             )
-        return qs
+        return filter_by_branch(qs, self.request, "branch")
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):

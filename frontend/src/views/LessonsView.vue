@@ -192,8 +192,10 @@
 import { ref, computed, onMounted } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
+import { useBranchStore } from '@/stores/branch'
 import { formatPhone } from '@/utils/formatters'
 
+const branchStore = useBranchStore()
 const activeTab = ref('theory')
 const loading = ref(true)
 
@@ -209,20 +211,24 @@ const expandedTeachers = ref(new Set())
 const expandedInstructors = ref(new Set())
 
 const filteredTheoryTeachers = computed(() => {
-  if (!theorySearchQuery.value.trim()) return theoryTeachers.value
   const q = theorySearchQuery.value.trim().toLowerCase()
-  return theoryTeachers.value.filter(t => (t.full_name || '').toLowerCase().includes(q) || (t.phone || '').includes(q))
+  return theoryTeachers.value.filter(t => {
+    if (!branchStore.isBranchMatch(t)) return false
+    if (!q) return true
+    return (t.full_name || '').toLowerCase().includes(q) || (t.phone || '').includes(q)
+  })
 })
 
 const filteredDrivingLessons = computed(() => {
-  if (!drivingSearchQuery.value.trim()) return drivingLessons.value
   const q = drivingSearchQuery.value.trim().toLowerCase()
-  return drivingLessons.value.filter(l => 
-    (l.student_name || '').toLowerCase().includes(q) ||
-    (l.instructor_name || '').toLowerCase().includes(q) ||
-    (l.car_name || '').toLowerCase().includes(q) ||
-    (l.notes || '').toLowerCase().includes(q)
-  )
+  return drivingLessons.value.filter(l => {
+    if (!branchStore.isBranchMatch(l)) return false
+    if (!q) return true
+    return (l.student_name || '').toLowerCase().includes(q) ||
+      (l.instructor_name || '').toLowerCase().includes(q) ||
+      (l.car_name || '').toLowerCase().includes(q) ||
+      (l.notes || '').toLowerCase().includes(q)
+  })
 })
 
 async function fetchData() {

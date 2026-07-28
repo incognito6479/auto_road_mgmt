@@ -148,6 +148,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/vehicles/:id',
+    name: 'car-detail',
+    component: () => import('@/views/CarDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/cars',
     redirect: '/vehicles',
   },

@@ -11,6 +11,7 @@ from rest_framework.routers import DefaultRouter
 from management import views
 
 router = DefaultRouter()
+router.register(r"branches", views.BranchViewSet, basename="branch")
 router.register(r"categories", views.CategoryViewSet, basename="category")
 router.register(r"users", views.UserViewSet, basename="user")
 router.register(r"students", views.StudentViewSet, basename="student")

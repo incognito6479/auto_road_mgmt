@@ -11,7 +11,9 @@
       </button>
 
       <div v-if="student" class="header-info">
-        <div class="header-avatar">{{ initials }}</div>
+        <div class="header-avatar" @click="openImageModal(student.image || '/default_photo.png')" title="Rasmni kattalashtirish">
+          <img :src="student.image || '/default_photo.png'" alt="Student" class="user-avatar-img" />
+        </div>
         <div>
           <h1 class="header-name">{{ student.full_name || student.phone }}</h1>
           <div class="header-meta">
@@ -27,6 +29,13 @@
       </div>
 
       <div class="header-actions" v-if="student">
+        <button class="btn-view-pass-header" v-if="student.pass_img" @click="openPassportPreview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          Pasport rasmi
+        </button>
         <button class="btn-confirm-lesson" @click="openLessonModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
@@ -34,7 +43,7 @@
           </svg>
           Amaliy haydash darsini tasdiqlash
         </button>
-        <button class="btn-payment" v-if="!authStore.isStudent && !enrollment?.enrolled_free" @click="openPaymentModal">
+        <button class="btn-payment" v-if="!authStore.isStudent && !enrollment?.enrolled_free && !isFullyPaid" @click="openPaymentModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <rect x="2" y="5" width="20" height="14" rx="2"/>
             <line x1="2" y1="10" x2="22" y2="10"/>
@@ -81,6 +90,19 @@
             <div class="info-row" v-if="student.phone2"><span class="info-label">Qo'shimcha tel.</span><span class="info-value">{{ formatPhone(student.phone2) }}</span></div>
             <div class="info-row"><span class="info-label">JSHSHR</span><span class="info-value mono">{{ student.jshshr || '-' }}</span></div>
             <div class="info-row"><span class="info-label">Pasport</span><span class="info-value mono">{{ student.passport_serie || '' }} {{ student.passport_number || '' }}</span></div>
+            <div class="info-row">
+              <span class="info-label">Pasport nusxasi</span>
+              <span class="info-value">
+                <button v-if="student.pass_img" type="button" class="btn-view-pass" @click="openPassportPreview">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  Pasport rasmini ko'rish
+                </button>
+                <span v-else style="color: #9CA3AF; font-size: 13px;">Yuklanmagan</span>
+              </span>
+            </div>
             <div class="info-row"><span class="info-label">Ro'yxatdan o'tgan</span><span class="info-value">{{ formatDate(student.date_joined) }}</span></div>
             <div class="info-row" v-if="student.notes"><span class="info-label">Eslatma</span><span class="info-value">{{ student.notes }}</span></div>
           </div>
@@ -155,7 +177,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </span>
             <h2 class="card-title">To'lov Holati</h2>
-            <button class="btn-add-payment" v-if="!authStore.isStudent && !enrollment?.enrolled_free" @click="openPaymentModal">
+            <button class="btn-add-payment" v-if="!authStore.isStudent && !enrollment?.enrolled_free && !isFullyPaid" @click="openPaymentModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               To'lov
             </button>
@@ -276,6 +298,20 @@
             <div class="form-group"><label class="form-label">JSHSHR</label><input v-model="editForm.jshshr" type="text" maxlength="14" class="form-input mono" placeholder="14 ta raqam"/></div>
             <div class="form-group"><label class="form-label">Pasport Seriyasi</label><input v-model="editForm.passport_serie" type="text" maxlength="2" class="form-input text-upper" placeholder="AA"/></div>
             <div class="form-group"><label class="form-label">Pasport Raqami</label><input v-model="editForm.passport_number" type="text" maxlength="7" class="form-input mono" placeholder="1234567"/></div>
+            <div class="form-group">
+              <label class="form-label">O'quvchi Rasmi (Foto)</label>
+              <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                <img v-if="editForm.existingImage" :src="editForm.existingImage" alt="Photo" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
+                <input type="file" accept="image/*" class="form-input" style="width: 100%;" @change="onEditStudentPhotoChange" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Pasport Rasmi / Nusxasi</label>
+              <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                <img v-if="editForm.existingPassImg" :src="editForm.existingPassImg" alt="Passport" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
+                <input type="file" accept="image/*,.pdf" class="form-input" style="width: 100%;" @change="onEditPassportPhotoChange" />
+              </div>
+            </div>
           </div>
         </div>
         <div class="form-section">
@@ -407,6 +443,14 @@
       </form>
     </dialog>
 
+    <!-- Image Zoom Modal -->
+    <dialog ref="imageZoomModal" class="image-zoom-dialog" @click="imageZoomModal?.close()">
+      <div class="image-zoom-content" @click.stop>
+        <button type="button" class="image-zoom-close" @click="imageZoomModal?.close()">✕</button>
+        <img :src="zoomedImageUrl" alt="Enlarged Photo" class="zoomed-img" />
+      </div>
+    </dialog>
+
   </AppLayout>
 </template>
 
@@ -431,6 +475,14 @@ const error      = ref('')
 const editModal    = ref(null)
 const paymentModal = ref(null)
 const lessonModal  = ref(null)
+const imageZoomModal = ref(null)
+const zoomedImageUrl = ref('')
+
+function openImageModal(url) {
+  if (!url) return
+  zoomedImageUrl.value = url
+  imageZoomModal.value?.showModal()
+}
 
 const editError    = ref('')
 const editSaving   = ref(false)
@@ -514,6 +566,12 @@ const submitLessonConfirmation = async () => {
   }
 }
 
+function openPassportPreview() {
+  if (student.value?.pass_img) {
+    openImageModal(student.value.pass_img)
+  }
+}
+
 const initials = computed(() => {
   const name = student.value?.full_name || ''
   const parts = name.trim().split(' ')
@@ -526,12 +584,26 @@ const activeStatus = computed(() => {
   return enrollment.value?.status || student.value?.status || 'new'
 })
 
-const paidTotal = computed(() =>
+const acceptedAmount = computed(() =>
   payments.value.filter(p => p.is_active && p.status === 'accepted').reduce((s, p) => s + (p.amount || 0), 0)
+)
+const returnedAmount = computed(() =>
+  payments.value.filter(p => p.is_active && p.status === 'returned').reduce((s, p) => s + (p.amount || 0), 0)
+)
+const netAcceptedAmount = computed(() =>
+  acceptedAmount.value - returnedAmount.value
+)
+const paidTotal = computed(() =>
+  Math.max(0, netAcceptedAmount.value)
 )
 const remaining = computed(() => {
   if (!enrollment.value || enrollment.value.enrolled_free) return 0
   return Math.max(0, (enrollment.value.enrolled_amount || 0) - paidTotal.value)
+})
+const isFullyPaid = computed(() => {
+  if (!enrollment.value || enrollment.value.enrolled_free) return false
+  const contract = Number(enrollment.value.enrolled_amount) || 0
+  return contract > 0 && netAcceptedAmount.value >= contract
 })
 const progressPct = computed(() => {
   const amt = enrollment.value?.enrolled_amount
@@ -603,17 +675,34 @@ const fetchPayments = async () => {
   finally { loadingPayments.value = false }
 }
 
+const selectedStudentPhoto = ref(null)
+const selectedPassportPhoto = ref(null)
+
+function onEditStudentPhotoChange(e) {
+  selectedStudentPhoto.value = e.target.files?.[0] || null
+}
+function onEditPassportPhotoChange(e) {
+  selectedPassportPhoto.value = e.target.files?.[0] || null
+}
+
 const openEditModal = () => {
   const s = student.value
+  selectedStudentPhoto.value = null
+  selectedPassportPhoto.value = null
   editForm.value = {
-    full_name: s.full_name || '', phone: formatPhone(s.phone),
-    phone2: s.phone2 ? formatPhone(s.phone2) : '',
+    full_name: s.full_name || '',
+    phone: formatPhone(s.phone),
+    phone2: s.phone2 || '',
     jshshr: s.jshshr ? String(s.jshshr) : '',
     passport_serie: s.passport_serie || '',
     passport_number: s.passport_number ? String(s.passport_number) : '',
-    status: activeStatus.value, notes: s.notes || '',
+    status: activeStatus.value,
+    notes: s.notes || '',
+    existingImage: s.image || null,
+    existingPassImg: s.pass_img || null,
   }
-  editError.value = ''; editModal.value?.showModal()
+  editError.value = ''
+  editModal.value?.showModal()
 }
 
 const maskPhone = (val) => {
@@ -627,8 +716,33 @@ const maskPhone = (val) => {
   if (d.length > 10) f += ' ' + d.slice(10, 12)
   return f
 }
-const onEditPhoneInput  = (e) => { editForm.value.phone  = maskPhone(e.target.value) }
-const onEditPhone2Input = (e) => { editForm.value.phone2 = maskPhone(e.target.value) }
+const onEditPhoneInput = (e) => { editForm.value.phone = maskPhone(e.target.value) }
+
+const onEditPhone2Input = (e) => {
+  const val = e.target.value
+  const match = val.match(/^(\+?[\d\s-]+)(.*)$/)
+  if (!match) {
+    editForm.value.phone2 = val
+    return
+  }
+  const phonePart = match[1]
+  const textPart = match[2] || ''
+
+  let digits = phonePart.replace(/\D/g, '')
+  if (digits.length > 0 && !digits.startsWith('998')) {
+    digits = '998' + digits
+  }
+  digits = digits.substring(0, 12)
+
+  let formatted = ''
+  if (digits.length > 0) formatted += '+' + digits.substring(0, 3)
+  if (digits.length > 3) formatted += ' ' + digits.substring(3, 5)
+  if (digits.length > 5) formatted += ' ' + digits.substring(5, 8)
+  if (digits.length > 8) formatted += ' ' + digits.substring(8, 10)
+  if (digits.length > 10) formatted += ' ' + digits.substring(10, 12)
+
+  editForm.value.phone2 = formatted + textPart
+}
 
 const saveStudent = async () => {
   editError.value = ''
@@ -638,17 +752,49 @@ const saveStudent = async () => {
   if (phoneCleaned.length < 12) { editError.value = "Telefon raqami noto'g'ri."; return }
   editSaving.value = true
   try {
-    await api.patch(`/students/${student.value.id}/`, {
-      full_name: f.full_name.trim(), phone: phoneCleaned,
-      phone2: f.phone2 ? f.phone2.replace(/\D/g, '') : null,
+    const payload = {
+      full_name: f.full_name.trim(),
+      phone: phoneCleaned,
+      phone2: f.phone2 ? f.phone2.trim() : null,
       jshshr: f.jshshr ? parseInt(f.jshshr, 10) : null,
       passport_serie: f.passport_serie ? f.passport_serie.trim().toUpperCase() : null,
       passport_number: f.passport_number ? parseInt(f.passport_number, 10) : null,
-      status: f.status, notes: f.notes,
-    })
-    editModal.value?.close(); await fetchAll()
-  } catch (err) { console.error(err); editError.value = "Saqlashda xatolik yuz berdi." }
-  finally { editSaving.value = false }
+      status: f.status,
+      notes: f.notes || '',
+    }
+
+    if (selectedStudentPhoto.value || selectedPassportPhoto.value) {
+      const formData = new FormData()
+      Object.keys(payload).forEach(key => {
+        if (payload[key] !== null && payload[key] !== undefined) {
+          formData.append(key, payload[key])
+        }
+      })
+      if (selectedStudentPhoto.value) formData.append('image', selectedStudentPhoto.value)
+      if (selectedPassportPhoto.value) formData.append('pass_img', selectedPassportPhoto.value)
+      await api.patch(`/students/${student.value.id}/`, formData)
+    } else {
+      await api.patch(`/students/${student.value.id}/`, payload)
+    }
+
+    editModal.value?.close()
+    await fetchAll()
+  } catch (err) {
+    console.error(err)
+    if (err.response?.data) {
+      const data = err.response.data
+      if (typeof data === 'object') {
+        const msgs = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+        editError.value = msgs.join(' | ')
+      } else {
+        editError.value = String(data)
+      }
+    } else {
+      editError.value = "Saqlashda xatolik yuz berdi."
+    }
+  } finally {
+    editSaving.value = false
+  }
 }
 
 const openPaymentModal = () => {
@@ -741,8 +887,57 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .btn-back:hover{background:#F9FAFB;border-color:#D1D5DB}
 
 .detail-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
-.header-info{display:flex;align-items:center;gap:14px;flex:1}
-.header-avatar{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#2D6A4F,#52B788);color:white;font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(45,106,79,0.25)}
+.header-info{display:flex;align-items:center;gap:16px;flex:1}
+.header-avatar{width:72px;height:72px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,0.08);border:2.5px solid #E5E7EB;overflow:hidden;cursor:pointer;transition:transform 0.15s ease}
+.header-avatar:hover{transform:scale(1.04);border-color:#2D6A4F}
+.user-avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+
+/* Image Zoom Modal */
+.image-zoom-dialog {
+  border: none;
+  background: transparent;
+  padding: 0;
+  max-width: 90vw;
+  max-height: 90vh;
+  margin: auto;
+  overflow: visible;
+}
+.image-zoom-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(5px);
+}
+.image-zoom-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-zoom-close {
+  position: absolute;
+  top: -16px;
+  right: -16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  color: #111827;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.zoomed-img {
+  max-width: 85vw;
+  max-height: 85vh;
+  border-radius: 14px;
+  object-fit: contain;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
 .header-name{font-size:20px;font-weight:700;color:#111827;line-height:1.2}
 .header-meta{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
 .meta-sep{color:#D1D5DB;font-size:12px}
@@ -889,4 +1084,48 @@ textarea.form-input{resize:vertical;min-height:80px}
 .btn-save:disabled{opacity:.6;cursor:not-allowed}
 .btn-spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite}
 .pay-remaining-hint{padding:10px 14px;background:#ECFDF5;border-radius:8px;color:#065F46;font-size:13px;font-weight:500;margin-bottom:14px}
+.btn-view-pass {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #E0E7FF;
+  color: #3730A3;
+  border: 1px solid #C7D2FE;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-view-pass:hover {
+  background: #C7D2FE;
+}
+.btn-view-pass-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #059669;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-view-pass-header:hover {
+  background: #047857;
+}
+.avatar-placeholder-box {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 20px;
+  color: white;
+}
 </style>

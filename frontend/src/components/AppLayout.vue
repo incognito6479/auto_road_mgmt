@@ -8,11 +8,23 @@
       <div class="sidebar-brand">
         <div class="brand-left" v-if="!isSidebarCollapsed">
           <div class="brand-icon-wrap">
-            <img src="/car-icon.jpg" alt="AUTOROAD SCHOOL" class="brand-logo" />
+            <img src="/car-icon.jpg" alt="Logo" class="brand-logo" />
           </div>
-          <div class="brand-name">
-            <span>AUTOROAD</span>
-            <span>SCHOOL</span>
+          <div class="branch-select-big-wrap">
+            <select
+              :value="branchStore.activeBranch"
+              @change="onBranchChange"
+              class="branch-select-big"
+            >
+              <option
+                v-for="b in branchStore.branches"
+                :key="b.id"
+                :value="b.name"
+              >
+                {{ b.name.toUpperCase() }}
+              </option>
+            </select>
+            <div class="branch-select-big-icon">▼</div>
           </div>
         </div>
         <button class="btn-toggle-sidebar" @click="toggleSidebar" :title="isSidebarCollapsed ? 'Menyuni ochish' : 'Menyuni yopish'">
@@ -151,10 +163,17 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
+
+function onBranchChange(e) {
+  branchStore.setActiveBranch(e.target.value)
+  window.location.reload()
+}
 
 const isSidebarCollapsed = ref(localStorage.getItem('sidebar_collapsed') === 'true')
 const toggleSidebar = () => {
@@ -273,6 +292,7 @@ onMounted(() => {
   document.addEventListener('click', handleOutsideClick)
   fetchUnreadCount()
   unreadTimer = setInterval(fetchUnreadCount, 5000)
+  branchStore.fetchBranches()
 })
 onUnmounted(() => {
   document.removeEventListener('click', handleOutsideClick)
@@ -655,6 +675,54 @@ button { cursor: pointer; background: none; border: none; font-family: inherit; 
   object-fit: cover;
   mix-blend-mode: multiply;
   background: #f0f0f0;
+}
+
+.branch-select-big-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  margin-left: 4px;
+}
+
+.branch-select-big {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #F9FAFB;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  padding: 6px 24px 6px 10px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: none;
+  width: 100%;
+  transition: all 0.15s ease;
+}
+
+.branch-select-big:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.branch-select-big option {
+  background: #1E293B;
+  color: #F3F4F6;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.branch-select-big-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: #CBD5E1;
+  pointer-events: none;
 }
 
 .user-dropdown {

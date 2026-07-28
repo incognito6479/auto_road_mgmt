@@ -13,6 +13,18 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
+  if (config.method === 'get') {
+    const activeBranch = localStorage.getItem('active_branch')
+    if (activeBranch) {
+      config.params = config.params || {}
+      if (!config.params.branch) {
+        config.params.branch = activeBranch
+      }
+    }
+  }
   return config
 })
 

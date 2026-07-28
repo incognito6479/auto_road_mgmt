@@ -39,8 +39,8 @@
       <!-- Profile Overview Card -->
       <div class="profile-card">
         <div class="profile-header">
-          <div class="avatar-large">
-            {{ userInitials }}
+          <div class="avatar-large" @click="openImageModal(user.image || '/default_photo.png')" title="Rasmni kattalashtirish" style="cursor: pointer;">
+            <img :src="user.image || '/default_photo.png'" alt="Profile" class="user-avatar-img" />
           </div>
           <div class="profile-identity">
             <h3 class="profile-name">{{ user.full_name || (user.first_name + ' ' + user.last_name) }}</h3>
@@ -232,6 +232,14 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label">Foydalanuvchi Rasmi (Foto)</label>
+          <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+            <img v-if="editForm.existingImage" :src="editForm.existingImage" alt="Current Photo" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
+            <input type="file" accept="image/*" class="form-input" style="width: 100%;" @change="onUserFileChange" />
+          </div>
+        </div>
+
+        <div class="form-group">
           <label class="form-label">Qo'shimcha izoh</label>
           <textarea v-model="editForm.notes" rows="3" class="form-input form-textarea"></textarea>
         </div>
@@ -243,6 +251,14 @@
           </button>
         </div>
       </form>
+    </dialog>
+
+    <!-- Image Zoom Modal -->
+    <dialog ref="imageZoomModal" class="image-zoom-dialog" @click="imageZoomModal?.close()">
+      <div class="image-zoom-content" @click.stop>
+        <button type="button" class="image-zoom-close" @click="imageZoomModal?.close()">✕</button>
+        <img :src="zoomedImageUrl" alt="Enlarged Photo" class="zoomed-img" />
+      </div>
     </dialog>
 
   </AppLayout>
@@ -385,17 +401,33 @@ function statusText(st) {
   }
 }
 
+const imageZoomModal = ref(null)
+const zoomedImageUrl = ref('')
+
+function openImageModal(url) {
+  if (!url) return
+  zoomedImageUrl.value = url
+  imageZoomModal.value?.showModal()
+}
+
+const selectedUserFile = ref(null)
+function onUserFileChange(e) {
+  selectedUserFile.value = e.target.files?.[0] || null
+}
+
 function openEditModal() {
   modalError.value = null
+  selectedUserFile.value = null
   editForm.value = {
     full_name: user.value.full_name || '',
-    phone: user.value.phone || '',
+    phone: formatPhone(user.value.phone),
     phone2: user.value.phone2 || '',
     role: user.value.role || 'instructor',
     jshshr: user.value.jshshr || '',
     passport_serie: user.value.passport_serie || '',
     passport_number: user.value.passport_number || '',
-    notes: user.value.notes || ''
+    notes: user.value.notes || '',
+    existingImage: user.value.image || null,
   }
   userModal.value?.showModal()
 }
@@ -408,10 +440,36 @@ async function saveUser() {
   saving.value = true
   modalError.value = null
   try {
-    const res = await api.patch(`/users/${user.value.id}/`, editForm.value)
+    const phoneCleaned = editForm.value.phone ? editForm.value.phone.replace(/\D/g, '') : ''
+    const payload = {
+      full_name: editForm.value.full_name.trim(),
+      phone: phoneCleaned,
+      phone2: editForm.value.phone2 ? editForm.value.phone2.trim() : null,
+      role: editForm.value.role,
+      jshshr: editForm.value.jshshr ? parseInt(editForm.value.jshshr, 10) : null,
+      passport_serie: editForm.value.passport_serie ? editForm.value.passport_serie.trim().toUpperCase() : null,
+      passport_number: editForm.value.passport_number ? parseInt(editForm.value.passport_number, 10) : null,
+      notes: editForm.value.notes || '',
+    }
+
+    let res
+    if (selectedUserFile.value) {
+      const formData = new FormData()
+      Object.keys(payload).forEach(k => {
+        if (payload[k] !== null && payload[k] !== undefined) {
+          formData.append(k, payload[k])
+        }
+      })
+      formData.append('image', selectedUserFile.value)
+      res = await api.patch(`/users/${user.value.id}/`, formData)
+    } else {
+      res = await api.patch(`/users/${user.value.id}/`, payload)
+    }
+
     user.value = res.data
     closeModal()
   } catch (err) {
+    console.error(err)
     modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi"
   } finally {
     saving.value = false
@@ -419,7 +477,11 @@ async function saveUser() {
 }
 
 function goBack() {
-  router.push('/users')
+  if (user.value?.role) {
+    router.push({ path: '/users', query: { role: user.value.role } })
+  } else {
+    router.push('/users')
+  }
 }
 
 function goStudent(studentId) {
@@ -741,15 +803,20 @@ onMounted(() => {
   border: none;
   border-radius: 20px;
   padding: 0;
-  width: 100%;
-  max-width: 520px;
+  width: 90%;
+  max-width: 620px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   background: white;
+  margin: auto;
   overflow: hidden;
 
   &::backdrop {
     background: rgba(15, 23, 42, 0.65);
     backdrop-filter: blur(6px);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
   }
 }
 
@@ -787,9 +854,9 @@ onMounted(() => {
 .user-modal-title { font-size: 17px; font-weight: 700; color: #111827; }
 .user-modal-sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
 .user-btn-close { background: none; border: none; font-size: 18px; color: #9CA3AF; cursor: pointer; }
-.user-modal-form { padding: 24px; }
-.form-group { margin-bottom: 18px; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.user-modal-form { padding: 24px; width: 100%; box-sizing: border-box; }
+.form-group { margin-bottom: 16px; width: 100%; min-width: 0; box-sizing: border-box; }
+.form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; width: 100%; box-sizing: border-box; }
 
 .form-label {
   display: block;
@@ -806,6 +873,7 @@ onMounted(() => {
 
 .form-input {
   width: 100%;
+  box-sizing: border-box;
   padding: 11px 14px;
   border: 1.5px solid #E5E7EB;
   border-radius: 10px;
@@ -872,5 +940,69 @@ select.form-input {
     transform: translateY(-1px);
     box-shadow: 0 6px 16px rgba(45, 106, 79, 0.35);
   }
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-placeholder-large {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F3F4F6;
+  border-radius: 50%;
+}
+
+/* Image Zoom Modal */
+.image-zoom-dialog {
+  border: none;
+  background: transparent;
+  padding: 0;
+  max-width: 90vw;
+  max-height: 90vh;
+  margin: auto;
+  overflow: visible;
+}
+.image-zoom-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(5px);
+}
+.image-zoom-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-zoom-close {
+  position: absolute;
+  top: -16px;
+  right: -16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  color: #111827;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.zoomed-img {
+  max-width: 85vw;
+  max-height: 85vh;
+  border-radius: 14px;
+  object-fit: contain;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
 }
 </style>

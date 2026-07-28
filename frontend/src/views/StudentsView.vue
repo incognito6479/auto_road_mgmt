@@ -88,11 +88,16 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="students.length === 0">
+          <tr v-if="displayedStudents.length === 0">
             <td colspan="10" class="no-data">Ma'lumot topilmadi</td>
           </tr>
-          <tr v-for="s in students" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
-            <td class="td-name">{{ s.name }}</td>
+          <tr v-for="s in displayedStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
+            <td class="td-name">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <img :src="s.image || '/default_photo.png'" alt="Student" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
+                <span>{{ s.name }}</span>
+              </div>
+            </td>
             <td class="td-cat">{{ s.category }}</td>
             <td class="td-muted td-phone">
               <div>{{ s.phone }}</div>
@@ -154,9 +159,9 @@
         </div>
 
         <div class="form-grid">
-          <!-- Row 1: Personal Details -->
+          <!-- Row 1: Personal Details & Photos -->
           <div class="form-group">
-            <label for="std-name" class="form-label">F.I.SH. (To'liq ism)</label>
+            <label for="std-name" class="form-label">F.I.SH. (To'liq ism) *</label>
             <input
               id="std-name"
               v-model="newStudent.full_name"
@@ -168,7 +173,7 @@
           </div>
 
           <div class="form-group">
-            <label for="std-phone" class="form-label">Telefon raqami</label>
+            <label for="std-phone" class="form-label">Telefon raqami *</label>
             <input
               id="std-phone"
               v-model="newStudent.phone"
@@ -180,13 +185,33 @@
           </div>
 
           <div class="form-group">
-            <label for="std-phone2" class="form-label">Qo'shimcha telefon raqami</label>
+            <label for="std-phone2" class="form-label">Qo'shimcha telefon (qarindoshi)</label>
             <input
               id="std-phone2"
               v-model="newStudent.phone2"
-              type="tel"
-              placeholder="+998 90 123 45 67 (ixtiyoriy)"
+              type="text"
+              placeholder="+998 90 123 45 67 otasi / amakisi"
               class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">O'quvchi rasmi (foto)</label>
+            <input
+              type="file"
+              accept="image/*"
+              class="form-input"
+              @change="onStudentPhotoChange"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pasport rasmi / nusxasi</label>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              class="form-input"
+              @change="onPassportPhotoChange"
             />
           </div>
 
@@ -636,13 +661,33 @@
           </div>
 
           <div class="form-group">
-            <label for="edit-std-phone2" class="form-label">Qo'shimcha telefon raqami</label>
+            <label for="edit-std-phone2" class="form-label">Qo'shimcha telefon (qarindoshi)</label>
             <input
               id="edit-std-phone2"
               v-model="editingStudent.phone2"
-              type="tel"
-              placeholder="+998 90 123 45 67 (ixtiyoriy)"
+              type="text"
+              placeholder="+998 90 123 45 67 otasi / amakisi"
               class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">O'quvchi rasmi (foto)</label>
+            <input
+              type="file"
+              accept="image/*"
+              class="form-input"
+              @change="onEditStudentPhotoChange"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pasport rasmi / nusxasi</label>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              class="form-input"
+              @change="onEditPassportPhotoChange"
             />
           </div>
 
@@ -739,8 +784,10 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const router = useRouter()
 
 const goToStudentDetail = (id) => {
@@ -783,6 +830,24 @@ const newStudent = ref({
 })
 const saving = ref(false)
 const modalError = ref('')
+
+const selectedStudentPhoto = ref(null)
+const selectedPassportPhoto = ref(null)
+const selectedEditStudentPhoto = ref(null)
+const selectedEditPassportPhoto = ref(null)
+
+function onStudentPhotoChange(e) {
+  selectedStudentPhoto.value = e.target.files?.[0] || null
+}
+function onPassportPhotoChange(e) {
+  selectedPassportPhoto.value = e.target.files?.[0] || null
+}
+function onEditStudentPhotoChange(e) {
+  selectedEditStudentPhoto.value = e.target.files?.[0] || null
+}
+function onEditPassportPhotoChange(e) {
+  selectedEditPassportPhoto.value = e.target.files?.[0] || null
+}
 
 // ── Edit Modal state ─────────────────────────────────────────
 const editStudentModal = ref(null)
@@ -835,7 +900,12 @@ watch(() => editingStudent.value.phone, (newValue) => {
 
 watch(() => editingStudent.value.phone2, (newValue) => {
   if (!newValue) return
-  let digits = newValue.replace(/\D/g, '')
+  const match = newValue.match(/^(\+?[\d\s-]+)(.*)$/)
+  if (!match) return
+  const phonePart = match[1]
+  const textPart = match[2] || ''
+
+  let digits = phonePart.replace(/\D/g, '')
 
   if (digits.length > 0 && !digits.startsWith('998')) {
     digits = '998' + digits
@@ -860,12 +930,15 @@ watch(() => editingStudent.value.phone2, (newValue) => {
     formatted += ' ' + digits.substring(10, 12)
   }
 
-  if (newValue !== formatted) {
-    editingStudent.value.phone2 = formatted
+  const result = formatted + textPart
+  if (newValue !== result) {
+    editingStudent.value.phone2 = result
   }
 })
 
 const openEditModal = (student) => {
+  selectedEditStudentPhoto.value = null
+  selectedEditPassportPhoto.value = null
   editingStudent.value = {
     id: student.id,
     full_name: student.name,
@@ -909,11 +982,7 @@ const updateStudent = async () => {
     return
   }
 
-  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
-  if (phone2Cleaned && phone2Cleaned.length < 12) {
-    editModalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
-    return
-  }
+  const phone2Val = s.phone2 ? s.phone2.trim() : null
 
   editSaving.value = true
   editModalError.value = ''
@@ -922,7 +991,7 @@ const updateStudent = async () => {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
-      phone2: phone2Cleaned,
+      phone2: phone2Val,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
@@ -931,19 +1000,34 @@ const updateStudent = async () => {
       notes: s.notes,
     }
 
-    await api.patch(`/students/${s.id}/`, payload)
+    if (selectedEditStudentPhoto.value || selectedEditPassportPhoto.value) {
+      const formData = new FormData()
+      Object.keys(payload).forEach(key => {
+        if (payload[key] !== null && payload[key] !== undefined) {
+          formData.append(key, payload[key])
+        }
+      })
+      if (selectedEditStudentPhoto.value) formData.append('image', selectedEditStudentPhoto.value)
+      if (selectedEditPassportPhoto.value) formData.append('pass_img', selectedEditPassportPhoto.value)
+      await api.patch(`/students/${s.id}/`, formData)
+    } else {
+      await api.patch(`/students/${s.id}/`, payload)
+    }
+
     closeEditModal()
     await fetchStudents()
   } catch (err) {
     console.error(err)
-    if (err.response?.data?.phone) {
-      editModalError.value = "Ushbu telefon raqamli o'quvchi allaqachon mavjud."
-    } else if (err.response?.data?.jshshr) {
-      editModalError.value = "Ushbu JSHSHR egasi bo'lgan o'quvchi allaqachon mavjud."
-    } else if (err.response?.data?.passport_number) {
-      editModalError.value = "Ushbu passport raqamli o'quvchi allaqachon mavjud."
+    if (err.response?.data) {
+      const data = err.response.data
+      if (typeof data === 'object') {
+        const msgs = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+        editModalError.value = msgs.join(' | ')
+      } else {
+        editModalError.value = String(data)
+      }
     } else {
-      editModalError.value = "Tahrirlashda xatolik yuz berdi. Ma'lumotlarni tekshirib qayta urinib ko'ring."
+      editModalError.value = "Tahrirlashda xatolik yuz berdi."
     }
   } finally {
     editSaving.value = false
@@ -986,33 +1070,27 @@ watch(() => newStudent.value.phone, (newValue) => {
 
 watch(() => newStudent.value.phone2, (newValue) => {
   if (!newValue) return
-  let digits = newValue.replace(/\D/g, '')
+  const match = newValue.match(/^(\+?[\d\s-]+)(.*)$/)
+  if (!match) return
+  const phonePart = match[1]
+  const textPart = match[2] || ''
 
+  let digits = phonePart.replace(/\D/g, '')
   if (digits.length > 0 && !digits.startsWith('998')) {
     digits = '998' + digits
   }
-
   digits = digits.substring(0, 12)
 
   let formatted = ''
-  if (digits.length > 0) {
-    formatted += '+' + digits.substring(0, 3)
-  }
-  if (digits.length > 3) {
-    formatted += ' ' + digits.substring(3, 5)
-  }
-  if (digits.length > 5) {
-    formatted += ' ' + digits.substring(5, 8)
-  }
-  if (digits.length > 8) {
-    formatted += ' ' + digits.substring(8, 10)
-  }
-  if (digits.length > 10) {
-    formatted += ' ' + digits.substring(10, 12)
-  }
+  if (digits.length > 0) formatted += '+' + digits.substring(0, 3)
+  if (digits.length > 3) formatted += ' ' + digits.substring(3, 5)
+  if (digits.length > 5) formatted += ' ' + digits.substring(5, 8)
+  if (digits.length > 8) formatted += ' ' + digits.substring(8, 10)
+  if (digits.length > 10) formatted += ' ' + digits.substring(10, 12)
 
-  if (newValue !== formatted) {
-    newStudent.value.phone2 = formatted
+  const finalVal = formatted + textPart
+  if (newValue !== finalVal) {
+    newStudent.value.phone2 = finalVal
   }
 })
 
@@ -1142,8 +1220,15 @@ const mapStudent = (s) => {
     enrolledFree: s.enrolled_free || false,
     paymentAmount: formatPrice(s.payment_amount),
     notes: s.notes || '',
+    image: s.image || null,
+    pass_img: s.pass_img || null,
+    branch_name: s.branch_name || s.branch?.name || null,
   }
 }
+
+const displayedStudents = computed(() => {
+  return students.value.filter(s => branchStore.isBranchMatch(s))
+})
 
 const formatPhoneDisplay = (p) => {
   if (!p) return ''
@@ -1241,7 +1326,7 @@ const selectCoordinator = (id) => {
 
 const fetchStaff = async () => {
   try {
-    const res = await api.get('/users/')
+    const res = await api.get('/users/', { params: { page_size: 1000 } })
     const list = Array.isArray(res.data) ? res.data : (res.data.results || [])
     staffInstructors.value = list.filter(u => u.role === 'instructor' && u.is_active)
     staffCoordinators.value = list.filter(u => u.role === 'coordinator' && u.is_active)
@@ -1301,6 +1386,8 @@ const openModal = async () => {
     return
   }
   await Promise.all([fetchStaff(), fetchLearningPlaces(), fetchAgents()])
+  selectedStudentPhoto.value = null
+  selectedPassportPhoto.value = null
   newStudent.value = {
     full_name: '',
     phone: '',
@@ -1366,20 +1453,16 @@ const saveStudent = async () => {
     return
   }
   
-  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
-  if (phone2Cleaned && phone2Cleaned.length < 12) {
-    modalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
-    return
-  }
+  const phone2Val = s.phone2 ? s.phone2.trim() : null
 
   saving.value = true
   modalError.value = ''
-  
+
   try {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
-      phone2: phone2Cleaned,
+      phone2: phone2Val,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
@@ -1398,19 +1481,34 @@ const saveStudent = async () => {
       status: 'new' // Register new student in new status
     }
     
-    await api.post('/students/', payload)
+    if (selectedStudentPhoto.value || selectedPassportPhoto.value) {
+      const formData = new FormData()
+      Object.keys(payload).forEach(key => {
+        if (payload[key] !== null && payload[key] !== undefined) {
+          formData.append(key, payload[key])
+        }
+      })
+      if (selectedStudentPhoto.value) formData.append('image', selectedStudentPhoto.value)
+      if (selectedPassportPhoto.value) formData.append('pass_img', selectedPassportPhoto.value)
+      await api.post('/students/', formData)
+    } else {
+      await api.post('/students/', payload)
+    }
+
     closeModal()
     await fetchStudents()
   } catch (err) {
     console.error(err)
-    if (err.response?.data?.phone) {
-      modalError.value = "Ushbu telefon raqamli o'quvchi allaqachon mavjud."
-    } else if (err.response?.data?.jshshr) {
-      modalError.value = "Ushbu JSHSHR egasi bo'lgan o'quvchi allaqachon mavjud."
-    } else if (err.response?.data?.passport_number) {
-      modalError.value = "Ushbu passport raqamli o'quvchi allaqachon mavjud."
+    if (err.response?.data) {
+      const data = err.response.data
+      if (typeof data === 'object') {
+        const msgs = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+        modalError.value = msgs.join(' | ')
+      } else {
+        modalError.value = String(data)
+      }
     } else {
-      modalError.value = "Saqlashda xatolik yuz berdi. Ma'lumotlarni tekshirib qayta urinib ko'ring."
+      modalError.value = "Saqlashda xatolik yuz berdi."
     }
   } finally {
     saving.value = false

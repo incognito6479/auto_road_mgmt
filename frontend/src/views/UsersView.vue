@@ -74,8 +74,13 @@
             <tr v-for="u in filteredUsers" :key="u.id" class="table-row clickable" @click="goToUserDetail(u.id)">
               <td class="td-id">#{{ u.id }}</td>
               <td class="td-name">
-                <div class="user-fullname user-link-title">{{ getUserFullName(u) }}</div>
-                <div v-if="u.email" class="user-email">{{ u.email }}</div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <img :src="u.image || '/default_photo.png'" alt="User" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
+                  <div>
+                    <div class="user-fullname user-link-title">{{ getUserFullName(u) }}</div>
+                    <div v-if="u.email" class="user-email">{{ u.email }}</div>
+                  </div>
+                </div>
               </td>
               <td class="td-phone">{{ formatPhone(u.phone) }}</td>
               <td class="td-role">
@@ -210,6 +215,38 @@
                   type="text"
                   placeholder="Valiyev"
                   class="form-input with-icon"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Otasining ismi</label>
+              <div class="input-icon-wrap">
+                <svg class="field-ico" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <input
+                  v-model="userForm.father_name"
+                  type="text"
+                  placeholder="Eshmatovich"
+                  class="form-input with-icon"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row" style="margin-top: 12px;">
+            <div class="form-group">
+              <label class="form-label">Foydalanuvchi Rasmi (Foto)</label>
+              <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                <img v-if="userForm.existingImage" :src="userForm.existingImage" alt="User Photo" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="form-input"
+                  style="width: 100%;"
+                  @change="onUserFileChange"
                 />
               </div>
             </div>
@@ -391,8 +428,10 @@ import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const route = useRoute()
 const router = useRouter()
 const users = ref([])
@@ -429,6 +468,7 @@ const defaultUserForm = () => ({
   phone2: '',
   first_name: '',
   last_name: '',
+  father_name: '',
   role: 'coordinator',
   jshshr: '',
   passport_serie: '',
@@ -529,7 +569,8 @@ const filteredUsers = computed(() => {
     const qClean = q.replace(/\D/g, '')
     
     const matchSearch = !q || fullName.includes(q) || (u.phone && u.phone.toLowerCase().includes(q)) || (qClean && (phoneClean.includes(qClean) || phone2Clean.includes(qClean)))
-    return matchRole && matchSearch
+    const matchBranch = branchStore.isBranchMatch(u)
+    return matchRole && matchSearch && matchBranch
   })
 })
 
@@ -629,6 +670,12 @@ const onJshshrInput = (e) => {
   userForm.value.jshshr = e.target.value.replace(/\D/g, '')
 }
 
+const selectedUserFile = ref(null)
+
+function onUserFileChange(e) {
+  selectedUserFile.value = e.target.files?.[0] || null
+}
+
 // Modal logic
 const openCreateModal = () => {
   if (!authStore.isSuperuser) {
@@ -639,17 +686,20 @@ const openCreateModal = () => {
   editingId.value = null
   modalError.value = ''
   showPassword.value = false
+  selectedUserFile.value = null
   // Pre-select the role matching the active nav filter (default: coordinator)
   const defaultRole = filterRole.value && filterRole.value !== '' ? filterRole.value : 'coordinator'
   userForm.value = {
     phone: '+998 ',
     first_name: '',
     last_name: '',
+    father_name: '',
     role: defaultRole,
     jshshr: '',
     passport_serie: '',
     passport_number: '',
     password: '',
+    existingImage: null,
   }
   if (userModal.value) {
     userModal.value.showModal()
@@ -665,15 +715,27 @@ const openEditModal = (u) => {
   editingId.value = u.id
   modalError.value = ''
   showPassword.value = false
+  selectedUserFile.value = null
+
+  let fatherName = ''
+  if (u.full_name) {
+    const parts = u.full_name.trim().split(/\s+/)
+    if (parts.length >= 3) {
+      fatherName = parts.slice(2).join(' ')
+    }
+  }
+
   userForm.value = {
     phone: formatPhone(u.phone),
     first_name: u.first_name || '',
     last_name: u.last_name || '',
+    father_name: fatherName,
     role: u.is_superuser ? 'superuser' : (u.role || 'coordinator'),
     jshshr: u.jshshr ? String(u.jshshr) : '',
     passport_serie: u.passport_serie || '',
     passport_number: u.passport_number ? String(u.passport_number) : '',
     password: '',
+    existingImage: u.image || null,
   }
   if (userModal.value) {
     userModal.value.showModal()
@@ -707,10 +769,17 @@ const saveUser = async () => {
   modalError.value = ''
 
   try {
+    const fullNameParts = [
+      userForm.value.last_name.trim(),
+      userForm.value.first_name.trim(),
+      (userForm.value.father_name || '').trim()
+    ].filter(Boolean)
+
     const payload = {
       phone: phoneCleaned,
       first_name: userForm.value.first_name.trim(),
       last_name: userForm.value.last_name.trim(),
+      full_name: fullNameParts.join(' '),
       role: userForm.value.role,
       is_superuser: userForm.value.role === 'superuser',
       is_staff: userForm.value.role === 'admin' || userForm.value.role === 'superuser',
@@ -733,10 +802,26 @@ const saveUser = async () => {
       payload.password = userForm.value.password
     }
 
-    if (isEditing.value) {
-      await api.patch(`/users/${editingId.value}/`, payload)
+    if (selectedUserFile.value) {
+      const formData = new FormData()
+      Object.keys(payload).forEach(key => {
+        if (payload[key] !== null && payload[key] !== undefined) {
+          formData.append(key, payload[key])
+        }
+      })
+      formData.append('image', selectedUserFile.value)
+
+      if (isEditing.value) {
+        await api.patch(`/users/${editingId.value}/`, formData)
+      } else {
+        await api.post('/users/', formData)
+      }
     } else {
-      await api.post('/users/', payload)
+      if (isEditing.value) {
+        await api.patch(`/users/${editingId.value}/`, payload)
+      } else {
+        await api.post('/users/', payload)
+      }
     }
 
     closeUserModal()
@@ -1221,13 +1306,16 @@ watch(() => route.query.role, () => {
 
 .form-row {
   display: flex;
-  gap: 16px;
+  gap: 12px;
+  width: 100%;
 }
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .form-label {
   font-size: 12.5px;
@@ -1249,6 +1337,8 @@ watch(() => route.query.role, () => {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 .field-ico {
   position: absolute;
@@ -1258,6 +1348,7 @@ watch(() => route.query.role, () => {
 }
 .form-input {
   width: 100%;
+  box-sizing: border-box;
   padding: 10px 14px;
   font-size: 13.5px;
   border: 1px solid #D1D5DB;

@@ -9,7 +9,7 @@ from rest_framework import serializers
 from django.db.models import Sum
 
 from datetime import timedelta
-from management.models import Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, DrivingLessons, Notification
+from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, DrivingLessons, Notification
 
 
 def compute_group_duration(started_at, working_days, working_weekends_choice):
@@ -71,15 +71,27 @@ class HolidaysSerializer(serializers.ModelSerializer):
 
 
 # ---------------------------------------------------------------------------
+# Branch
+# ---------------------------------------------------------------------------
+
+class BranchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Branch
+        fields = ["id", "name", "notes", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+# ---------------------------------------------------------------------------
 # Category
 # ---------------------------------------------------------------------------
 
 class CategorySerializer(serializers.ModelSerializer):
     registered = serializers.SerializerMethodField()
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = Category
-        fields = ["id", "name", "price", "duration", "is_active", "registered", "notes", "created_at", "updated_at"]
+        fields = ["id", "name", "price", "duration", "branch", "branch_name", "is_active", "registered", "notes", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def get_registered(self, obj):
@@ -101,6 +113,7 @@ class UserSerializer(serializers.ModelSerializer):
     `password` is write-only: accepted on create/update, never returned.
     """
 
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
     password = serializers.CharField(
         write_only=True,
         required=False,
@@ -124,6 +137,10 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "full_name",
             "email",
+            "image",
+            "pass_img",
+            "branch",
+            "branch_name",
             "jshshr",
             "passport_serie",
             "passport_number",
@@ -171,6 +188,7 @@ class StudentSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     payment_amount = serializers.SerializerMethodField()
     enrolled_free = serializers.SerializerMethodField()
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = User
@@ -181,6 +199,10 @@ class StudentSerializer(serializers.ModelSerializer):
             "last_name",
             "phone",
             "phone2",
+            "image",
+            "pass_img",
+            "branch",
+            "branch_name",
             "jshshr",
             "passport_serie",
             "passport_number",
@@ -333,6 +355,8 @@ class StudentCreateSerializer(serializers.ModelSerializer):
             "full_name",
             "phone",
             "phone2",
+            "image",
+            "pass_img",
             "jshshr",
             "passport_serie",
             "passport_number",
@@ -428,6 +452,8 @@ class StudentCreateSerializer(serializers.ModelSerializer):
 
 
 class AgentSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+
     class Meta:
         model = Agent
         fields = [
@@ -435,6 +461,8 @@ class AgentSerializer(serializers.ModelSerializer):
             "full_name",
             "phone",
             "phone2",
+            "branch",
+            "branch_name",
             "notes",
             "is_active",
             "created_at",
@@ -444,9 +472,11 @@ class AgentSerializer(serializers.ModelSerializer):
 
 
 class LearningPlaceSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+
     class Meta:
         model = LearningPlace
-        fields = ["id", "place_name", "is_active", "created_at", "updated_at"]
+        fields = ["id", "place_name", "branch", "branch_name", "is_active", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -463,6 +493,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     agent_phone = serializers.CharField(source="agent.phone", read_only=True)
     learning_place_name = serializers.CharField(source="learning_place.place_name", read_only=True)
     paid_amount = serializers.SerializerMethodField()
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = Enrollment
@@ -471,7 +502,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             "category", "category_name", "group", "group_name", "instructor", "instructor_name", "coordinator", "coordinator_name",
             "agent", "agent_name", "agent_phone",
             "learning_place", "learning_place_name", "learning_time", "learning_days", "status",
-            "enrolled_free", "enrolled_amount", "paid_amount", "notes",
+            "enrolled_free", "enrolled_amount", "paid_amount", "branch", "branch_name", "notes",
             "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -496,18 +527,22 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 class PaymentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="enrollment.student.full_name", read_only=True)
     student_jshshr = serializers.CharField(source="enrollment.student.jshshr", read_only=True)
+    category = serializers.IntegerField(source="enrollment.category.id", read_only=True)
+    category_id = serializers.IntegerField(source="enrollment.category.id", read_only=True)
     category_name = serializers.CharField(source="enrollment.category.name", read_only=True)
     cashier_name = serializers.CharField(source="user.phone", read_only=True)
     user_full_name = serializers.CharField(source="user.full_name", read_only=True)
     user_phone = serializers.CharField(source="user.phone", read_only=True)
     agent_name = serializers.CharField(source="agent.full_name", read_only=True)
     agent_phone = serializers.CharField(source="agent.phone", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = Payment
         fields = [
-            "id", "user", "user_full_name", "user_phone", "cashier_name", "enrollment", "student_name", "student_jshshr", "category_name",
-            "agent", "agent_name", "agent_phone",
+            "id", "user", "user_full_name", "user_phone", "cashier_name", "enrollment", "student_name", "student_jshshr",
+            "category", "category_id", "category_name",
+            "agent", "agent_name", "agent_phone", "branch", "branch_name",
             "amount", "status", "method", "notes", "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -521,6 +556,7 @@ class GroupSerializer(serializers.ModelSerializer):
     )
     student_count = serializers.SerializerMethodField()
     category_name = serializers.CharField(source="category.name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
     enrollments = EnrollmentSerializer(many=True, read_only=True)
 
     class Meta:
@@ -528,7 +564,7 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = [
             "id", "category", "category_name", "name", "started_at",
             "working_days", "working_weekends", "duration", "status",
-            "student_ids", "student_count", "enrollments", "notes",
+            "branch", "branch_name", "student_ids", "student_count", "enrollments", "notes",
             "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at", "student_count"]
@@ -588,7 +624,7 @@ class CarSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
         fields = [
-            "id", "car_name", "manufact_year", "policy_date",
+            "id", "car_name", "image", "manufact_year", "policy_date",
             "tech_inspection_date", "status", "notes", "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -598,24 +634,26 @@ class DrivingLessonsSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.full_name", read_only=True)
     instructor_name = serializers.CharField(source="instructor.full_name", read_only=True)
     car_name = serializers.CharField(source="car.car_name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = DrivingLessons
         fields = [
             "id", "student", "student_name", "instructor", "instructor_name",
-            "car", "car_name", "lesson_date", "notes", "is_active", "created_at", "updated_at"
+            "car", "car_name", "branch", "branch_name", "lesson_date", "notes", "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class NotificationSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user.full_name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = Notification
         fields = [
             "id", "user", "user_name", "title", "date", "note", "is_read",
-            "status", "is_active", "created_at", "updated_at"
+            "status", "branch", "branch_name", "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 

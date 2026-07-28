@@ -104,12 +104,18 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="car in cars" :key="car.id" class="table-row">
+            <tr v-for="car in cars" :key="car.id" class="table-row clickable" @click="goToCarDetail(car.id)" style="cursor: pointer;">
               <td class="td-id">#{{ car.id }}</td>
 
               <!-- Car Title -->
               <td class="td-name">
-                <div class="car-title font-bold">🚘 {{ car.car_name }}</div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <img :src="car.image || '/default_car_photo.png'" alt="Car" style="width: 48px; height: 34px; object-fit: cover; border-radius: 6px; border: 1px solid #E5E7EB;" />
+                  <div>
+                    <div class="car-title font-bold text-primary">{{ car.car_name }}</div>
+                    <div class="plate-sub font-mono">{{ car.plate_number }}</div>
+                  </div>
+                </div>
               </td>
 
               <!-- Status -->
@@ -136,7 +142,7 @@
                   <div class="progress-bar-track">
                     <div
                       class="progress-bar-fill"
-                      :class="getDateStatus(car.policy_date).colorClass"
+                      :class="getDateStatus(car.policy_date).barClass"
                       :style="{ width: getDateStatus(car.policy_date).percent + '%' }"
                     ></div>
                   </div>
@@ -156,7 +162,7 @@
                   <div class="progress-bar-track">
                     <div
                       class="progress-bar-fill"
-                      :class="getDateStatus(car.tech_inspection_date).colorClass"
+                      :class="getDateStatus(car.tech_inspection_date).barClass"
                       :style="{ width: getDateStatus(car.tech_inspection_date).percent + '%' }"
                     ></div>
                   </div>
@@ -165,20 +171,18 @@
               </td>
 
               <!-- Notes -->
-              <td>
-                <span class="notes-text">{{ car.notes || '-' }}</span>
-              </td>
+              <td class="td-notes">{{ car.notes || '-' }}</td>
 
               <!-- Actions -->
-              <td style="text-align: right;">
+              <td style="text-align: right;" @click.stop>
                 <div class="row-actions">
-                  <button class="btn-action-edit" @click="openEditModal(car)" title="Tahrirlash">
+                  <button class="btn-action-edit" @click.stop="openEditModal(car)" title="Tahrirlash">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button class="btn-action-delete" @click="confirmDelete(car)" title="O'chirish">
+                  <button class="btn-action-delete" @click.stop="confirmDelete(car)" title="O'chirish">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -219,6 +223,17 @@
                 class="finput"
                 placeholder="Masalan: Cobalt 01 A 777 AA"
                 required
+              />
+            </div>
+
+            <!-- Car Image -->
+            <div class="form-group">
+              <label class="flabel">Avtomobil Rasmi</label>
+              <input
+                type="file"
+                accept="image/*"
+                class="finput"
+                @change="onCarFileChange"
               />
             </div>
 
@@ -316,11 +331,17 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 
+const router = useRouter()
 const cars = ref([])
 const loading = ref(true)
+
+function goToCarDetail(id) {
+  if (id) router.push(`/vehicles/${id}`)
+}
 const totalCount = ref(0)
 const searchQuery = ref('')
 const filterStatus = ref('')
@@ -436,10 +457,18 @@ function getDateStatus(targetDateStr) {
   }
 }
 
+const selectedCarFile = ref(null)
+
+function onCarFileChange(e) {
+  const file = e.target.files?.[0]
+  selectedCarFile.value = file || null
+}
+
 function openCreateModal() {
   isEditing.value = false
   editingId.value = null
   modalError.value = null
+  selectedCarFile.value = null
   form.value = {
     car_name: '',
     status: 'available',
@@ -455,6 +484,7 @@ function openEditModal(car) {
   isEditing.value = true
   editingId.value = car.id
   modalError.value = null
+  selectedCarFile.value = null
   form.value = {
     car_name: car.car_name,
     status: car.status || 'available',
@@ -471,7 +501,7 @@ function closeModal() {
 }
 
 async function saveCar() {
-  if (!form.value.car_name.trim()) {
+  if (!form.value.car_name || !form.value.car_name.trim()) {
     modalError.value = "Avtomobil nomini kiriting."
     return
   }
@@ -481,22 +511,48 @@ async function saveCar() {
   try {
     const payload = {
       car_name: form.value.car_name.trim(),
-      status: form.value.status,
-      manufact_year: form.value.manufact_year || null,
+      status: form.value.status || 'available',
+      manufact_year: form.value.manufact_year ? parseInt(form.value.manufact_year, 10) : null,
       policy_date: form.value.policy_date || null,
       tech_inspection_date: form.value.tech_inspection_date || null,
-      notes: form.value.notes.trim()
+      notes: form.value.notes ? form.value.notes.trim() : '',
     }
-    if (isEditing.value) {
-      await api.put(`/cars/${editingId.value}/`, payload)
+
+    if (selectedCarFile.value) {
+      const formData = new FormData()
+      Object.keys(payload).forEach(k => {
+        if (payload[k] !== null && payload[k] !== undefined) {
+          formData.append(k, payload[k])
+        }
+      })
+      formData.append('image', selectedCarFile.value)
+      if (isEditing.value) {
+        await api.patch(`/cars/${editingId.value}/`, formData)
+      } else {
+        await api.post('/cars/', formData)
+      }
     } else {
-      await api.post('/cars/', payload)
+      if (isEditing.value) {
+        await api.patch(`/cars/${editingId.value}/`, payload)
+      } else {
+        await api.post('/cars/', payload)
+      }
     }
     closeModal()
     fetchCars()
   } catch (err) {
     console.error("Avtomobilni saqlashda xatolik:", err)
-    modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi."
+    if (err.response?.data) {
+      const data = err.response.data
+      if (typeof data === 'object') {
+        const msgs = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+        modalError.value = msgs.join(' | ')
+      } else {
+        modalError.value = String(data)
+      }
+    } else {
+      modalError.value = "Saqlashda xatolik yuz berdi."
+    }
   } finally {
     saving.value = false
   }

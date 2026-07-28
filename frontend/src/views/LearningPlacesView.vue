@@ -174,8 +174,10 @@ import { ref, computed, onMounted } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const places = ref([])
 const loading = ref(false)
 const error = ref('')
@@ -214,7 +216,8 @@ const fetchPlaces = async () => {
 const filteredPlaces = computed(() => {
   return places.value.filter(p => {
     const q = filterSearch.value.toLowerCase().trim()
-    return !q || p.place_name.toLowerCase().includes(q)
+    const matchSearch = !q || p.place_name.toLowerCase().includes(q)
+    return matchSearch && branchStore.isBranchMatch(p)
   })
 })
 

@@ -111,7 +111,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in payments" :key="p.id" class="table-row">
+            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
               <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
                 <div class="student-name">{{ p.notes || p.student_name || 'To\'lov Operatsiyasi' }}</div>
@@ -218,9 +218,11 @@ import { ref, computed, watch, onMounted } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney } from '@/utils/formatters'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 const payments = ref([])
 const loading = ref(true)
@@ -237,11 +239,15 @@ const modalError = ref(null)
 
 const form = ref({ amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
+const displayedPayments = computed(() => {
+  return payments.value.filter(p => branchStore.isBranchMatch(p))
+})
+
 const metrics = computed(() => {
-  const cash = payments.value.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
-  const card = payments.value.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
-  const transfer = payments.value.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
-  const total = payments.value.reduce((s, p) => s + (p.amount || 0), 0)
+  const cash = displayedPayments.value.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
+  const card = displayedPayments.value.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
+  const transfer = displayedPayments.value.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
+  const total = displayedPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
   return { cash, card, transfer, total }
 })
 
