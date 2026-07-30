@@ -61,7 +61,7 @@
             <tr v-if="filteredPlaces.length === 0">
               <td :colspan="authStore.isAdminOrSuperuser ? 4 : 3" class="td-empty">O'quv joylari topilmadi.</td>
             </tr>
-            <tr v-for="p in filteredPlaces" :key="p.id" class="table-row">
+            <tr v-for="p in filteredPlaces" :key="p.id" class="table-row clickable-row" @click="goToPlaceDetail(p.id)">
               <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
                 <div class="place-name-text">{{ p.place_name }}</div>
@@ -69,13 +69,13 @@
               <td class="td-date">{{ formatDate(p.created_at) }}</td>
               <td v-if="authStore.isAdminOrSuperuser" style="text-align: center;">
                 <div class="action-btn-group">
-                  <button class="btn-action btn-edit" @click="openEditModal(p)" title="Tahrirlash">
+                  <button class="btn-action btn-edit" @click.stop="openEditModal(p)" title="Tahrirlash">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button class="btn-action btn-delete" @click="openDeleteModal(p)" title="O'chirish">
+                  <button class="btn-action btn-delete" @click.stop="openDeleteModal(p)" title="O'chirish">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -171,6 +171,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -178,6 +179,11 @@ import { useBranchStore } from '@/stores/branch'
 
 const authStore = useAuthStore()
 const branchStore = useBranchStore()
+const router = useRouter()
+
+const goToPlaceDetail = (id) => {
+  router.push(`/learning-places/${id}`)
+}
 const places = ref([])
 const loading = ref(false)
 const error = ref('')
@@ -203,7 +209,7 @@ const fetchPlaces = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/learning-places/?page_size=100')
+    const response = await api.get('/learning-places/?page_size=1000')
     places.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
   } catch (err) {
     console.error(err)
@@ -419,6 +425,7 @@ onMounted(async () => {
   vertical-align: middle;
 }
 .table-row:hover { background: #F9FAFB; }
+.clickable-row { cursor: pointer; }
 .td-id { color: #6B7280; font-size: 12.5px; font-weight: 600; }
 .place-name-text { font-weight: 600; color: #111827; }
 .td-empty { text-align: center; padding: 32px; color: #6B7280; }

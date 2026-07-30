@@ -24,6 +24,8 @@ router.register(r"holidays", views.HolidaysViewSet, basename="holiday")
 router.register(r"cars", views.CarViewSet, basename="car")
 router.register(r"driving-lessons", views.DrivingLessonsViewSet, basename="driving-lesson")
 router.register(r"notifications", views.NotificationViewSet, basename="notification")
+router.register(r"teacher-reviews", views.TeacherReviewViewSet, basename="teacher-review")
+router.register(r"student-certificates", views.StudentCertificateViewSet, basename="student-certificate")
 
 urlpatterns = [
     path("", include(router.urls)),

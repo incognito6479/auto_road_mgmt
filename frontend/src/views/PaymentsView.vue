@@ -154,7 +154,7 @@
                 <td class="td-agent">{{ p.agent_name || '-' }}</td>
                 <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
                 <td class="td-cashier">{{ formatPhone(p.cashier_name) }}</td>
-                <td class="td-amount">{{ formatMoney(p.amount) }} so'm</td>
+                <td class="td-amount">{{ formatMoney(p.amount) }}</td>
                 <td class="td-method">{{ formatMethodText(p.method) }}</td>
                 <td>
                   <span class="status-badge" :class="statusClass(p.status)">

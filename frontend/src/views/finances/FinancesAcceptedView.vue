@@ -29,15 +29,23 @@
           </div>
           <h3>Bugungi Tushumlar ({{ todayDateStr }})</h3>
         </div>
-        <span class="section-total-badge green-badge font-bold">{{ formatMoney(todayMetrics.total) }} so'm</span>
+        <span class="section-total-badge green-badge font-bold">{{ formatMoney(todayMetrics.total) }}</span>
       </div>
 
       <div class="metrics-cards-grid big-cards">
+        <div class="card-metric card-red card-hero">
+          <div class="card-metric-icon">💰</div>
+          <div class="metric-info">
+            <span class="metric-lbl">Jami Bugungi Tushum</span>
+            <h4 class="metric-val text-red-strong">{{ formatMoney(todayMetrics.total) }}</h4>
+          </div>
+        </div>
+
         <div class="card-metric card-green">
           <div class="card-metric-icon">💵</div>
           <div class="metric-info">
             <span class="metric-lbl">Bugungi Naqd</span>
-            <h4 class="metric-val">{{ formatMoney(todayMetrics.cash) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(todayMetrics.cash) }}</h4>
           </div>
         </div>
 
@@ -45,7 +53,7 @@
           <div class="card-metric-icon">💳</div>
           <div class="metric-info">
             <span class="metric-lbl">Bugungi Karta</span>
-            <h4 class="metric-val">{{ formatMoney(todayMetrics.card) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(todayMetrics.card) }}</h4>
           </div>
         </div>
 
@@ -53,7 +61,7 @@
           <div class="card-metric-icon">🏦</div>
           <div class="metric-info">
             <span class="metric-lbl">Bugungi O'tkazma</span>
-            <h4 class="metric-val">{{ formatMoney(todayMetrics.transfer) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(todayMetrics.transfer) }}</h4>
           </div>
         </div>
 
@@ -61,15 +69,7 @@
           <div class="card-metric-icon">📱</div>
           <div class="metric-info">
             <span class="metric-lbl">Bugungi QR Code</span>
-            <h4 class="metric-val">{{ formatMoney(todayMetrics.qr_code) }} so'm</h4>
-          </div>
-        </div>
-
-        <div class="card-metric card-dark-green card-hero">
-          <div class="card-metric-icon">💰</div>
-          <div class="metric-info">
-            <span class="metric-lbl">Jami Bugungi Tushum</span>
-            <h4 class="metric-val text-emerald">{{ formatMoney(todayMetrics.total) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(todayMetrics.qr_code) }}</h4>
           </div>
         </div>
       </div>
@@ -87,17 +87,32 @@
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
           </div>
-          <h3>Oylik Tushumlar ({{ monthNameStr }})</h3>
+          <h3 v-if="!hasActiveFilters">Oylik Tushumlar ({{ monthNameStr }})</h3>
+          <h3 v-else>
+            Filtr Natijasi — Oylar Bo'yicha
+            <span v-if="activeDateRangeLabel" class="date-range-badge">📅 {{ activeDateRangeLabel }}</span>
+          </h3>
         </div>
-        <span class="section-total-badge blue-badge font-bold">{{ formatMoney(monthMetrics.total) }} so'm</span>
+        <span class="section-total-badge blue-badge font-bold">
+          {{ formatMoney(hasActiveFilters ? filteredGrandTotal : monthMetrics.total) }}
+        </span>
       </div>
 
-      <div class="metrics-cards-grid big-cards">
+      <!-- No filters applied: show the current calendar month only -->
+      <div v-if="!hasActiveFilters" class="metrics-cards-grid big-cards">
+        <div class="card-metric card-red card-hero">
+          <div class="card-metric-icon">📊</div>
+          <div class="metric-info">
+            <span class="metric-lbl">Jami Oylik Tushum</span>
+            <h4 class="metric-val text-red-strong">{{ formatMoney(monthMetrics.total) }}</h4>
+          </div>
+        </div>
+
         <div class="card-metric card-green">
           <div class="card-metric-icon">💵</div>
           <div class="metric-info">
             <span class="metric-lbl">Oylik Naqd</span>
-            <h4 class="metric-val">{{ formatMoney(monthMetrics.cash) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(monthMetrics.cash) }}</h4>
           </div>
         </div>
 
@@ -105,7 +120,7 @@
           <div class="card-metric-icon">💳</div>
           <div class="metric-info">
             <span class="metric-lbl">Oylik Karta</span>
-            <h4 class="metric-val">{{ formatMoney(monthMetrics.card) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(monthMetrics.card) }}</h4>
           </div>
         </div>
 
@@ -113,7 +128,7 @@
           <div class="card-metric-icon">🏦</div>
           <div class="metric-info">
             <span class="metric-lbl">Oylik O'tkazma</span>
-            <h4 class="metric-val">{{ formatMoney(monthMetrics.transfer) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(monthMetrics.transfer) }}</h4>
           </div>
         </div>
 
@@ -121,15 +136,57 @@
           <div class="card-metric-icon">📱</div>
           <div class="metric-info">
             <span class="metric-lbl">Oylik QR Code</span>
-            <h4 class="metric-val">{{ formatMoney(monthMetrics.qr_code) }} so'm</h4>
+            <h4 class="metric-val">{{ formatMoney(monthMetrics.qr_code) }}</h4>
           </div>
         </div>
+      </div>
 
-        <div class="card-metric card-dark-blue card-hero">
-          <div class="card-metric-icon">📊</div>
-          <div class="metric-info">
-            <span class="metric-lbl">Jami Oylik Tushum</span>
-            <h4 class="metric-val text-blue">{{ formatMoney(monthMetrics.total) }} so'm</h4>
+      <!-- Filters applied: break the filtered result set down by month -->
+      <div v-else class="monthly-breakdown-list">
+        <div v-if="monthlyBreakdown.length === 0" class="empty-state">
+          <p>Filtrga mos tushumlar topilmadi</p>
+        </div>
+        <div v-for="m in monthlyBreakdown" :key="m.key" class="month-card-group">
+          <div class="month-card-header">
+            <h4>{{ m.label }}</h4>
+            <span class="month-total-badge">{{ formatMoney(m.total) }}</span>
+          </div>
+          <div class="metrics-cards-grid big-cards">
+            <div class="card-metric card-red card-hero">
+              <div class="card-metric-icon">📊</div>
+              <div class="metric-info">
+                <span class="metric-lbl">Jami</span>
+                <h4 class="metric-val text-red-strong">{{ formatMoney(m.total) }}</h4>
+              </div>
+            </div>
+            <div class="card-metric card-green">
+              <div class="card-metric-icon">💵</div>
+              <div class="metric-info">
+                <span class="metric-lbl">Naqd</span>
+                <h4 class="metric-val">{{ formatMoney(m.cash) }}</h4>
+              </div>
+            </div>
+            <div class="card-metric card-blue">
+              <div class="card-metric-icon">💳</div>
+              <div class="metric-info">
+                <span class="metric-lbl">Karta</span>
+                <h4 class="metric-val">{{ formatMoney(m.card) }}</h4>
+              </div>
+            </div>
+            <div class="card-metric card-purple">
+              <div class="card-metric-icon">🏦</div>
+              <div class="metric-info">
+                <span class="metric-lbl">O'tkazma</span>
+                <h4 class="metric-val">{{ formatMoney(m.transfer) }}</h4>
+              </div>
+            </div>
+            <div class="card-metric card-orange">
+              <div class="card-metric-icon">📱</div>
+              <div class="metric-info">
+                <span class="metric-lbl">QR Code</span>
+                <h4 class="metric-val">{{ formatMoney(m.qr_code) }}</h4>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -172,8 +229,8 @@
                 <option value="">Barcha usullar</option>
                 <option value="cash">Naqd</option>
                 <option value="card">Karta</option>
+                <option value="qr_code">QR code</option>
                 <option value="transfer">O'tkazma</option>
-                <option value="qr_code">QR Code</option>
               </select>
               <div class="select-chevron-icon">▼</div>
             </div>
@@ -213,7 +270,6 @@
               <th>Kategoriya</th>
               <th>Tushum Summasi</th>
               <th>To'lov Usuli</th>
-              <th>Kassir</th>
               <th>Sana & Vaqt</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
             </tr>
@@ -222,30 +278,35 @@
             <tr v-for="p in filteredPayments" :key="p.id" class="table-row">
               <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
-                <div class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
+                <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
+                <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-if="p.student_jshshr" class="student-jshshr">JSHSHR: {{ p.student_jshshr }}</div>
               </td>
-              <td><span class="cat-pill">{{ p.category_name || '-' }}</span></td>
+              <td>
+                <span class="cat-pill">{{ p.category_name || '-' }}</span>
+                <div v-if="p.group_name" class="group-sub">{{ p.group_name }}</div>
+              </td>
               <td class="td-amount">
-                <span class="amount-val text-green">{{ formatMoney(p.amount) }} so'm</span>
+                <span class="amount-val text-green">{{ formatMoney(p.amount) }}</span>
               </td>
               <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
-              <td class="td-cashier">{{ p.cashier_name || '-' }}</td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
               <td style="text-align: right;">
                 <div class="row-actions">
-                  <button class="btn-action-edit" @click="openEditModal(p)" title="Tahrirlash">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="btn-action-delete" @click="confirmDelete(p)" title="O'chirish">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                  </button>
+                  <template v-if="authStore.isSuperuser">
+                    <button class="btn-action-edit" @click="openEditModal(p)" title="Tahrirlash">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                    </button>
+                    <button class="btn-action-delete" @click="openDeleteModal(p)" title="O'chirish">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </template>
                 </div>
               </td>
             </tr>
@@ -287,13 +348,14 @@
                   class="finput search-input-field"
                   placeholder="Ism bo'yicha qidiring..."
                   @focus="showStudentDropdown = true"
+                  @keydown="onStudentKeydown"
                 />
                 <div v-if="showStudentDropdown" class="dropdown-options-list">
                   <div
-                    v-for="e in filteredEnrollments"
+                    v-for="(e, idx) in filteredEnrollments"
                     :key="e.id"
                     class="dropdown-option-item"
-                    :class="{ selected: form.enrollment === e.id }"
+                    :class="{ selected: form.enrollment === e.id, highlighted: studentKb.highlightedIndex.value === idx }"
                     @click="selectEnrollment(e)"
                   >
                     <div class="opt-name">{{ e.student_name }}</div>
@@ -327,10 +389,10 @@
               <label class="flabel required">To'lov Usuli *</label>
               <div class="select-wrap-relative">
                 <select v-model="form.method" class="fselect-field">
-                  <option value="cash">💵 Naqd</option>
-                  <option value="card">💳 Plastik karta</option>
-                  <option value="transfer">🏦 Bank o'tkazmasi</option>
-                  <option value="qr_code">📱 QR Code</option>
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
               </div>
@@ -353,17 +415,37 @@
       </div>
     </Transition>
 
+    <ConfirmDeleteModal
+      ref="deleteModal"
+      title="To'lovni O'chirish"
+      :deleting="deleting"
+      :error="deleteError"
+      @confirm="performDelete"
+    >
+      Haqiqatan ham <strong>#{{ deletingPayment?.id }}</strong> raqamli tushumni o'chirmoqchimisiz?
+    </ConfirmDeleteModal>
+
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatDate } from '@/utils/formatters'
+import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
 const authStore = useAuthStore()
+const router = useRouter()
+
+function goStudent(id) {
+  if (!id) return
+  router.push(`/students/${id}`)
+}
 const branchStore = useBranchStore()
 
 const payments = ref([])
@@ -414,6 +496,50 @@ const monthMetrics = computed(() => {
   return { cash, card, transfer, qr_code, total: cash + card + transfer + qr_code }
 })
 
+// Whether any of the toolbar filters (search/category/method/date range) is active.
+const hasActiveFilters = computed(() => !!(
+  filterStudentName.value || filterCategory.value || filterMethod.value ||
+  filterDateFrom.value || filterDateTo.value
+))
+
+// Human-readable label for the active date-range filter, shown next to the
+// monthly breakdown so it's clear which window the totals below cover.
+const activeDateRangeLabel = computed(() => {
+  if (!filterDateFrom.value && !filterDateTo.value) return ''
+  const fmt = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('uz-UZ')
+  if (filterDateFrom.value && filterDateTo.value) return `${fmt(filterDateFrom.value)} – ${fmt(filterDateTo.value)}`
+  if (filterDateFrom.value) return `${fmt(filterDateFrom.value)} dan`
+  return `${fmt(filterDateTo.value)} gacha`
+})
+
+// Breaks the currently filtered payment list (`payments`, already server-filtered
+// by fetchPayments()) down into one bucket per calendar month, newest first.
+const monthlyBreakdown = computed(() => {
+  const buckets = {}
+  for (const p of filteredPayments.value) {
+    if (!p.created_at) continue
+    const key = p.created_at.slice(0, 7) // "YYYY-MM"
+    if (!buckets[key]) {
+      buckets[key] = { key, cash: 0, card: 0, transfer: 0, qr_code: 0, total: 0 }
+    }
+    const bucket = buckets[key]
+    const amt = p.amount || 0
+    if (p.method === 'cash') bucket.cash += amt
+    else if (p.method === 'card') bucket.card += amt
+    else if (p.method === 'transfer') bucket.transfer += amt
+    else if (p.method === 'qr_code') bucket.qr_code += amt
+    bucket.total += amt
+  }
+  return Object.values(buckets)
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .map(bucket => ({
+      ...bucket,
+      label: new Date(`${bucket.key}-01T00:00:00`).toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' }),
+    }))
+})
+
+const filteredGrandTotal = computed(() => monthlyBreakdown.value.reduce((s, m) => s + m.total, 0))
+
 const filteredEnrollments = computed(() => {
   const q = studentSearchQuery.value.toLowerCase().trim()
   if (!q) return enrollments.value
@@ -452,7 +578,7 @@ async function fetchAllAcceptedMetrics() {
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'accepted', page_size: 300 }
+    const params = { status: 'accepted', page_size: 1000 }
     if (filterMethod.value) params.method = filterMethod.value
     if (filterDateFrom.value) params.date_from = filterDateFrom.value
     if (filterDateTo.value) params.date_to = filterDateTo.value
@@ -467,7 +593,7 @@ async function fetchPayments() {
 
 async function fetchEnrollments() {
   try {
-    const res = await api.get('/enrollments/', { params: { page_size: 500 } })
+    const res = await api.get('/enrollments/', { params: { page_size: 1000 } })
     enrollments.value = res.data.results || res.data
   } catch (err) { console.error(err) }
 }
@@ -480,13 +606,17 @@ function selectEnrollment(e) {
   studentSearchQuery.value = e.student_name
   showStudentDropdown.value = false
 }
+const studentKb = useSearchSelectKeyboard()
+function onStudentKeydown(e) {
+  studentKb.onKeydown(e, filteredEnrollments.value, selectEnrollment, () => { showStudentDropdown.value = false })
+}
 
 function methodText(m) {
   switch (m) {
     case 'cash': return 'Naqd'
     case 'card': return 'Karta'
-    case 'qr_code': return 'QR Code'
-    case 'transfer': return 'Bank o\'tkazmasi'
+    case 'qr_code': return 'QR code'
+    case 'transfer': return "O'tkazma"
     default: return m
   }
 }
@@ -544,10 +674,31 @@ async function savePayment() {
   finally { saving.value = false }
 }
 
-async function confirmDelete(p) {
-  if (!confirm(`Haqiqatan ham #${p.id} raqamli tushumni o'chirmoqchimisiz?`)) return
-  try { await api.delete(`/payments/${p.id}/`); fetchPayments(); fetchAllAcceptedMetrics() }
-  catch (err) { alert("O'chirishda xatolik yuz berdi") }
+const deleteModal = ref(null)
+const deletingPayment = ref(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+function openDeleteModal(p) {
+  deletingPayment.value = p
+  deleteError.value = ''
+  deleteModal.value?.show()
+}
+
+async function performDelete() {
+  if (!deletingPayment.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await api.delete(`/payments/${deletingPayment.value.id}/`)
+    deleteModal.value?.close()
+    fetchPayments()
+    fetchAllAcceptedMetrics()
+  } catch (err) {
+    deleteError.value = "O'chirishda xatolik yuz berdi"
+  } finally {
+    deleting.value = false
+  }
 }
 
 onMounted(() => {
@@ -573,19 +724,31 @@ onMounted(() => {
 
 .finance-section { margin-bottom: 26px; }
 .section-header-wrap { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.section-header-title { display: flex; align-items: center; gap: 10px; h3 { font-size: 17px; font-weight: 700; color: #111827; } }
+.section-header-title { display: flex; align-items: center; gap: 10px; h3 { font-size: 17px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } }
+.date-range-badge { font-size: 16px; font-weight: 700; color: #2563EB; background: #EFF6FF; padding: 5px 14px; border-radius: 20px; white-space: nowrap; }
 .icon-pulse { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; &.green-pulse { background: #E8F5E9; } &.blue-pulse { background: #EFF6FF; } }
 .section-total-badge { font-size: 14px; padding: 6px 14px; border-radius: 20px; &.green-badge { color: #2D6A4F; background: #E8F5E9; } &.blue-badge { color: #2563EB; background: #EFF6FF; } }
 
 .metrics-cards-grid.big-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+
+/* Fixed footprint regardless of how many months the active date range spans —
+   without this, the section above the date-range inputs grows/shrinks as the
+   filter changes and visibly shoves the inputs the user is interacting with. */
+.monthly-breakdown-list { display: flex; flex-direction: column; gap: 20px; height: 380px; overflow-y: auto; padding-right: 4px; }
+.monthly-breakdown-list .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; }
+.month-card-group { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 16px; padding: 16px; }
+.month-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; h4 { font-size: 14.5px; font-weight: 700; color: #111827; text-transform: capitalize; } }
+.month-total-badge { font-size: 12.5px; font-weight: 700; color: #2563EB; background: #EFF6FF; padding: 4px 12px; border-radius: 20px; }
 .card-metric { background: white; border: 1.5px solid #E5E7EB; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03); transition: all 0.2s ease; &:hover { transform: translateY(-2px); border-color: #CBD5E1; box-shadow: 0 6px 16px rgba(0,0,0,0.06); } }
-.card-hero { border-width: 2px; background: linear-gradient(180deg, #FFFFFF 0%, #F9FAFB 100%); }
+.card-hero { border-width: 2px; background: linear-gradient(180deg, #FFFFFF 0%, #F9FAFB 100%); grid-column: span 2; }
+.card-red { border-color: #FCA5A5; background: linear-gradient(180deg, #FEF2F2 0%, #FEE2E2 100%); }
 .card-metric-icon { font-size: 30px; }
 .metric-lbl { font-size: 12.5px; color: #6B7280; font-weight: 600; }
 .metric-val { font-size: 18px; font-weight: 800; color: #111827; margin-top: 4px; }
 .text-emerald { color: #2D6A4F; }
 .text-blue { color: #2563EB; }
 .text-green { color: #166534; font-weight: 700; }
+.text-red-strong { color: #B91C1C; }
 
 .table-section-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03); }
 .toolbar-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; gap: 16px; flex-wrap: wrap; }
@@ -615,8 +778,11 @@ onMounted(() => {
 .table-container { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
 .student-name { font-weight: 700; color: #111827; }
+.link-value { cursor: pointer; }
+.link-value:hover { text-decoration: underline; }
 .student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #E8F5E9; color: #2D6A4F; border-radius: 8px; font-size: 12px; font-weight: 700; }
+.group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
 
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
@@ -638,7 +804,7 @@ onMounted(() => {
 
 .searchable-select-wrap { position: relative; width: 100%; }
 .dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #2D6A4F; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
-.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #F0FDF4; } &.selected { background: #E8F5E9; font-weight: 700; } }
+.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #F0FDF4; } &.selected { background: #E8F5E9; font-weight: 700; } &.highlighted { background: #F0FDF4; } }
 .opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }
 .opt-sub { font-size: 11.5px; color: #6B7280; margin-top: 1px; }
 .dropdown-empty { padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px; }

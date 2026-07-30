@@ -1,0 +1,291 @@
+/* =========================================================================
+   responsive.css — global adaptive layer
+   -------------------------------------------------------------------------
+   Views in this app each carry their own <style scoped> block, which compiles
+   to `.class[data-v-hash]` (specificity 0,2,0) and in a few places uses inline
+   `style="grid-template-columns: ..."`. A plain global `.class` rule therefore
+   loses every time, so the mobile overrides below are marked `!important`.
+   That is deliberate and contained: every rule here lives inside a max-width
+   media query, so nothing in this file affects the desktop layout.
+
+   Breakpoints
+     1024px — tablet / small laptop: multi-column grids drop to two
+      900px — sidebar becomes a drawer (see AppLayout.vue)
+      768px — phone landscape: grids go single column, toolbars stack
+      560px — phone portrait: tighten padding, full-width actions
+   ========================================================================= */
+
+/* Real viewport height on mobile browsers, where 100vh overshoots because of
+   the collapsing URL bar. */
+@supports (height: 100dvh) {
+  @media (max-width: 900px) {
+    .app-shell { height: 100dvh !important; }
+  }
+}
+
+/* =========================================================================
+   Modals — always scroll internally rather than overflowing the viewport.
+   Applies at every width: a tall form on a short laptop screen has the same
+   problem as one on a phone. The panel is capped just under the viewport so
+   its header/footer stay reachable and the body scrolls.
+   ========================================================================= */
+.modal-card,
+.modal-dialog,
+.start-group-dialog,
+dialog.modal-dialog {
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+/* Overlay-based modals centre their panel; allow the overlay itself to scroll
+   too, so a panel taller than the cap can never be clipped out of reach. */
+.modal-overlay {
+  overflow-y: auto !important;
+  align-items: flex-start !important;
+  padding-top: max(20px, 3vh) !important;
+  padding-bottom: max(20px, 3vh) !important;
+}
+
+/* Native <dialog> is centred by the UA; keep it off the very edge. */
+dialog.modal-dialog {
+  margin: auto;
+}
+
+/* ─────────────────────────── Tablet ─────────────────────────── */
+@media (max-width: 1024px) {
+  .stats-row,
+  .filter-card,
+  .form-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .two-col-row,
+  .content-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ─────────────────────────── Phone (landscape) ─────────────────────────── */
+@media (max-width: 768px) {
+  /* --- Page headers: title above the action button, button full width --- */
+  .page-top,
+  .page-header,
+  .detail-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  .page-main-title { font-size: 18px !important; }
+  .page-sub-title { font-size: 12px !important; }
+
+  .page-top > button,
+  .page-top .btn-add,
+  .page-top .btn-primary-action,
+  .page-top .btn-primary-action span {
+    width: 100%;
+    justify-content: center;
+  }
+  .page-top > div[style*="display: flex"] {
+    flex-direction: column !important;
+    width: 100%;
+  }
+
+  /* --- Grids collapse to a single column --- */
+  .stats-row,
+  .filter-card,
+  .form-grid,
+  .form-grid-2,
+  .cards-grid,
+  .metrics-cards-grid,
+  .two-col-row,
+  .content-grid,
+  .info-grid,
+  .detail-grid,
+  .role-cards-grid,
+  .quick-nav-grid,
+  .quick-actions-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* A child still carrying `grid-column: span 2` would force an implicit
+     second track back into these now-single-column grids, so reset the
+     placement of every direct child. */
+  .stats-row > *,
+  .filter-card > *,
+  .form-grid > *,
+  .form-grid-2 > *,
+  .cards-grid > *,
+  .metrics-cards-grid > *,
+  .two-col-row > *,
+  .content-grid > *,
+  .info-grid > *,
+  .detail-grid > *,
+  .role-cards-grid > * {
+    grid-column: auto !important;
+  }
+
+  /* Payment stat strips read better stacked than as three squeezed columns. */
+  .payment-stats { grid-template-columns: 1fr !important; }
+
+  /* --- Toolbars / filter bars stack --- */
+  .toolbar-bar,
+  .groups-toolbar,
+  .filter-controls,
+  .filter-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  .filter-item,
+  .filter-field,
+  .filter-group {
+    width: 100% !important;
+  }
+  .filter-item .select-wrap-relative,
+  .filter-item select,
+  .filter-group select,
+  .fselect-field,
+  .filter-select,
+  .finput-date {
+    width: 100% !important;
+  }
+
+  /* Search inputs are fixed-width on desktop; let them fill the row. */
+  .search-box,
+  .search-input-wrap,
+  .searchable-select-wrap {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .total-count { text-align: left; }
+
+  /* --- Tables scroll sideways rather than crushing their columns --- */
+  .table-wrap,
+  .table-container,
+  .table-card,
+  .table-section-card,
+  .pay-table-wrap,
+  .payments-table-wrap,
+  .waiting-students-table-wrap,
+  .students-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .data-table,
+  .stbl,
+  .dtable,
+  .students-table,
+  .pay-table,
+  .payments-table,
+  .waiting-students-table {
+    min-width: 680px;
+  }
+  /* Two-line phone cells are the widest offender on narrow screens. */
+  .th-phone, .td-phone { white-space: nowrap; }
+
+  /* --- Modals fill the screen with a small gutter --- */
+  .modal-card,
+  .modal-dialog,
+  .start-group-dialog {
+    width: calc(100% - 24px) !important;
+    max-width: calc(100% - 24px) !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+  }
+  .modal-overlay { padding: 12px !important; }
+  .modal-body,
+  .modal-form,
+  .modal-form-body { padding: 18px 16px !important; }
+  .modal-header,
+  .modal-header-banner { padding: 16px 16px !important; }
+
+  .modal-actions,
+  .modal-footer,
+  .modal-footer-actions {
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+  }
+  .modal-actions > button,
+  .modal-footer > button,
+  .modal-footer-actions > button {
+    width: 100% !important;
+    justify-content: center;
+  }
+
+  /* --- Cards / sections --- */
+  .card,
+  .detail-card,
+  .info-card,
+  .card-metric,
+  .linked-section {
+    padding: 16px 14px !important;
+  }
+  .card-header { flex-wrap: wrap !important; gap: 8px !important; }
+  .section-header { flex-wrap: wrap !important; gap: 8px !important; }
+
+  /* Profile headers stack their avatar above the details. */
+  .profile-header,
+  .header-main-info,
+  .top-left {
+    flex-wrap: wrap !important;
+  }
+
+  /* Dashboard heatmap has a fixed 110px label column + 5 day columns. */
+  .heatmap-days-row,
+  .heatmap-row {
+    grid-template-columns: 84px repeat(5, 1fr) !important;
+  }
+}
+
+/* ─────────────────────────── Phone (portrait) ─────────────────────────── */
+@media (max-width: 560px) {
+  .page-main-title { font-size: 17px !important; }
+
+  .card,
+  .detail-card,
+  .info-card,
+  .card-metric,
+  .linked-section,
+  .table-section-card,
+  .filter-card,
+  .quick-card {
+    border-radius: 12px !important;
+  }
+
+  .metric-val { font-size: 16px !important; }
+  .stat-value { font-size: 19px !important; }
+  .card-metric-icon { font-size: 24px !important; }
+
+  /* Action button rows (edit/delete/pay) wrap instead of overflowing. */
+  .row-actions,
+  .action-btn-group,
+  .header-actions {
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+  }
+
+  /* Keep tap targets at a usable size. */
+  .btn-action,
+  .btn-action-edit,
+  .btn-action-delete,
+  .btn-edit,
+  .btn-delete {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  /* Inputs at >=16px stop iOS Safari from zooming on focus. */
+  input[type="text"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="date"],
+  input[type="password"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

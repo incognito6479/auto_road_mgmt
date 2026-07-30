@@ -25,6 +25,22 @@ api.interceptors.request.use((config) => {
       }
     }
   }
+
+  // When creating a new record, stamp it with the currently active branch
+  // so it's correctly scoped without every form having to set it manually.
+  if (config.method === 'post' && config.data) {
+    const activeBranchId = localStorage.getItem('active_branch_id')
+    if (activeBranchId) {
+      if (config.data instanceof FormData) {
+        if (!config.data.has('branch')) {
+          config.data.append('branch', activeBranchId)
+        }
+      } else if (typeof config.data === 'object' && config.data.branch === undefined) {
+        config.data.branch = Number(activeBranchId)
+      }
+    }
+  }
+
   return config
 })
 

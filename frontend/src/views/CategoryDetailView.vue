@@ -116,7 +116,7 @@
               <span v-else>{{ s.paymentAmount }}</span>
             </td>
             <td>
-              <span class="status-badge badge-new">{{ s.status }}</span>
+              <span class="status-badge" :class="statusClass(s.rawStatus)">{{ s.status }}</span>
             </td>
             <td>
               <div class="td-notes" :title="s.notes">{{ s.notes || '-' }}</div>
@@ -258,18 +258,13 @@
           </div>
 
           <!-- Row 4: Learning Days, Instructor, Coordinator -->
-          <div class="form-group">
-            <label for="std-days" class="form-label">O'quv Kunlari (ixtiyoriy)</label>
-            <div class="select-wrap">
-              <select id="std-days" v-model="newStudent.learning_days" class="form-input select-input">
-                <option value="">-- Kunlarni tanlang --</option>
-                <option value="Mo-Wed-Fri">Dush - Chor - Jum (Mo-Wed-Fri)</option>
-                <option value="Tue-Thu-Sat">Sesh - Pay - Shan (Tue-Thu-Sat)</option>
-                <option value="everyday">Har kuni (Everyday)</option>
-              </select>
-              <svg class="select-arrow-modal" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-              </svg>
+          <div class="form-group fg-full">
+            <label class="form-label">O'quv Kunlari (ixtiyoriy)</label>
+            <div class="weekday-picker">
+              <label v-for="d in weekdayOptions" :key="d.value" class="weekday-chip" :class="{ active: newStudent.learning_days.includes(d.value) }">
+                <input type="checkbox" :value="d.value" v-model="newStudent.learning_days" style="display: none;" />
+                {{ d.label }}
+              </label>
             </div>
           </div>
 
@@ -280,7 +275,7 @@
               <div 
                 class="search-select-trigger" 
                 :class="{ 'is-open': isInstructorOpen, 'has-selected': selectedInstructor }"
-                @click="isInstructorOpen = !isInstructorOpen; isCoordinatorOpen = false"
+                @click="isInstructorOpen = !isInstructorOpen; isCoordinatorOpen = false; isAgentOpen = false"
               >
                 <template v-if="selectedInstructor">
                   <div class="selected-user-card">
@@ -316,10 +311,12 @@
                     v-model="instructorSearch"
                     placeholder="Ism yoki telefon raqami..."
                     class="dropdown-search-field"
+                    autofocus
+                    @keydown="onInstructorKeydown"
                   />
                 </div>
                 <div class="dropdown-options-container">
-                  <div 
+                  <div
                     class="dropdown-option-row option-clear"
                     :class="{ 'is-active': !newStudent.instructor }"
                     @click="selectInstructor(null)"
@@ -327,10 +324,10 @@
                     <span>&lt; Tanlanmagan &gt;</span>
                   </div>
                   <div
-                    v-for="inst in filteredInstructors"
+                    v-for="(inst, idx) in filteredInstructors"
                     :key="inst.id"
                     class="dropdown-option-row"
-                    :class="{ 'is-active': newStudent.instructor === inst.id }"
+                    :class="{ 'is-active': newStudent.instructor === inst.id, 'is-highlighted': instructorKb.highlightedIndex.value === idx }"
                     @click="selectInstructor(inst.id)"
                   >
                     <div class="opt-avatar avatar-inst">
@@ -357,7 +354,7 @@
               <div 
                 class="search-select-trigger" 
                 :class="{ 'is-open': isCoordinatorOpen, 'has-selected': selectedCoordinator }"
-                @click="isCoordinatorOpen = !isCoordinatorOpen; isInstructorOpen = false"
+                @click="isCoordinatorOpen = !isCoordinatorOpen; isInstructorOpen = false; isAgentOpen = false"
               >
                 <template v-if="selectedCoordinator">
                   <div class="selected-user-card">
@@ -393,10 +390,12 @@
                     v-model="coordinatorSearch"
                     placeholder="Ism yoki telefon raqami..."
                     class="dropdown-search-field"
+                    autofocus
+                    @keydown="onCoordinatorKeydown"
                   />
                 </div>
                 <div class="dropdown-options-container">
-                  <div 
+                  <div
                     class="dropdown-option-row option-clear"
                     :class="{ 'is-active': !newStudent.coordinator }"
                     @click="selectCoordinator(null)"
@@ -404,10 +403,10 @@
                     <span>&lt; Tanlanmagan &gt;</span>
                   </div>
                   <div
-                    v-for="coord in filteredCoordinators"
+                    v-for="(coord, idx) in filteredCoordinators"
                     :key="coord.id"
                     class="dropdown-option-row"
-                    :class="{ 'is-active': newStudent.coordinator === coord.id }"
+                    :class="{ 'is-active': newStudent.coordinator === coord.id, 'is-highlighted': coordinatorKb.highlightedIndex.value === idx }"
                     @click="selectCoordinator(coord.id)"
                   >
                     <div class="opt-avatar avatar-coord">
@@ -470,10 +469,12 @@
                     v-model="agentSearch"
                     placeholder="Agent ismi yoki telefon..."
                     class="dropdown-search-field"
+                    autofocus
+                    @keydown="onAgentKeydown"
                   />
                 </div>
                 <div class="dropdown-options-container">
-                  <div 
+                  <div
                     class="dropdown-option-row option-clear"
                     :class="{ 'is-active': !newStudent.agent }"
                     @click="selectAgent(null)"
@@ -481,10 +482,10 @@
                     <span>&lt; Tanlanmagan &gt;</span>
                   </div>
                   <div
-                    v-for="ag in filteredAgents"
+                    v-for="(ag, idx) in filteredAgents"
                     :key="ag.id"
                     class="dropdown-option-row"
-                    :class="{ 'is-active': newStudent.agent === ag.id }"
+                    :class="{ 'is-active': newStudent.agent === ag.id, 'is-highlighted': agentKb.highlightedIndex.value === idx }"
                     @click="selectAgent(ag.id)"
                   >
                     <div class="opt-avatar avatar-agent">
@@ -520,10 +521,10 @@
             <label for="std-payment-method" class="form-label">To'lov turi</label>
             <div class="select-wrap">
               <select id="std-payment-method" v-model="newStudent.payment_method" required class="form-input select-input">
-                <option value="cash">💵 Naqd pul</option>
-                <option value="card">💳 Plastik karta</option>
-                <option value="qr_code">📱 QR-kod orqali</option>
-                <option value="transfer">🏦 Bank o'tkazmasi</option>
+                <option value="cash">Naqd</option>
+                <option value="card">Karta</option>
+                <option value="qr_code">QR code</option>
+                <option value="transfer">O'tkazma</option>
               </select>
               <svg class="select-arrow-modal" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -685,8 +686,9 @@
             <div class="select-wrap">
               <select id="edit-std-status" v-model="editingStudent.status" required class="filter-select">
                 <option value="new">Yangi</option>
-                <option value="enrolled">Qabul qilingan</option>
+                <option value="enrolled">Faol</option>
                 <option value="finished">Tugatgan</option>
+                <option value="canceled">Bekor qilingan</option>
               </select>
               <span class="select-arrow" style="top: 10px;">▼</span>
             </div>
@@ -748,16 +750,27 @@
           </div>
 
           <div class="form-group">
-            <label for="group-duration-input" class="form-label">Davomiyligi (oylar)</label>
+            <label class="form-label">Dars kunlari (Dushanba - Shanba)</label>
+            <div class="weekday-picker">
+              <label v-for="d in weekdayOptions" :key="d.value" class="weekday-chip" :class="{ active: groupForm.selected_weekdays.includes(d.value) }">
+                <input type="checkbox" :value="d.value" v-model="groupForm.selected_weekdays" style="display: none;" />
+                {{ d.label }}
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="group-working-days-input" class="form-label">Ish kunlari soni</label>
             <input
-              id="group-duration-input"
-              v-model="groupForm.duration"
+              id="group-working-days-input"
+              v-model="groupForm.working_days"
               type="number"
-              step="0.1"
-              required
               class="form-input"
-              placeholder="Masalan: 3.5"
+              placeholder="68"
             />
+            <p style="margin: 6px 0 0; font-size: 12px; color: #9CA3AF;">
+              Tugash sanasi tanlangan dars kunlari, bayramlar va ish kunlari soniga qarab avtomatik hisoblanadi.
+            </p>
           </div>
         </div>
 
@@ -775,11 +788,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
 const router = useRouter()
 const route = useRoute()
@@ -809,8 +823,19 @@ const groupSaving = ref(false)
 const groupForm = ref({
   name: '',
   started_at: '',
-  duration: null,
+  working_days: 68,
+  selected_weekdays: [0, 2, 4], // Mon, Wed, Fri by default
 })
+
+// Mon(0) - Sat(5); Sunday is never a class day.
+const weekdayOptions = [
+  { value: 0, label: 'Dush' },
+  { value: 1, label: 'Sesh' },
+  { value: 2, label: 'Chor' },
+  { value: 3, label: 'Pay' },
+  { value: 4, label: 'Juma' },
+  { value: 5, label: 'Shan' },
+]
 
 const isAllSelected = computed(() => {
   return filteredStudents.value.length > 0 && selectedStudentIds.value.length === filteredStudents.value.length
@@ -832,7 +857,8 @@ const openGroupConfirmModal = () => {
   groupForm.value = {
     name: category.value ? `${category.value.name} guruhi` : '',
     started_at: new Date().toISOString().substring(0, 10),
-    duration: category.value ? category.value.duration : null,
+    working_days: category.value && category.value.duration ? category.value.duration : 68,
+    selected_weekdays: [0, 2, 4],
   }
   if (groupConfirmModal.value) {
     groupConfirmModal.value.showModal()
@@ -851,7 +877,7 @@ const startGroup = async () => {
     return
   }
 
-  if (!groupForm.value.name.trim() || !groupForm.value.started_at || groupForm.value.duration === null || groupForm.value.duration === undefined) {
+  if (!groupForm.value.name.trim() || !groupForm.value.started_at || !groupForm.value.working_days) {
     alert("Barcha maydonlarni to'ldiring.")
     return
   }
@@ -861,7 +887,8 @@ const startGroup = async () => {
     const payload = {
       name: groupForm.value.name.trim(),
       started_at: groupForm.value.started_at,
-      duration: parseFloat(groupForm.value.duration),
+      working_days: Number(groupForm.value.working_days) || 68,
+      selected_weekdays: groupForm.value.selected_weekdays,
       category: parseInt(categoryId, 10),
       status: 'started',
       student_ids: selectedStudentIds.value,
@@ -1066,6 +1093,7 @@ const newStudent = ref({
   passport_serie: '',
   passport_number: '',
   category: categoryId,
+  learning_days: [],
   min_payment: null,
   enrolled_free: false,
   has_custom_price: false,
@@ -1264,6 +1292,8 @@ const formatDateDisplay = (dateVal) => {
   return `${day}.${month}.${year}`
 }
 
+const statusLabels = { new: 'Yangi', enrolled: 'Faol', finished: 'Tugatgan', canceled: 'Bekor qilingan' }
+
 const mapStudent = (s) => {
   const dateStr = formatDateDisplay(s.date_joined || s.created_at)
   return {
@@ -1277,7 +1307,7 @@ const mapStudent = (s) => {
     passportNumber: s.passport_number,
     date: dateStr,
     date_joined: dateStr,
-    status: "Yangi",
+    status: statusLabels[s.status] || 'Yangi',
     rawStatus: s.status,
     categoryId: s.category_id,
     enrolledFree: s.enrolled_free || false,
@@ -1285,6 +1315,13 @@ const mapStudent = (s) => {
     notes: s.notes || '',
   }
 }
+
+const statusClass = (rawStatus) => ({
+  new: 'badge-new',
+  enrolled: 'badge-enrolled',
+  finished: 'badge-canceled',
+  canceled: 'badge-canceled',
+}[rawStatus] || 'badge-new')
 
 const formatPhoneDisplay = (p) => {
   if (!p) return ''
@@ -1318,7 +1355,22 @@ onMounted(async () => {
       }
     })
   }
+
+  document.addEventListener('click', handleSearchSelectOutsideClick)
 })
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleSearchSelectOutsideClick)
+})
+
+// Any click landing outside all instructor/coordinator/agent searchable
+// selects closes whichever is open.
+function handleSearchSelectOutsideClick(event) {
+  if (event.target.closest('.search-select-container')) return
+  isInstructorOpen.value = false
+  isCoordinatorOpen.value = false
+  isAgentOpen.value = false
+}
 
 const staffInstructors = ref([])
 const staffCoordinators = ref([])
@@ -1348,6 +1400,8 @@ const selectInstructor = (id) => {
   isInstructorOpen.value = false
   instructorSearch.value = ''
 }
+const instructorKb = useSearchSelectKeyboard()
+const onInstructorKeydown = (e) => instructorKb.onKeydown(e, filteredInstructors.value, (inst) => selectInstructor(inst.id), () => { isInstructorOpen.value = false })
 
 const selectedCoordinator = computed(() => {
   if (!newStudent.value.coordinator) return null
@@ -1368,10 +1422,12 @@ const selectCoordinator = (id) => {
   isCoordinatorOpen.value = false
   coordinatorSearch.value = ''
 }
+const coordinatorKb = useSearchSelectKeyboard()
+const onCoordinatorKeydown = (e) => coordinatorKb.onKeydown(e, filteredCoordinators.value, (c) => selectCoordinator(c.id), () => { isCoordinatorOpen.value = false })
 
 const fetchStaff = async () => {
   try {
-    const res = await api.get('/users/')
+    const res = await api.get('/users/', { params: { page_size: 1000 } })
     const list = Array.isArray(res.data) ? res.data : (res.data.results || [])
     staffInstructors.value = list.filter(u => u.role === 'instructor' && u.is_active)
     staffCoordinators.value = list.filter(u => u.role === 'coordinator' && u.is_active)
@@ -1384,7 +1440,7 @@ const learningPlaces = ref([])
 
 const fetchLearningPlaces = async () => {
   try {
-    const res = await api.get('/learning-places/')
+    const res = await api.get('/learning-places/', { params: { page_size: 1000 } })
     learningPlaces.value = Array.isArray(res.data) ? res.data : (res.data.results || [])
   } catch (err) {
     console.error('Failed to fetch learning places:', err)
@@ -1414,10 +1470,12 @@ const selectAgent = (id) => {
   isAgentOpen.value = false
   agentSearch.value = ''
 }
+const agentKb = useSearchSelectKeyboard()
+const onAgentKeydown = (e) => agentKb.onKeydown(e, filteredAgents.value, (a) => selectAgent(a.id), () => { isAgentOpen.value = false })
 
 const fetchAgents = async () => {
   try {
-    const res = await api.get('/agents/')
+    const res = await api.get('/agents/', { params: { page_size: 1000 } })
     agents.value = Array.isArray(res.data) ? res.data : (res.data.results || [])
   } catch (err) {
     console.error('Failed to fetch agents:', err)
@@ -1450,7 +1508,7 @@ const openModal = async () => {
     agent: null,
     learning_place: null,
     learning_time: '',
-    learning_days: '',
+    learning_days: [],
     min_payment: null,
     payment_method: 'cash',
     enrolled_free: false,
@@ -1526,7 +1584,7 @@ const saveStudent = async () => {
       agent: s.agent || null,
       learning_place: s.learning_place || null,
       learning_time: s.learning_time ? s.learning_time.trim() : null,
-      learning_days: s.learning_days || null,
+      learning_days: s.learning_days || [],
       min_payment: parseInt(s.min_payment, 10),
       payment_method: s.payment_method || 'cash',
       enrolled_free: s.enrolled_free || false,
@@ -1810,6 +1868,16 @@ const saveStudent = async () => {
   border: 1.5px solid #D1D5DB;
 }
 
+.badge-enrolled {
+  background: #2D6A4F;
+  color: white;
+}
+
+.badge-canceled {
+  background: #DC2626;
+  color: white;
+}
+
 .badge-free {
   background: #E8F5E9;
   color: #2E7D32;
@@ -2013,6 +2081,26 @@ const saveStudent = async () => {
   background: #ECFDF5;
 }
 
+.dropdown-option-row.is-highlighted {
+  background: #F3F4F6;
+}
+
+.weekday-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.weekday-chip {
+  padding: 8px 12px;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.weekday-chip:hover { border-color: #9CA3AF; }
+.weekday-chip.active { background: #2D6A4F; border-color: #2D6A4F; color: white; }
+
 .option-clear {
   color: #6B7280;
   font-weight: 500;
@@ -2146,6 +2234,22 @@ const saveStudent = async () => {
   font-weight: 600;
   color: #374151;
 }
+
+.weekday-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.weekday-chip {
+  padding: 8px 12px;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4B5563;
+  background: #F9FAFB;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.weekday-chip:hover { border-color: #9CA3AF; }
+.weekday-chip.active { background: #2D6A4F; border-color: #2D6A4F; color: white; }
 
 .form-input {
   padding: 10px 14px;

@@ -1,239 +1,872 @@
 <template>
   <AppLayout>
 
-    <!-- ── Stat Cards ─────────────────────────────────── -->
+    <!-- ── Quick Navigation ───────────────────────────── -->
+    <div class="quick-card">
+      <h3 class="quick-title">Tezkor o'tish</h3>
+      <div class="quick-nav-grid">
+        <button v-for="q in quickNavLinks" :key="q.label" class="quick-nav-btn" @click="goTo(q)">
+          <span class="quick-nav-icon" v-html="q.icon"></span>
+          <span>{{ q.label }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Quick Actions ──────────────────────────────── -->
+    <div v-if="authStore.isAdminOrSuperuser" class="quick-card">
+      <h3 class="quick-title">Tezkor amallar</h3>
+      <div class="quick-actions-grid">
+        <button class="quick-action-btn action-violet" @click="goStartGroup">
+          <span class="qa-icon">+</span> Guruhni boshlash
+        </button>
+        <button class="quick-action-btn action-blue" @click="goEnrollStudent">
+          <span class="qa-icon">+</span> O'quvchini qabul qilish
+        </button>
+        <button class="quick-action-btn action-green" @click="openAcceptPaymentModal">
+          <span class="qa-icon">+</span> To'lov qabul qilish
+        </button>
+        <button class="quick-action-btn action-amber" @click="openPayAgentModal">
+          <span class="qa-icon">+</span> Agentga to'lov
+        </button>
+        <button class="quick-action-btn action-indigo" @click="openPayTeacherModal">
+          <span class="qa-icon">+</span> O'qituvchiga to'lov
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Count Stat Cards ────────────────────────────── -->
     <div class="stats-row">
-      <div class="stat-card" v-for="s in stats" :key="s.key">
+      <div class="stat-card" v-for="s in countStatCards" :key="s.key">
         <div class="stat-top">
           <div class="stat-icon-wrap" :style="{ background: s.iconBg }">
             <span v-html="s.icon"></span>
           </div>
           <span class="stat-label">{{ s.label }}</span>
         </div>
-        <div class="stat-value">{{ s.value }}</div>
-        <div class="stat-bar-track">
-          <div class="stat-bar-fill" :style="{ width: s.pct + '%', background: s.color }"></div>
-        </div>
+        <div class="stat-value">{{ loadingStats ? '…' : s.value }}</div>
       </div>
     </div>
 
-    <!-- ── Row 2: Lessons + Heatmap ─────────────────── -->
-    <div class="two-col-row">
-
-      <!-- Upcoming Lessons -->
-      <div class="card">
-        <div class="card-head">
-          <h2>Kelayotgan darslar</h2>
-          <button class="btn-outline">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-              <rect x="3" y="4" width="18" height="18" rx="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/>
-              <line x1="8" y1="2" x2="8" y2="6"/>
-              <line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            Taqvim
-          </button>
-        </div>
-        <table class="dtable">
-          <thead>
-            <tr>
-              <th>Talaba ismi</th>
-              <th>Vaqt</th>
-              <th>Avtomobil</th>
-              <th>Holat</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="lesson in upcomingLessons" :key="lesson.id">
-              <td>
-                <div class="cell-with-ava">
-                  <div class="mini-ava" :style="{ background: lesson.color }">{{ lesson.initials }}</div>
-                  <span>{{ lesson.name }}</span>
-                </div>
-              </td>
-              <td class="td-muted">{{ lesson.time }}</td>
-              <td class="td-muted">{{ lesson.vehicle }}</td>
-              <td>
-                <span class="badge" :class="lesson.status === 'Rejalashtirilgan' ? 'badge-green' : 'badge-amber'">
-                  {{ lesson.status }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Instructor Heatmap -->
-      <div class="card">
-        <div class="card-head">
-          <h2>Instruktor mavjudligi</h2>
-          <button class="btn-dark-sm">+ Yangi instruktor</button>
-        </div>
-        <div class="heatmap-days-row">
-          <div class="hday-spacer"></div>
-          <div v-for="d in heatmapDays" :key="d" class="hday">{{ d }}</div>
-        </div>
-        <div class="heatmap-row" v-for="inst in instructors" :key="inst.name">
-          <div class="inst-info">
-            <div class="mini-ava" :style="{ background: inst.color }">{{ inst.initials }}</div>
-            <span class="inst-name">{{ inst.name }}</span>
-          </div>
-          <div v-for="(slot, idx) in inst.slots" :key="idx" class="hcell" :class="slot ? 'hcell-active' : ''">
-            <span v-if="slot" class="hcell-label">{{ slot }}</span>
-          </div>
+    <!-- ── Money Stat Cards ─────────────────────────────── -->
+    <div class="quick-card money-stats-card">
+      <div class="money-stats-header">
+        <h3 class="quick-title">Moliyaviy ko'rsatkichlar</h3>
+        <div class="money-date-filter">
+          <label class="money-date-label">Sanadan:</label>
+          <input v-model="moneyDateFrom" type="date" class="money-date-input" />
+          <label class="money-date-label">Sanagacha:</label>
+          <input v-model="moneyDateTo" type="date" class="money-date-input" />
         </div>
       </div>
-
-    </div>
-
-    <!-- ── Row 3: Alerts + Vehicles ──────────────────── -->
-    <div class="two-col-row">
-
-      <!-- Student Alerts -->
-      <div class="card">
-        <div class="card-head">
-          <h2>Talabalar jarayoni / Ogohlantirishlar</h2>
-        </div>
-        <div class="alert-list">
-          <div class="alert-row" v-for="a in alerts" :key="a.id">
-            <div class="alert-ico-wrap" :class="a.type === 'warn' ? 'aico-warn' : 'aico-info'">
-              <svg v-if="a.type === 'warn'" viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-              </svg>
-              <svg v-else viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-              </svg>
+      <div class="stats-row">
+        <div class="stat-card" v-for="s in moneyStatCards" :key="s.key">
+          <div class="stat-top">
+            <div class="stat-icon-wrap" :style="{ background: s.iconBg }">
+              <span v-html="s.icon"></span>
             </div>
-            <span class="alert-label">{{ a.label }}</span>
-            <span class="alert-desc">{{ a.desc }}</span>
-            <span class="badge badge-green">{{ a.status }}</span>
-            <span class="alert-arrow">›</span>
+            <span class="stat-label">{{ s.label }}</span>
           </div>
+          <div class="stat-value">{{ loadingMoneyStats ? '…' : s.value }}</div>
         </div>
       </div>
+    </div>
 
-      <!-- Vehicle Status -->
-      <div class="card">
-        <div class="card-head">
-          <h2>Avtomobil holati</h2>
-          <button class="btn-outline">Ko'rish</button>
-        </div>
-        <table class="dtable">
-          <thead>
-            <tr>
-              <th>Avtomobil</th>
-              <th>Holat</th>
-              <th>Yoqilg'i</th>
-              <th>Keyingi xizmat</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="v in vehicles" :key="v.id">
-              <td>
-                <div class="cell-with-ava">
-                  <svg viewBox="0 0 24 24" fill="#9CA3AF" width="16" height="16">
-                    <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-                  </svg>
-                  <span>{{ v.name }}</span>
-                </div>
-              </td>
-              <td>
-                <span class="badge" :class="v.status === 'Mavjud' ? 'badge-green' : 'badge-amber'">{{ v.status }}</span>
-              </td>
-              <td>
-                <div class="fuel-cell">
-                  <span class="td-muted">{{ v.fuel }}</span>
-                  <div class="fuel-track">
-                    <div class="fuel-fill" :style="{ width: v.fuel, background: v.fuelColor }"></div>
+    <!-- ── Accept Payment Modal ───────────────────────── -->
+    <Transition name="modal">
+      <div v-if="showAcceptPaymentModal" class="modal-overlay" @click.self="closeAcceptPaymentModal">
+        <div class="modal-card">
+          <div class="modal-header-banner green-banner">
+            <div class="header-left-info">
+              <div class="header-icon-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                  <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                  <line x1="2" y1="10" x2="22" y2="10"></line>
+                </svg>
+              </div>
+              <div>
+                <h3>To'lov Qabul Qilish</h3>
+                <p>O'quvchi to'lovini tizimga kiriting</p>
+              </div>
+            </div>
+            <button class="btn-modal-close" @click="closeAcceptPaymentModal">✕</button>
+          </div>
+
+          <form @submit.prevent="submitAcceptPayment" class="modal-body">
+            <div v-if="payModalError" class="alert-error">{{ payModalError }}</div>
+
+            <div class="form-group">
+              <label class="flabel required">O'quvchini Ism bo'yicha Qidirish *</label>
+              <div class="searchable-select-wrap" ref="studentSelectRef">
+                <input
+                  v-model="studentSearchQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  placeholder="Ism bo'yicha qidiring..."
+                  @click="showStudentDropdown = !showStudentDropdown"
+                  @input="showStudentDropdown = true"
+                  @keydown="onStudentPayKeydown"
+                />
+                <div v-if="showStudentDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(e, idx) in filteredEnrollments"
+                    :key="e.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: payForm.enrollment === e.id, highlighted: studentPayKb.highlightedIndex.value === idx }"
+                    @click="selectPayEnrollment(e)"
+                  >
+                    <div class="opt-name">{{ e.student_name }}</div>
+                    <div class="opt-sub">{{ e.category_name }} {{ e.group_name ? `(${e.group_name})` : '' }}</div>
+                  </div>
+                  <div v-if="filteredEnrollments.length === 0" class="dropdown-empty">
+                    Mos o'quvchi topilmadi
                   </div>
                 </div>
-              </td>
-              <td class="td-muted">{{ v.nextService }}</td>
-              <td><button class="more-btn">···</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </div>
+              <div v-if="selectedStudentLabel" class="selected-chip">
+                Tanlandi: <strong>{{ selectedStudentLabel }}</strong>
+              </div>
+            </div>
 
-    </div>
+            <div class="form-group">
+              <label class="flabel required">To'lanayotgan Summa *</label>
+              <input
+                v-model="payForm.amountFormatted"
+                type="text"
+                class="finput amount-input"
+                placeholder="0"
+                required
+                @input="onPayAmountInput"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Usuli *</label>
+              <div class="select-wrap-relative">
+                <select v-model="payForm.method" class="fselect-field">
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
+                </select>
+                <div class="select-chevron-icon">▼</div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel">Izoh / Eslatma</label>
+              <input v-model="payForm.notes" type="text" class="finput" placeholder="Ixtiyoriy izoh..." />
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="closeAcceptPaymentModal">Bekor qilish</button>
+              <button type="submit" class="btn-save" :disabled="paySaving">
+                {{ paySaving ? "Saqlanmoqda..." : "To'lovni Saqlash" }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── Pay Agent Modal ────────────────────────────── -->
+    <Transition name="modal">
+      <div v-if="showPayAgentModal" class="modal-overlay" @click.self="closePayAgentModal">
+        <div class="modal-card">
+          <div class="modal-header-banner gold-banner">
+            <div class="header-left-info">
+              <div class="header-icon-box gold-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                </svg>
+              </div>
+              <div>
+                <h3>Agentga To'lov</h3>
+                <p>Hamkor agentga bonus/to'lov summasini kiriting</p>
+              </div>
+            </div>
+            <button class="btn-modal-close" @click="closePayAgentModal">✕</button>
+          </div>
+
+          <form @submit.prevent="submitPayAgent" class="modal-body">
+            <div v-if="agentPayModalError" class="alert-error">{{ agentPayModalError }}</div>
+
+            <div class="form-group">
+              <label class="flabel required">Agentni Ism bo'yicha Qidirish *</label>
+              <div class="searchable-select-wrap" ref="agentSelectRef">
+                <input
+                  v-model="agentSearchQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  placeholder="Agent ismini kiriting..."
+                  @click="showAgentDropdown = !showAgentDropdown"
+                  @input="showAgentDropdown = true"
+                  @keydown="onAgentPayKeydown"
+                />
+                <div v-if="showAgentDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(ag, idx) in filteredAgentsForPay"
+                    :key="ag.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: agentPayForm.agent === ag.id, highlighted: agentPayKb.highlightedIndex.value === idx }"
+                    @click="selectPayAgent(ag)"
+                  >
+                    <div class="opt-name">👤 {{ ag.full_name }}</div>
+                    <div class="opt-sub">{{ ag.phone || 'Telefon ko\'rsatilmagan' }}</div>
+                  </div>
+                  <div v-if="filteredAgentsForPay.length === 0" class="dropdown-empty">
+                    Mos agent topilmadi
+                  </div>
+                </div>
+              </div>
+              <div v-if="selectedAgentLabel" class="selected-chip gold-chip">
+                Tanlandi: <strong>{{ selectedAgentLabel }}</strong>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Summasi *</label>
+              <input
+                v-model="agentPayForm.amountFormatted"
+                type="text"
+                class="finput amount-input gold-text"
+                placeholder="0"
+                required
+                @input="onAgentPayAmountInput"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Usuli *</label>
+              <div class="select-wrap-relative">
+                <select v-model="agentPayForm.method" class="fselect-field">
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
+                </select>
+                <div class="select-chevron-icon">▼</div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel">Izoh / Eslatma</label>
+              <input v-model="agentPayForm.notes" type="text" class="finput" placeholder="Ixtiyoriy izoh..." />
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="closePayAgentModal">Bekor qilish</button>
+              <button type="submit" class="btn-save btn-gold-save" :disabled="agentPaySaving">
+                {{ agentPaySaving ? "Saqlanmoqda..." : "To'lovni Saqlash" }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ── Pay Teacher Modal ──────────────────────────── -->
+    <Transition name="modal">
+      <div v-if="showPayTeacherModal" class="modal-overlay" @click.self="closePayTeacherModal">
+        <div class="modal-card">
+          <div class="modal-header-banner indigo-banner">
+            <div class="header-left-info">
+              <div class="header-icon-box indigo-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
+              <div>
+                <h3>O'qituvchiga To'lov</h3>
+                <p>O'qituvchi yoki instruktorga to'lov summasini kiriting</p>
+              </div>
+            </div>
+            <button class="btn-modal-close" @click="closePayTeacherModal">✕</button>
+          </div>
+
+          <form @submit.prevent="submitPayTeacher" class="modal-body">
+            <div v-if="teacherPayModalError" class="alert-error">{{ teacherPayModalError }}</div>
+
+            <div class="form-group">
+              <label class="flabel required">O'qituvchini Ism bo'yicha Qidirish *</label>
+              <div class="searchable-select-wrap" ref="teacherSelectRef">
+                <input
+                  v-model="teacherSearchQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  placeholder="O'qituvchi/Instruktor ismini kiriting..."
+                  @click="showTeacherDropdown = !showTeacherDropdown"
+                  @input="showTeacherDropdown = true"
+                  @keydown="onTeacherPayKeydown"
+                />
+                <div v-if="showTeacherDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(t, idx) in filteredTeachersForPay"
+                    :key="t.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: teacherPayForm.teacher === t.id, highlighted: teacherPayKb.highlightedIndex.value === idx }"
+                    @click="selectPayTeacher(t)"
+                  >
+                    <div class="opt-name">👨‍🏫 {{ t.full_name }}</div>
+                    <div class="opt-sub">{{ t.role === 'instructor' ? 'Instruktor' : "O'qituvchi" }} ({{ t.phone }})</div>
+                  </div>
+                  <div v-if="filteredTeachersForPay.length === 0" class="dropdown-empty">
+                    Mos o'qituvchi topilmadi
+                  </div>
+                </div>
+              </div>
+              <div v-if="selectedTeacherLabel" class="selected-chip indigo-chip">
+                Tanlandi: <strong>{{ selectedTeacherLabel }}</strong>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Summasi *</label>
+              <input
+                v-model="teacherPayForm.amountFormatted"
+                type="text"
+                class="finput amount-input indigo-text"
+                placeholder="0"
+                required
+                @input="onTeacherPayAmountInput"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Turi *</label>
+              <div class="select-wrap-relative">
+                <select v-model="teacherPayForm.status" class="fselect-field">
+                  <option value="paid">Oylik to'lov</option>
+                  <option value="bonus_teacher">Sertifikat bonusi</option>
+                </select>
+                <div class="select-chevron-icon">▼</div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Usuli *</label>
+              <div class="select-wrap-relative">
+                <select v-model="teacherPayForm.method" class="fselect-field">
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
+                </select>
+                <div class="select-chevron-icon">▼</div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel">Izoh / Eslatma</label>
+              <input v-model="teacherPayForm.notes" type="text" class="finput" placeholder="Ixtiyoriy izoh..." />
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="closePayTeacherModal">Bekor qilish</button>
+              <button type="submit" class="btn-save btn-indigo-save" :disabled="teacherPaySaving">
+                {{ teacherPaySaving ? "Saqlanmoqda..." : "To'lovni Saqlash" }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Transition>
 
   </AppLayout>
 </template>
 
 <script setup>
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import api from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
+import { formatMoney, formatNumber } from '@/utils/formatters'
+import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
-// ── Stats data ────────────────────────────────────────────────
-const stats = [
-  {
-    key: 'students', label: 'Faol talabalar', value: '202', pct: 70,
-    color: '#2D6A4F', iconBg: '#d1fae5',
-    icon: `<svg viewBox="0 0 24 24" fill="#2D6A4F" width="20" height="20"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>`,
-  },
-  {
-    key: 'lessons', label: 'Kutilayotgan darslar', value: '19', pct: 38,
-    color: '#f59e0b', iconBg: '#fef3c7',
-    icon: `<svg viewBox="0 0 24 24" fill="#f59e0b" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23L13 14.87V7z"/></svg>`,
-  },
-  {
-    key: 'maintenance', label: "Texnik ko'rik", value: '13', pct: 28,
-    color: '#3b82f6', iconBg: '#dbeafe',
-    icon: `<svg viewBox="0 0 24 24" fill="#3b82f6" width="20" height="20"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>`,
-  },
-  {
-    key: 'revenue', label: 'Oylik daromad', value: "45 000 000 so'm", pct: 82,
-    color: '#2D6A4F', iconBg: '#d1fae5',
-    icon: `<svg viewBox="0 0 24 24" fill="#2D6A4F" width="20" height="20"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>`,
-  },
+const router = useRouter()
+const authStore = useAuthStore()
+
+// ── Icons (inline, monochrome, reused across quick nav + stat cards) ──
+const icoStudents = `<svg viewBox="0 0 24 24" fill="#2D6A4F" width="20" height="20"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>`
+const icoStaff = `<svg viewBox="0 0 24 24" fill="none" stroke="#0891b2" stroke-width="2" width="20" height="20"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
+const icoMoney = `<svg viewBox="0 0 24 24" fill="#2D6A4F" width="20" height="20"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>`
+const icoOutcome = `<svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" width="20" height="20"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></svg>`
+const icoDebt = `<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+const icoGroups = `<svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8" width="20" height="20"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
+const icoCars = `<svg viewBox="0 0 24 24" fill="#3b82f6" width="20" height="20"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>`
+const icoDebtNav = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`
+const icoAgentNav = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
+
+// ── Quick Navigation ───────────────────────────────────
+const quickNavLinks = [
+  { label: 'Avtomobillar', path: '/vehicles', icon: icoCars },
+  { label: "O'quvchilar", path: '/students', icon: icoStudents },
+  { label: 'Qarzdorlar', path: '/finances/debts', icon: icoDebtNav },
+  { label: 'Guruhlar', path: '/groups', icon: icoGroups },
+  { label: "O'qituvchilar", path: '/users', query: { role: 'coordinator' }, icon: icoStaff },
+  { label: 'Instruktorlar', path: '/users', query: { role: 'instructor' }, icon: icoStaff },
+  { label: 'Agentlar', path: '/agents', icon: icoAgentNav },
 ]
 
-// ── Upcoming Lessons ──────────────────────────────────────────
-const upcomingLessons = [
-  { id: 1, name: 'Rahmatullo Qodirov', initials: 'RQ', color: '#4f46e5', time: '10:00 – 11:00', vehicle: 'Avto',   status: 'Rejalashtirilgan' },
-  { id: 2, name: 'Sardor Mirzayev',    initials: 'SM', color: '#0891b2', time: '11:30 – 12:30', vehicle: "Qo'lda", status: 'Jarayonda' },
-  { id: 3, name: 'Barno Holiqova',     initials: 'BH', color: '#7c3aed', time: '14:00 – 15:00', vehicle: 'Avto',   status: 'Rejalashtirilgan' },
-  { id: 4, name: 'Jamshid Toshmatov',  initials: 'JT', color: '#db2777', time: '16:00 – 17:00', vehicle: "Qo'lda", status: 'Jarayonda' },
-]
+function goTo(q) {
+  router.push({ path: q.path, query: q.query })
+}
 
-// ── Instructor Heatmap ────────────────────────────────────────
-const heatmapDays = ['Du', 'Se', 'Ch', 'Pa', 'Ju']
-const instructors = [
-  { name: 'Admin',        initials: 'A',  color: '#2D6A4F', slots: ['', '10:00', '',      '13:00', '']      },
-  { name: 'Instruktor 1', initials: 'I1', color: '#0891b2', slots: ['', '10:00', '14:00', '',      '10:00'] },
-  { name: 'Instruktor 2', initials: 'I2', color: '#7c3aed', slots: ['', '',      '14:00', '14:00', '']      },
-  { name: 'Blonanin',     initials: 'BL', color: '#db2777', slots: ['', '10:00', '',      '10:00', '']      },
-  { name: 'Admin 2',      initials: 'A2', color: '#f59e0b', slots: ['19:00', '', '10:00', '',      '']      },
-]
+function goStartGroup() {
+  router.push({ path: '/groups', query: { action: 'create' } })
+}
+function goEnrollStudent() {
+  router.push({ path: '/students', query: { action: 'create' } })
+}
 
-// ── Alerts ───────────────────────────────────────────────────
-const alerts = [
-  { id: 1, type: 'warn', label: 'Guvohnoma muddati',     desc: 'Guvohnoma muddati tugayapti',  status: 'Rejalashtirilgan' },
-  { id: 2, type: 'warn', label: 'Nazariya imtihoni',     desc: 'Nazariya imtihoni zarur',       status: 'Rejalashtirilgan' },
-  { id: 3, type: 'warn', label: 'Nazariya imtihoni',     desc: 'Nazariya imtihoni zarur',       status: 'Rejalashtirilgan' },
-  { id: 4, type: 'info', label: 'Amaliy imtihon tayyor', desc: 'Guvohnoma muddati tugayapti',   status: 'Rejalashtirilgan' },
-]
+// ── Real dashboard stats ──────────────────────────────
+const loadingStats = ref(true)
+const loadingMoneyStats = ref(true)
+const enrolledStudentsCount = ref(0)
+const activeStaffCount = ref(0)
+const activeGroupsCount = ref(0)
+const activeCarsCount = ref(0)
+const monthIncome = ref(0)
+const monthOutcomeAgents = ref(0)
+const monthOutcomeTeachers = ref(0)
+const monthOutcomeOther = ref(0)
+const totalDebt = ref(0)
 
-// ── Vehicles ─────────────────────────────────────────────────
-const vehicles = [
-  { id: 1, name: 'Avto-T167', status: 'Mavjud',   fuel: '60%', fuelColor: '#2D6A4F', nextService: '01.03.2023' },
-  { id: 2, name: 'Avto-5320', status: "Ta'mirda", fuel: '50%', fuelColor: '#f59e0b', nextService: '01.03.2023' },
-  { id: 3, name: 'Avto-BR3V', status: 'Mavjud',   fuel: '85%', fuelColor: '#2D6A4F', nextService: '01.03.2023' },
-]
+const enrollments = ref([])
+const agents = ref([])
+const teachers = ref([])
+
+function listOf(data) {
+  return data && data.results ? data.results : (data || [])
+}
+
+function countOf(data) {
+  if (data && typeof data.count === 'number') return data.count
+  return listOf(data).length
+}
+
+function getDebt(e) {
+  if (!e || e.enrolled_free) return 0
+  const contract = Number(e.enrolled_amount) || 0
+  const paid = Number(e.paid_amount) || 0
+  return Math.max(0, contract - paid)
+}
+
+const now = new Date()
+const defaultMoneyFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+const defaultMoneyTo = now.toISOString().split('T')[0]
+const moneyDateFrom = ref(defaultMoneyFrom)
+const moneyDateTo = ref(defaultMoneyTo)
+
+async function fetchCountStats() {
+  loadingStats.value = true
+  try {
+    const [studentsRes, coordinatorsRes, instructorsRes, groupsRes, carsRes] = await Promise.all([
+      api.get('/students/', { params: { status: 'Faol', page_size: 1 } }),
+      api.get('/users/', { params: { role: 'coordinator', page_size: 1 } }),
+      api.get('/users/', { params: { role: 'instructor', page_size: 1 } }),
+      api.get('/groups/', { params: { page_size: 1000 } }),
+      api.get('/cars/', { params: { status: 'available', page_size: 1 } }),
+    ])
+
+    enrolledStudentsCount.value = countOf(studentsRes.data)
+    activeStaffCount.value = countOf(coordinatorsRes.data) + countOf(instructorsRes.data)
+    activeGroupsCount.value = listOf(groupsRes.data).filter(g => g.status === 'started').length
+    activeCarsCount.value = countOf(carsRes.data)
+  } catch (err) {
+    console.error('Failed to load dashboard stats:', err)
+  } finally {
+    loadingStats.value = false
+  }
+}
+
+async function fetchMoneyStats() {
+  loadingMoneyStats.value = true
+  try {
+    const [paymentsRes, enrollmentsRes, agentsRes, teachersRes] = await Promise.all([
+      api.get('/payments/', {
+        params: {
+          status: 'accepted,bonus,bonus_teacher,paid',
+          date_from: moneyDateFrom.value,
+          date_to: moneyDateTo.value,
+          page_size: 1000,
+        },
+      }),
+      api.get('/enrollments/', { params: { page_size: 1000 } }),
+      api.get('/agents/', { params: { page_size: 1000 } }),
+      api.get('/users/', { params: { page_size: 1000 } }),
+    ])
+
+    const periodPayments = listOf(paymentsRes.data)
+    monthIncome.value = periodPayments.filter(p => p.status === 'accepted').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    monthOutcomeAgents.value = periodPayments.filter(p => p.status === 'bonus').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    monthOutcomeTeachers.value = periodPayments.filter(p => p.status === 'bonus_teacher').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    monthOutcomeOther.value = periodPayments.filter(p => p.status === 'paid').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+
+    enrollments.value = listOf(enrollmentsRes.data)
+    totalDebt.value = enrollments.value.reduce((s, e) => s + getDebt(e), 0)
+
+    agents.value = listOf(agentsRes.data)
+    teachers.value = listOf(teachersRes.data).filter(u => u.role === 'coordinator' || u.role === 'instructor')
+  } catch (err) {
+    console.error('Failed to load money stats:', err)
+  } finally {
+    loadingMoneyStats.value = false
+  }
+}
+
+async function fetchDashboardStats() {
+  await Promise.all([fetchCountStats(), fetchMoneyStats()])
+}
+
+watch([moneyDateFrom, moneyDateTo], () => { fetchMoneyStats() })
+
+const countStatCards = computed(() => [
+  { key: 'students', label: "Faol o'quvchilar", value: formatNumber(enrolledStudentsCount.value), iconBg: '#d1fae5', icon: icoStudents },
+  { key: 'staff', label: "Faol o'qituvchi + instruktor", value: formatNumber(activeStaffCount.value), iconBg: '#cffafe', icon: icoStaff },
+  { key: 'groups', label: 'Faol guruhlar', value: formatNumber(activeGroupsCount.value), iconBg: '#ede9fe', icon: icoGroups },
+  { key: 'cars', label: 'Faol avtomobillar', value: formatNumber(activeCarsCount.value), iconBg: '#dbeafe', icon: icoCars },
+])
+
+const moneyStatCards = computed(() => [
+  { key: 'income', label: 'Davr daromadi', value: formatMoney(monthIncome.value), iconBg: '#d1fae5', icon: icoMoney },
+  { key: 'outcome-agents', label: 'Davr chiqimi (Agentlar)', value: formatMoney(monthOutcomeAgents.value), iconBg: '#fef3c7', icon: icoOutcome },
+  { key: 'outcome-teachers', label: "Davr chiqimi (O'qituvchilar)", value: formatMoney(monthOutcomeTeachers.value), iconBg: '#fef3c7', icon: icoOutcome },
+  { key: 'outcome-other', label: 'Davr chiqimi (Boshqa)', value: formatMoney(monthOutcomeOther.value), iconBg: '#fef3c7', icon: icoOutcome },
+  { key: 'debt', label: 'Joriy qarzdorlik', value: formatMoney(totalDebt.value), iconBg: '#fee2e2', icon: icoDebt },
+])
+
+// ── Accept Payment Modal ──────────────────────────────
+const showAcceptPaymentModal = ref(false)
+const paySaving = ref(false)
+const payModalError = ref(null)
+const studentSearchQuery = ref('')
+const showStudentDropdown = ref(false)
+const selectedStudentLabel = ref('')
+const studentSelectRef = ref(null)
+const payForm = ref({ enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
+
+const filteredEnrollments = computed(() => {
+  const q = studentSearchQuery.value.toLowerCase().trim()
+  if (!q) return enrollments.value
+  return enrollments.value.filter(e => (e.student_name || '').toLowerCase().includes(q))
+})
+
+function openAcceptPaymentModal() {
+  payModalError.value = null
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  showStudentDropdown.value = false
+  payForm.value = { enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
+  showAcceptPaymentModal.value = true
+}
+function closeAcceptPaymentModal() { showAcceptPaymentModal.value = false }
+
+function selectPayEnrollment(e) {
+  payForm.value.enrollment = e.id
+  selectedStudentLabel.value = `${e.student_name} (${e.category_name})`
+  studentSearchQuery.value = e.student_name
+  showStudentDropdown.value = false
+}
+const studentPayKb = useSearchSelectKeyboard()
+function onStudentPayKeydown(e) {
+  studentPayKb.onKeydown(e, filteredEnrollments.value, selectPayEnrollment, () => { showStudentDropdown.value = false })
+}
+
+function onPayAmountInput(e) {
+  const digits = e.target.value.replace(/\D/g, '')
+  if (!digits) { payForm.value.amount = 0; payForm.value.amountFormatted = ''; return }
+  const num = parseInt(digits, 10)
+  payForm.value.amount = num
+  payForm.value.amountFormatted = formatMoney(num, false)
+}
+
+async function submitAcceptPayment() {
+  if (!payForm.value.enrollment) { payModalError.value = "O'quvchini tanlang."; return }
+  if (!payForm.value.amount || payForm.value.amount <= 0) { payModalError.value = "To'g'ri summani kiriting."; return }
+  paySaving.value = true
+  payModalError.value = null
+  try {
+    await api.post('/payments/', {
+      user: authStore.user?.id,
+      enrollment: payForm.value.enrollment,
+      amount: payForm.value.amount,
+      status: 'accepted',
+      method: payForm.value.method,
+      notes: payForm.value.notes,
+    })
+    closeAcceptPaymentModal()
+    fetchDashboardStats()
+  } catch (err) {
+    payModalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi"
+  } finally {
+    paySaving.value = false
+  }
+}
+
+// ── Pay Agent Modal ────────────────────────────────────
+const showPayAgentModal = ref(false)
+const agentPaySaving = ref(false)
+const agentPayModalError = ref(null)
+const agentSearchQuery = ref('')
+const showAgentDropdown = ref(false)
+const selectedAgentLabel = ref('')
+const agentSelectRef = ref(null)
+const agentPayForm = ref({ agent: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
+
+const filteredAgentsForPay = computed(() => {
+  const q = agentSearchQuery.value.toLowerCase().trim()
+  if (!q) return agents.value
+  return agents.value.filter(a => (a.full_name || '').toLowerCase().includes(q))
+})
+
+function openPayAgentModal() {
+  agentPayModalError.value = null
+  agentSearchQuery.value = ''
+  selectedAgentLabel.value = ''
+  showAgentDropdown.value = false
+  agentPayForm.value = { agent: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
+  showPayAgentModal.value = true
+}
+function closePayAgentModal() { showPayAgentModal.value = false }
+
+function selectPayAgent(a) {
+  agentPayForm.value.agent = a.id
+  selectedAgentLabel.value = `${a.full_name} (${a.phone || 'No phone'})`
+  agentSearchQuery.value = a.full_name
+  showAgentDropdown.value = false
+}
+const agentPayKb = useSearchSelectKeyboard()
+function onAgentPayKeydown(e) {
+  agentPayKb.onKeydown(e, filteredAgentsForPay.value, selectPayAgent, () => { showAgentDropdown.value = false })
+}
+
+function onAgentPayAmountInput(e) {
+  const digits = e.target.value.replace(/\D/g, '')
+  if (!digits) { agentPayForm.value.amount = 0; agentPayForm.value.amountFormatted = ''; return }
+  const num = parseInt(digits, 10)
+  agentPayForm.value.amount = num
+  agentPayForm.value.amountFormatted = formatMoney(num, false)
+}
+
+async function submitPayAgent() {
+  if (!agentPayForm.value.agent) { agentPayModalError.value = "Agentni tanlang."; return }
+  if (!agentPayForm.value.amount || agentPayForm.value.amount <= 0) { agentPayModalError.value = "To'g'ri summani kiriting."; return }
+  agentPaySaving.value = true
+  agentPayModalError.value = null
+  try {
+    await api.post('/payments/', {
+      user: authStore.user?.id,
+      agent: agentPayForm.value.agent,
+      amount: agentPayForm.value.amount,
+      status: 'bonus',
+      method: agentPayForm.value.method,
+      notes: agentPayForm.value.notes,
+    })
+    closePayAgentModal()
+    fetchDashboardStats()
+  } catch (err) {
+    agentPayModalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi"
+  } finally {
+    agentPaySaving.value = false
+  }
+}
+
+// ── Pay Teacher Modal ──────────────────────────────────
+const showPayTeacherModal = ref(false)
+const teacherPaySaving = ref(false)
+const teacherPayModalError = ref(null)
+const teacherSearchQuery = ref('')
+const showTeacherDropdown = ref(false)
+const selectedTeacherLabel = ref('')
+const teacherSelectRef = ref(null)
+const teacherPayForm = ref({ teacher: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' })
+
+const filteredTeachersForPay = computed(() => {
+  const q = teacherSearchQuery.value.toLowerCase().trim()
+  if (!q) return teachers.value
+  return teachers.value.filter(t => (t.full_name || '').toLowerCase().includes(q))
+})
+
+function openPayTeacherModal() {
+  teacherPayModalError.value = null
+  teacherSearchQuery.value = ''
+  selectedTeacherLabel.value = ''
+  showTeacherDropdown.value = false
+  teacherPayForm.value = { teacher: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' }
+  showPayTeacherModal.value = true
+}
+function closePayTeacherModal() { showPayTeacherModal.value = false }
+
+function selectPayTeacher(t) {
+  teacherPayForm.value.teacher = t.id
+  selectedTeacherLabel.value = `${t.full_name} (${t.role === 'instructor' ? 'Instruktor' : "O'qituvchi"})`
+  teacherSearchQuery.value = t.full_name
+  showTeacherDropdown.value = false
+}
+const teacherPayKb = useSearchSelectKeyboard()
+function onTeacherPayKeydown(e) {
+  teacherPayKb.onKeydown(e, filteredTeachersForPay.value, selectPayTeacher, () => { showTeacherDropdown.value = false })
+}
+
+function onTeacherPayAmountInput(e) {
+  const digits = e.target.value.replace(/\D/g, '')
+  if (!digits) { teacherPayForm.value.amount = 0; teacherPayForm.value.amountFormatted = ''; return }
+  const num = parseInt(digits, 10)
+  teacherPayForm.value.amount = num
+  teacherPayForm.value.amountFormatted = formatMoney(num, false)
+}
+
+async function submitPayTeacher() {
+  if (!teacherPayForm.value.teacher) { teacherPayModalError.value = "O'qituvchini tanlang."; return }
+  if (!teacherPayForm.value.amount || teacherPayForm.value.amount <= 0) { teacherPayModalError.value = "To'g'ri summani kiriting."; return }
+  teacherPaySaving.value = true
+  teacherPayModalError.value = null
+  try {
+    await api.post('/payments/', {
+      user: teacherPayForm.value.teacher,
+      amount: teacherPayForm.value.amount,
+      status: teacherPayForm.value.status,
+      method: teacherPayForm.value.method,
+      notes: teacherPayForm.value.notes,
+    })
+    closePayTeacherModal()
+    fetchDashboardStats()
+  } catch (err) {
+    teacherPayModalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi"
+  } finally {
+    teacherPaySaving.value = false
+  }
+}
+
+// Both searchable selects close when the click lands outside their own wrapper.
+// Clicking the input itself is handled by its own @click toggle, and since the
+// input sits inside the wrapper this handler leaves that toggle alone.
+function handleSelectOutsideClick(e) {
+  if (studentSelectRef.value && !studentSelectRef.value.contains(e.target)) {
+    showStudentDropdown.value = false
+  }
+  if (agentSelectRef.value && !agentSelectRef.value.contains(e.target)) {
+    showAgentDropdown.value = false
+  }
+  if (teacherSelectRef.value && !teacherSelectRef.value.contains(e.target)) {
+    showTeacherDropdown.value = false
+  }
+}
+
+onMounted(() => {
+  fetchDashboardStats()
+  document.addEventListener('click', handleSelectOutsideClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleSelectOutsideClick)
+})
 </script>
 
 <style scoped>
-/* ── Dashboard body layout ──────────────────────────────── */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+/* ── Quick nav / actions ────────────────────────────────── */
+.quick-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   margin-bottom: 18px;
 }
 
-.two-col-row {
+.quick-title { font-size: 14.5px; font-weight: 600; color: #111827; margin-bottom: 14px; }
+
+.money-stats-card .stats-row { margin-bottom: 0; }
+.money-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.money-stats-header .quick-title { margin-bottom: 0; }
+.money-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.money-date-label { font-size: 12.5px; font-weight: 600; color: #6B7280; }
+.money-date-input {
+  padding: 7px 10px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+  background: #F9FAFB;
+  outline: none;
+}
+.money-date-input:focus { border-color: #2D6A4F; }
+
+.quick-nav-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quick-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1.5px solid #E5E7EB;
+  background: #F9FAFB;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.quick-nav-btn:hover {
+  background: white;
+  border-color: #2D6A4F;
+  color: #2D6A4F;
+  transform: translateY(-1px);
+}
+.quick-nav-icon { display: inline-flex; align-items: center; }
+
+.quick-actions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 12px;
+  border: none;
+  color: white;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+.quick-action-btn:hover { transform: translateY(-2px); }
+.qa-icon { font-size: 15px; font-weight: 800; }
+
+.action-violet { background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); }
+.action-blue   { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); }
+.action-green  { background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%); }
+.action-amber  { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
+.action-indigo { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
+
+/* ── Dashboard body layout ──────────────────────────────── */
+.stats-row {
   display: grid;
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 16px;
   margin-bottom: 18px;
 }
@@ -262,214 +895,60 @@ const vehicles = [
 }
 
 .stat-label { font-size: 12.5px; color: #6B7280; font-weight: 500; line-height: 1.3; }
-.stat-value { font-size: 26px; font-weight: 700; color: #111827; line-height: 1; }
+.stat-value { font-size: 22px; font-weight: 700; color: #111827; line-height: 1.2; }
 
-.stat-bar-track { height: 4px; background: #F3F4F6; border-radius: 4px; overflow: hidden; }
-.stat-bar-fill  { height: 100%; border-radius: 4px; }
+/* ── Shared modal styles (Accept payment / Pay agent) ───── */
+.modal-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-card { background: white; border-radius: 20px; width: 100%; max-width: 500px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+.modal-header-banner { padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #F3F4F6; }
+.modal-header-banner.green-banner { background: linear-gradient(180deg, #F0FDF4 0%, #FFFFFF 100%); }
+.modal-header-banner.gold-banner { background: linear-gradient(180deg, #FEF3C7 0%, #FFFFFF 100%); }
+.modal-header-banner.indigo-banner { background: linear-gradient(180deg, #EEF2FF 0%, #FFFFFF 100%); }
+.header-left-info { display: flex; align-items: center; gap: 12px; }
+.header-left-info h3 { font-size: 17px; font-weight: 700; color: #111827; }
+.header-left-info p { font-size: 12px; color: #6B7280; margin-top: 2px; }
+.header-icon-box { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%); color: white; display: flex; align-items: center; justify-content: center; }
+.header-icon-box.gold-box { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
+.header-icon-box.indigo-box { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
+.btn-modal-close { background: none; border: none; font-size: 18px; color: #9CA3AF; cursor: pointer; }
+.modal-body { padding: 24px; }
 
-/* ── Cards ──────────────────────────────────────────────── */
-.card {
-  background: white;
-  border-radius: 12px;
-  padding: 18px 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  min-width: 0;
+.form-group { margin-bottom: 18px; width: 100%; }
+.flabel { display: block; font-size: 12.5px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.finput, .fselect-field {
+  width: 100%; box-sizing: border-box; padding: 11px 14px;
+  border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 14px;
+  background-color: #FAFAFA; color: #111827; outline: none;
+  transition: all 0.2s ease; appearance: none; -webkit-appearance: none;
 }
+.finput:focus, .fselect-field:focus { border-color: #2D6A4F; background-color: #FFFFFF; box-shadow: 0 0 0 3.5px rgba(45, 106, 79, 0.12); }
 
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
+.select-wrap-relative { position: relative; width: 100%; }
+.select-chevron-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9CA3AF; font-size: 10px; }
 
-.card-head h2 { font-size: 14.5px; font-weight: 600; color: #111827; }
+.searchable-select-wrap { position: relative; width: 100%; }
+.dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #2D6A4F; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
+.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; }
+.dropdown-option-item:hover { background: #F0FDF4; }
+.dropdown-option-item.selected { background: #E8F5E9; font-weight: 700; }
+.dropdown-option-item.highlighted { background: #F0FDF4; }
+.opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }
+.opt-sub { font-size: 11.5px; color: #6B7280; margin-top: 1px; }
+.dropdown-empty { padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px; }
+.selected-chip { font-size: 12.5px; color: #2D6A4F; margin-top: 6px; }
+.selected-chip.gold-chip { color: #D97706; }
+.selected-chip.indigo-chip { color: #4F46E5; }
 
-.btn-outline {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  border-radius: 8px;
-  border: 1px solid #E5E7EB;
-  font-size: 12.5px;
-  color: #374151;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-outline:hover { background: #F9FAFB; }
+.amount-input { font-size: 16.5px; font-weight: 800; color: #2D6A4F; }
+.amount-input.gold-text { color: #B45309; }
+.amount-input.indigo-text { color: #3730A3; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.btn-cancel { padding: 10px 18px; border: 1px solid #D1D5DB; background: white; border-radius: 10px; font-weight: 600; font-size: 13px; color: #374151; cursor: pointer; }
+.btn-save { padding: 10px 22px; background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%); color: white; border-radius: 10px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.btn-gold-save { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
+.btn-indigo-save { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
+.alert-error { background: #FEE2E2; color: #991B1B; padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
 
-.btn-dark-sm {
-  padding: 5px 11px;
-  border-radius: 8px;
-  background: #1B2430;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-dark-sm:hover { background: #111827; }
-
-/* ── Table ──────────────────────────────────────────────── */
-.dtable { width: 100%; border-collapse: collapse; font-size: 13px; }
-
-.dtable th {
-  text-align: left;
-  padding: 7px 10px;
-  color: #6B7280;
-  font-weight: 600;
-  font-size: 11.5px;
-  border-bottom: 1px solid #F3F4F6;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.dtable td {
-  padding: 10px 10px;
-  color: #374151;
-  border-bottom: 1px solid #F9FAFB;
-  vertical-align: middle;
-}
-
-.dtable tbody tr:last-child td { border-bottom: none; }
-.dtable tbody tr:hover td { background: #FAFAFA; }
-.td-muted { color: #6B7280; }
-
-.cell-with-ava { display: flex; align-items: center; gap: 8px; }
-
-.mini-ava {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: white;
-  flex-shrink: 0;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.badge-green { background: #d1fae5; color: #065f46; }
-.badge-amber { background: #fef3c7; color: #92400e; }
-
-/* ── Heatmap ────────────────────────────────────────────── */
-.heatmap-days-row {
-  display: grid;
-  grid-template-columns: 110px repeat(5, 1fr);
-  gap: 4px;
-  margin-bottom: 6px;
-}
-
-.hday { text-align: center; font-size: 11.5px; font-weight: 600; color: #9CA3AF; }
-
-.heatmap-row {
-  display: grid;
-  grid-template-columns: 110px repeat(5, 1fr);
-  gap: 4px;
-  align-items: center;
-  margin-bottom: 5px;
-}
-
-.inst-info { display: flex; align-items: center; gap: 6px; overflow: hidden; }
-
-.inst-name {
-  font-size: 11.5px;
-  color: #374151;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hcell {
-  height: 28px;
-  border-radius: 5px;
-  background: #F3F4F6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.hcell-active { background: #2D6A4F; }
-.hcell-label  { font-size: 9.5px; color: white; font-weight: 700; }
-
-/* ── Alerts ─────────────────────────────────────────────── */
-.alert-list { display: flex; flex-direction: column; }
-
-.alert-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 4px;
-  border-bottom: 1px solid #F9FAFB;
-}
-.alert-row:last-child { border-bottom: none; }
-
-.alert-ico-wrap {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.aico-warn { background: #fef3c7; color: #f59e0b; }
-.aico-info { background: #d1fae5; color: #2D6A4F; }
-
-.alert-label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #374151;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.alert-desc {
-  font-size: 12px;
-  color: #9CA3AF;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.alert-arrow { color: #9CA3AF; font-size: 18px; flex-shrink: 0; }
-
-/* ── Fuel bar ───────────────────────────────────────────── */
-.fuel-cell { display: flex; align-items: center; gap: 7px; }
-
-.fuel-track {
-  width: 55px;
-  height: 5px;
-  background: #F3F4F6;
-  border-radius: 4px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.fuel-fill { height: 100%; border-radius: 4px; }
-
-.more-btn {
-  color: #9CA3AF;
-  font-size: 14px;
-  padding: 4px 6px;
-  border-radius: 5px;
-  letter-spacing: 1px;
-  transition: background 0.15s;
-}
-.more-btn:hover { background: #F3F4F6; }
+.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
 </style>

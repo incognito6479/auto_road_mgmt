@@ -79,6 +79,13 @@
           >
             💼 Agent To'lovi
           </button>
+          <button
+            class="filter-tab-btn"
+            :class="{ active: activeStatusFilter === 'review' }"
+            @click="activeStatusFilter = 'review'"
+          >
+            ⭐ Sharh
+          </button>
         </div>
       </div>
 
@@ -97,8 +104,9 @@
           <div
             v-for="item in filteredNotifications"
             :key="item.id"
-            class="notif-card-item"
+            class="notif-card-item clickable"
             :class="{ 'unread-card': !item.is_read }"
+            @click="goToNotificationTarget(item)"
           >
             <div class="notif-card-left">
               <div class="status-avatar-box" :class="statusAvatarClass(item.status)">
@@ -123,7 +131,7 @@
               <button
                 v-else
                 class="btn-mark-read"
-                @click="markSingleAsRead(item.id)"
+                @click.stop="markSingleAsRead(item.id)"
               >
                 O'qilgan deb belgilash
               </button>
@@ -138,10 +146,12 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useBranchStore } from '@/stores/branch'
 
+const router = useRouter()
 const branchStore = useBranchStore()
 const notifications = ref([])
 const loading = ref(true)
@@ -160,7 +170,7 @@ const filteredNotifications = computed(() => {
 async function fetchNotifications() {
   loading.value = true
   try {
-    const res = await api.get('/notifications/', { params: { page_size: 100 } })
+    const res = await api.get('/notifications/', { params: { page_size: 1000 } })
     notifications.value = res.data.results || res.data || []
   } catch (err) {
     console.error("Bildirishnomalarni yuklashda xatolik:", err)
@@ -192,12 +202,41 @@ async function markAllAsRead() {
   }
 }
 
+// Notifications created since this field was added carry `target_id`
+// (the student or teacher the notification is about), so a click can open
+// their actual detail page. Older notifications (or types that don't have
+// one, like payment/agent_payment) fall back to the closest list page.
+function notificationTargetRoute(item) {
+  const id = item.target_id
+  switch (item.status) {
+    case 'driving_lesson':
+    case 'certificate_upload':
+      return id ? `/students/${id}` : '/students'
+    case 'review':
+      return id ? `/users/${id}` : { path: '/users', query: { role: 'instructor' } }
+    case 'payment':
+      return '/finances/accepted'
+    case 'agent_payment':
+      return '/agents'
+    default:
+      return null
+  }
+}
+
+function goToNotificationTarget(item) {
+  if (!item.is_read) markSingleAsRead(item.id)
+  const target = notificationTargetRoute(item)
+  if (!target) return
+  router.push(target)
+}
+
 function statusIcon(st) {
   switch (st) {
     case 'driving_lesson': return '🏎️'
     case 'certificate_upload': return '📄'
     case 'payment': return '💵'
     case 'agent_payment': return '💼'
+    case 'review': return '⭐'
     default: return '🔔'
   }
 }
@@ -208,6 +247,7 @@ function statusText(st) {
     case 'certificate_upload': return 'Sertifikat'
     case 'payment': return 'To\'lov'
     case 'agent_payment': return 'Agent To\'lovi'
+    case 'review': return 'Sharh'
     default: return st || 'Bildirishnoma'
   }
 }
@@ -218,6 +258,7 @@ function statusAvatarClass(st) {
     case 'certificate_upload': return 'bg-blue'
     case 'payment': return 'bg-green'
     case 'agent_payment': return 'bg-amber'
+    case 'review': return 'bg-amber'
     default: return 'bg-gray'
   }
 }
@@ -262,6 +303,7 @@ function formatDateTime(dtStr) {
 .notifications-container { padding: 20px; }
 .notif-cards-list { display: flex; flex-direction: column; gap: 14px; }
 .notif-card-item { background: white; border: 1.5px solid #E5E7EB; border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 18px; transition: all 0.2s ease; }
+.notif-card-item.clickable { cursor: pointer; }
 .notif-card-item:hover { border-color: #CBD5E1; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
 .notif-card-item.unread-card { border-left: 5px solid #4F46E5; background: #F8FAFC; }
 

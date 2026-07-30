@@ -124,6 +124,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/learning-places/:id',
+    name: 'learning-place-detail',
+    component: () => import('@/views/LearningPlaceDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/agents',
     name: 'agents',
     component: () => import('@/views/AgentsView.vue'),
@@ -176,6 +182,62 @@ const router = createRouter({
   routes,
 })
 
+// ---------------------------------------------------------------------------
+// Per-role route access
+// ---------------------------------------------------------------------------
+// Superusers are unrestricted. Every other role gets an explicit allowlist of
+// route names; anything outside it bounces to that role's own landing page.
+// `null` means "no restriction".
+
+const ROLE_ROUTES = {
+  // Admins may do everything a superuser can except return money, so the
+  // returned-payments page is the one route carved out of their access.
+  admin: null,
+
+  mechanic: [
+    'groups', 'group-detail',
+    'students', 'student-detail',
+    'vehicles', 'car-detail',
+    'lessons',
+    'learning-places', 'learning-place-detail',
+    'users', 'user-detail',
+    'notifications',
+  ],
+
+  // Instructors and coordinators work from their own profile page outward.
+  instructor: ['user-detail', 'student-detail', 'lessons', 'notifications'],
+  coordinator: ['user-detail', 'student-detail', 'lessons', 'notifications'],
+
+  // Students only ever see their own profile and their teachers' profiles.
+  student: ['student-detail', 'user-detail'],
+}
+
+// Routes an admin specifically may not reach (they cannot return money).
+const ADMIN_DENIED_ROUTES = ['finances-returned']
+
+function isRouteAllowed(authStore, to) {
+  if (authStore.isSuperuser) return true
+
+  const role = authStore.user?.role
+  if (role === 'admin') return !ADMIN_DENIED_ROUTES.includes(to.name)
+
+  const allowed = ROLE_ROUTES[role]
+  if (allowed === null || allowed === undefined) return true
+  if (!allowed.includes(to.name)) return false
+
+  // Students may only open their *own* student-detail page.
+  if (role === 'student' && to.name === 'student-detail') {
+    return String(to.params.id) === String(authStore.user?.id)
+  }
+
+  // Instructors/coordinators may only open their *own* profile page — not
+  // another teacher's or instructor's.
+  if ((role === 'instructor' || role === 'coordinator') && to.name === 'user-detail') {
+    return String(to.params.id) === String(authStore.user?.id)
+  }
+  return true
+}
+
 // Navigation guard
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
@@ -189,23 +251,25 @@ router.beforeEach(async (to, _from, next) => {
     await authStore.fetchCurrentUser()
   }
 
-  if (authStore.isStudent && authStore.user) {
-    const studentDetailPath = `/students/${authStore.user.id}`
-    if (to.path !== studentDetailPath && to.name !== 'login') {
-      next({ name: 'student-detail', params: { id: authStore.user.id } })
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    next(authStore.homeRoute)
+    return
+  }
+
+  if (authStore.isAuthenticated && authStore.user && to.meta.requiresAuth) {
+    if (!isRouteAllowed(authStore, to)) {
+      const landing = authStore.homeRoute
+      // Guard against redirect loops if the landing route is itself blocked.
+      if (to.name === landing.name && String(to.params?.id) === String(landing.params?.id)) {
+        next(false)
+        return
+      }
+      next(landing)
       return
     }
   }
 
-  if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    if (authStore.isStudent && authStore.user) {
-      next({ name: 'student-detail', params: { id: authStore.user.id } })
-    } else {
-      next({ name: 'home' })
-    }
-  } else {
-    next()
-  }
+  next()
 })
 
 export default router

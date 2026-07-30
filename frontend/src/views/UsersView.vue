@@ -186,6 +186,14 @@
             </div>
           </div>
 
+          <div class="form-group">
+            <label class="form-label">Filial</label>
+            <select v-model="userForm.branch" class="form-input">
+              <option :value="null">&lt; Filial biriktirilmagan &gt;</option>
+              <option v-for="b in branchStore.branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+            </select>
+          </div>
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Ismi</label>
@@ -465,6 +473,7 @@ const modalError = ref('')
 const showPassword = ref(false)
 const defaultUserForm = () => ({
   phone: '',
+  branch: null,
   phone2: '',
   first_name: '',
   last_name: '',
@@ -544,7 +553,11 @@ const fetchUsers = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/users/')
+    // Role/branch filtering below is done client-side over the full user list,
+    // so we need every record in one page — the default page_size (50) was
+    // silently truncating the list on `phone` order, making role tabs (e.g.
+    // Adminlar) appear empty once the school had more than 50 users total.
+    const response = await api.get('/users/', { params: { page_size: 1000 } })
     users.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
   } catch (err) {
     console.error(err)
@@ -691,6 +704,7 @@ const openCreateModal = () => {
   const defaultRole = filterRole.value && filterRole.value !== '' ? filterRole.value : 'coordinator'
   userForm.value = {
     phone: '+998 ',
+    branch: branchStore.activeBranchId ?? null,
     first_name: '',
     last_name: '',
     father_name: '',
@@ -727,6 +741,7 @@ const openEditModal = (u) => {
 
   userForm.value = {
     phone: formatPhone(u.phone),
+    branch: u.branch ?? null,
     first_name: u.first_name || '',
     last_name: u.last_name || '',
     father_name: fatherName,
@@ -781,6 +796,7 @@ const saveUser = async () => {
       last_name: userForm.value.last_name.trim(),
       full_name: fullNameParts.join(' '),
       role: userForm.value.role,
+      branch: userForm.value.branch ?? null,
       is_superuser: userForm.value.role === 'superuser',
       is_staff: userForm.value.role === 'admin' || userForm.value.role === 'superuser',
     }
@@ -881,6 +897,7 @@ onMounted(async () => {
     await authStore.fetchCurrentUser()
   }
   fetchUsers()
+  if (branchStore.branches.length === 0) branchStore.fetchBranches()
 
   // Light dismiss fallback
   const dialogs = [userModal.value, deleteModal.value]

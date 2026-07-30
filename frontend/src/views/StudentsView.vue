@@ -14,8 +14,9 @@
           <select v-model="filterStatus" class="filter-select">
             <option value="">Barchasi</option>
             <option value="Yangi">Yangi</option>
-            <option value="Qabul qilingan">Qabul qilingan</option>
+            <option value="Faol">Faol</option>
             <option value="Tugatgan">Tugatgan</option>
+            <option value="Bekor qilingan">Bekor qilingan</option>
           </select>
           <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
             <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -100,8 +101,8 @@
             </td>
             <td class="td-cat">{{ s.category }}</td>
             <td class="td-muted td-phone">
-              <div>{{ s.phone }}</div>
-              <div v-if="s.phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">
+              <div class="td-phone-main">{{ s.phone }}</div>
+              <div v-if="s.phone2" class="td-phone-sub">
                 Qo'shimcha: {{ s.phone2 }}
               </div>
             </td>
@@ -119,7 +120,7 @@
               <div class="td-notes" :title="s.notes">{{ s.notes || '-' }}</div>
             </td>
             <td>
-              <button class="btn-edit" @click.stop="openEditModal(s)" title="Tahrirlash">
+              <button v-if="authStore.isAdminOrSuperuser" class="btn-edit" @click.stop="openEditModal(s)" title="Tahrirlash">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align: middle;">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                   <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -298,18 +299,13 @@
           </div>
 
           <!-- Row 4: Learning Days, Instructor, Coordinator -->
-          <div class="form-group">
-            <label for="std-days" class="form-label">O'quv Kunlari (ixtiyoriy)</label>
-            <div class="select-wrap">
-              <select id="std-days" v-model="newStudent.learning_days" class="form-input select-input">
-                <option value="">-- Kunlarni tanlang --</option>
-                <option value="Mo-Wed-Fri">Dush - Chor - Jum (Mo-Wed-Fri)</option>
-                <option value="Tue-Thu-Sat">Sesh - Pay - Shan (Tue-Thu-Sat)</option>
-                <option value="everyday">Har kuni (Everyday)</option>
-              </select>
-              <svg class="select-arrow-modal" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-              </svg>
+          <div class="form-group fg-full">
+            <label class="form-label">O'quv Kunlari (ixtiyoriy)</label>
+            <div class="weekday-picker">
+              <label v-for="d in weekdayOptions" :key="d.value" class="weekday-chip" :class="{ active: newStudent.learning_days.includes(d.value) }">
+                <input type="checkbox" :value="d.value" v-model="newStudent.learning_days" style="display: none;" />
+                {{ d.label }}
+              </label>
             </div>
           </div>
 
@@ -320,7 +316,7 @@
               <div 
                 class="search-select-trigger" 
                 :class="{ 'is-open': isInstructorOpen, 'has-selected': selectedInstructor }"
-                @click="isInstructorOpen = !isInstructorOpen; isCoordinatorOpen = false"
+                @click="isInstructorOpen = !isInstructorOpen; isCoordinatorOpen = false; isAgentOpen = false"
               >
                 <template v-if="selectedInstructor">
                   <div class="selected-user-card">
@@ -340,7 +336,7 @@
                       <circle cx="11" cy="11" r="8"></circle>
                       <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                    <span>Instruktorni tanlash...</span>
+                    <span>Instruktorni tanlash uchun bosing...</span>
                   </div>
                   <svg class="select-arrow-icon" :class="{ 'rotate': isInstructorOpen }" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                     <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -356,10 +352,12 @@
                     v-model="instructorSearch"
                     placeholder="Ism yoki telefon raqami..."
                     class="dropdown-search-field"
+                    autofocus
+                    @keydown="onInstructorKeydown"
                   />
                 </div>
                 <div class="dropdown-options-container">
-                  <div 
+                  <div
                     class="dropdown-option-row option-clear"
                     :class="{ 'is-active': !newStudent.instructor }"
                     @click="selectInstructor(null)"
@@ -367,10 +365,10 @@
                     <span>&lt; Tanlanmagan &gt;</span>
                   </div>
                   <div
-                    v-for="inst in filteredInstructors"
+                    v-for="(inst, idx) in filteredInstructors"
                     :key="inst.id"
                     class="dropdown-option-row"
-                    :class="{ 'is-active': newStudent.instructor === inst.id }"
+                    :class="{ 'is-active': newStudent.instructor === inst.id, 'is-highlighted': instructorKb.highlightedIndex.value === idx }"
                     @click="selectInstructor(inst.id)"
                   >
                     <div class="opt-avatar avatar-inst">
@@ -417,7 +415,7 @@
                       <circle cx="11" cy="11" r="8"></circle>
                       <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                    <span>O'qituvchini tanlash...</span>
+                    <span>O'qituvchini tanlash uchun bosing...</span>
                   </div>
                   <svg class="select-arrow-icon" :class="{ 'rotate': isCoordinatorOpen }" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                     <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -433,10 +431,12 @@
                     v-model="coordinatorSearch"
                     placeholder="Ism yoki telefon raqami..."
                     class="dropdown-search-field"
+                    autofocus
+                    @keydown="onCoordinatorKeydown"
                   />
                 </div>
                 <div class="dropdown-options-container">
-                  <div 
+                  <div
                     class="dropdown-option-row option-clear"
                     :class="{ 'is-active': !newStudent.coordinator }"
                     @click="selectCoordinator(null)"
@@ -444,10 +444,10 @@
                     <span>&lt; Tanlanmagan &gt;</span>
                   </div>
                   <div
-                    v-for="coord in filteredCoordinators"
+                    v-for="(coord, idx) in filteredCoordinators"
                     :key="coord.id"
                     class="dropdown-option-row"
-                    :class="{ 'is-active': newStudent.coordinator === coord.id }"
+                    :class="{ 'is-active': newStudent.coordinator === coord.id, 'is-highlighted': coordinatorKb.highlightedIndex.value === idx }"
                     @click="selectCoordinator(coord.id)"
                   >
                     <div class="opt-avatar avatar-coord">
@@ -494,7 +494,7 @@
                       <circle cx="11" cy="11" r="8"></circle>
                       <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                    <span>{{ agentSearch ? agentSearch : "Agentni tanlash..." }}</span>
+                    <span>Agentni tanlash...</span>
                   </div>
                   <svg class="select-arrow-icon" :class="{ 'rotate': isAgentOpen }" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                     <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -510,10 +510,12 @@
                     v-model="agentSearch"
                     placeholder="Agent ismi yoki telefon..."
                     class="dropdown-search-field"
+                    autofocus
+                    @keydown="onAgentKeydown"
                   />
                 </div>
                 <div class="dropdown-options-container">
-                  <div 
+                  <div
                     class="dropdown-option-row option-clear"
                     :class="{ 'is-active': !newStudent.agent }"
                     @click="selectAgent(null)"
@@ -521,10 +523,10 @@
                     <span>&lt; Tanlanmagan &gt;</span>
                   </div>
                   <div
-                    v-for="ag in filteredAgents"
+                    v-for="(ag, idx) in filteredAgents"
                     :key="ag.id"
                     class="dropdown-option-row"
-                    :class="{ 'is-active': newStudent.agent === ag.id }"
+                    :class="{ 'is-active': newStudent.agent === ag.id, 'is-highlighted': agentKb.highlightedIndex.value === idx }"
                     @click="selectAgent(ag.id)"
                   >
                     <div class="opt-avatar avatar-agent">
@@ -561,10 +563,10 @@
             <label for="std-payment-method" class="form-label">To'lov turi</label>
             <div class="select-wrap">
               <select id="std-payment-method" v-model="newStudent.payment_method" required class="form-input select-input">
-                <option value="cash">💵 Naqd pul</option>
-                <option value="card">💳 Plastik karta</option>
-                <option value="qr_code">📱 QR-kod orqali</option>
-                <option value="transfer">🏦 Bank o'tkazmasi</option>
+                <option value="cash">Naqd</option>
+                <option value="card">Karta</option>
+                <option value="qr_code">QR code</option>
+                <option value="transfer">O'tkazma</option>
               </select>
               <svg class="select-arrow-modal" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -746,12 +748,224 @@
             <div class="select-wrap">
               <select id="edit-std-status" v-model="editingStudent.status" required class="filter-select">
                 <option value="new">Yangi</option>
-                <option value="enrolled">Qabul qilingan</option>
+                <option value="enrolled">Faol</option>
                 <option value="finished">Tugatgan</option>
+                <option value="canceled">Bekor qilingan</option>
               </select>
               <span class="select-arrow" style="top: 10px;">▼</span>
             </div>
           </div>
+
+          <div class="form-group">
+            <label for="edit-std-time" class="form-label">O'quv Vaqti (ixtiyoriy)</label>
+            <input
+              id="edit-std-time"
+              v-model="editingStudent.learning_time"
+              type="text"
+              placeholder="Masalan: 09:00"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group fg-full">
+            <label class="form-label">O'quv Kunlari (ixtiyoriy)</label>
+            <div class="weekday-picker">
+              <label v-for="d in weekdayOptions" :key="d.value" class="weekday-chip" :class="{ active: editingStudent.learning_days.includes(d.value) }">
+                <input type="checkbox" :value="d.value" v-model="editingStudent.learning_days" style="display: none;" />
+                {{ d.label }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Instruktor Searchable Select -->
+          <div class="form-group staff-select-group">
+            <label class="form-label">Instruktor</label>
+            <div class="search-select-container">
+              <div
+                class="search-select-trigger"
+                :class="{ 'is-open': isEditInstructorOpen, 'has-selected': selectedEditInstructor }"
+                @click="isEditInstructorOpen = !isEditInstructorOpen; isEditCoordinatorOpen = false; isEditAgentOpen = false"
+              >
+                <template v-if="selectedEditInstructor">
+                  <div class="selected-user-card">
+                    <div class="user-avatar-badge avatar-inst">
+                      {{ selectedEditInstructor.first_name?.[0] || 'I' }}
+                    </div>
+                    <div class="selected-user-details">
+                      <span class="selected-user-name">{{ getUserFullName(selectedEditInstructor) }}</span>
+                      <span class="selected-user-phone">{{ formatPhoneDisplay(selectedEditInstructor.phone) }}</span>
+                    </div>
+                    <button type="button" class="btn-remove-selection" @click.stop="selectEditInstructor(null)" title="Tozalash">✕</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="select-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>Instruktorni tanlash uchun bosing...</span>
+                  </div>
+                  <svg class="select-arrow-icon" :class="{ 'rotate': isEditInstructorOpen }" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                  </svg>
+                </template>
+              </div>
+
+              <div v-if="isEditInstructorOpen" class="search-select-dropdown" @click.stop>
+                <div class="dropdown-search-wrap">
+                  <input type="text" v-model="editInstructorSearch" placeholder="Ism yoki telefon raqami..." class="dropdown-search-field" autofocus @keydown="onEditInstructorKeydown" />
+                </div>
+                <div class="dropdown-options-container">
+                  <div class="dropdown-option-row option-clear" :class="{ 'is-active': !editingStudent.instructor }" @click="selectEditInstructor(null)">
+                    <span>&lt; Tanlanmagan &gt;</span>
+                  </div>
+                  <div
+                    v-for="(inst, idx) in filteredEditInstructors"
+                    :key="inst.id"
+                    class="dropdown-option-row"
+                    :class="{ 'is-active': editingStudent.instructor === inst.id, 'is-highlighted': editInstructorKb.highlightedIndex.value === idx }"
+                    @click="selectEditInstructor(inst.id)"
+                  >
+                    <div class="opt-avatar avatar-inst">{{ inst.first_name?.[0] || 'I' }}</div>
+                    <div class="opt-info">
+                      <span class="opt-name">{{ getUserFullName(inst) }}</span>
+                      <span class="opt-phone">{{ formatPhoneDisplay(inst.phone) }}</span>
+                    </div>
+                    <span v-if="editingStudent.instructor === inst.id" class="opt-check">✓</span>
+                  </div>
+                  <div v-if="filteredEditInstructors.length === 0" class="dropdown-empty">Instruktor topilmadi</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- O'qituvchi Searchable Select -->
+          <div class="form-group staff-select-group">
+            <label class="form-label">O'qituvchi</label>
+            <div class="search-select-container">
+              <div
+                class="search-select-trigger"
+                :class="{ 'is-open': isEditCoordinatorOpen, 'has-selected': selectedEditCoordinator }"
+                @click="isEditCoordinatorOpen = !isEditCoordinatorOpen; isEditInstructorOpen = false; isEditAgentOpen = false"
+              >
+                <template v-if="selectedEditCoordinator">
+                  <div class="selected-user-card">
+                    <div class="user-avatar-badge avatar-coord">
+                      {{ selectedEditCoordinator.first_name?.[0] || 'O' }}
+                    </div>
+                    <div class="selected-user-details">
+                      <span class="selected-user-name">{{ getUserFullName(selectedEditCoordinator) }}</span>
+                      <span class="selected-user-phone">{{ formatPhoneDisplay(selectedEditCoordinator.phone) }}</span>
+                    </div>
+                    <button type="button" class="btn-remove-selection" @click.stop="selectEditCoordinator(null)" title="Tozalash">✕</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="select-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>O'qituvchini tanlash uchun bosing...</span>
+                  </div>
+                  <svg class="select-arrow-icon" :class="{ 'rotate': isEditCoordinatorOpen }" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                  </svg>
+                </template>
+              </div>
+
+              <div v-if="isEditCoordinatorOpen" class="search-select-dropdown" @click.stop>
+                <div class="dropdown-search-wrap">
+                  <input type="text" v-model="editCoordinatorSearch" placeholder="Ism yoki telefon raqami..." class="dropdown-search-field" autofocus @keydown="onEditCoordinatorKeydown" />
+                </div>
+                <div class="dropdown-options-container">
+                  <div class="dropdown-option-row option-clear" :class="{ 'is-active': !editingStudent.coordinator }" @click="selectEditCoordinator(null)">
+                    <span>&lt; Tanlanmagan &gt;</span>
+                  </div>
+                  <div
+                    v-for="(coord, idx) in filteredEditCoordinators"
+                    :key="coord.id"
+                    class="dropdown-option-row"
+                    :class="{ 'is-active': editingStudent.coordinator === coord.id, 'is-highlighted': editCoordinatorKb.highlightedIndex.value === idx }"
+                    @click="selectEditCoordinator(coord.id)"
+                  >
+                    <div class="opt-avatar avatar-coord">{{ coord.first_name?.[0] || 'O' }}</div>
+                    <div class="opt-info">
+                      <span class="opt-name">{{ getUserFullName(coord) }}</span>
+                      <span class="opt-phone">{{ formatPhoneDisplay(coord.phone) }}</span>
+                    </div>
+                    <span v-if="editingStudent.coordinator === coord.id" class="opt-check">✓</span>
+                  </div>
+                  <div v-if="filteredEditCoordinators.length === 0" class="dropdown-empty">O'qituvchi topilmadi</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Agent Searchable Select -->
+          <div class="form-group staff-select-group">
+            <label class="form-label">Agent</label>
+            <div class="search-select-container">
+              <div
+                class="search-select-trigger"
+                :class="{ 'is-open': isEditAgentOpen, 'has-selected': selectedEditAgent }"
+                @click="isEditAgentOpen = !isEditAgentOpen; isEditInstructorOpen = false; isEditCoordinatorOpen = false"
+              >
+                <template v-if="selectedEditAgent">
+                  <div class="selected-user-card">
+                    <div class="user-avatar-badge avatar-agent">
+                      {{ selectedEditAgent.full_name?.[0] || 'A' }}
+                    </div>
+                    <div class="selected-user-details">
+                      <span class="selected-user-name">{{ selectedEditAgent.full_name }}</span>
+                      <span class="selected-user-phone">{{ formatPhoneDisplay(selectedEditAgent.phone) }}</span>
+                    </div>
+                    <button type="button" class="btn-remove-selection" @click.stop="selectEditAgent(null)" title="Tozalash">✕</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="select-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>Agentni tanlash...</span>
+                  </div>
+                  <svg class="select-arrow-icon" :class="{ 'rotate': isEditAgentOpen }" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                  </svg>
+                </template>
+              </div>
+
+              <div v-if="isEditAgentOpen" class="search-select-dropdown" @click.stop>
+                <div class="dropdown-search-wrap">
+                  <input type="text" v-model="editAgentSearch" placeholder="Agent ismi yoki telefon..." class="dropdown-search-field" autofocus @keydown="onEditAgentKeydown" />
+                </div>
+                <div class="dropdown-options-container">
+                  <div class="dropdown-option-row option-clear" :class="{ 'is-active': !editingStudent.agent }" @click="selectEditAgent(null)">
+                    <span>&lt; Tanlanmagan &gt;</span>
+                  </div>
+                  <div
+                    v-for="(ag, idx) in filteredEditAgents"
+                    :key="ag.id"
+                    class="dropdown-option-row"
+                    :class="{ 'is-active': editingStudent.agent === ag.id, 'is-highlighted': editAgentKb.highlightedIndex.value === idx }"
+                    @click="selectEditAgent(ag.id)"
+                  >
+                    <div class="opt-avatar avatar-agent">{{ ag.full_name?.[0] || 'A' }}</div>
+                    <div class="opt-info">
+                      <span class="opt-name">{{ ag.full_name }}</span>
+                      <span class="opt-phone">{{ formatPhoneDisplay(ag.phone) }}</span>
+                    </div>
+                    <span v-if="editingStudent.agent === ag.id" class="opt-check">✓</span>
+                  </div>
+                  <div v-if="filteredEditAgents.length === 0" class="dropdown-empty">Agent topilmadi</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="form-group" style="grid-column: span 2;">
             <label for="edit-std-notes" class="form-label">Eslatmalar</label>
             <textarea
@@ -779,16 +993,27 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
+import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+
+const weekdayOptions = [
+  { value: 0, label: 'Dush' },
+  { value: 1, label: 'Sesh' },
+  { value: 2, label: 'Chor' },
+  { value: 3, label: 'Pay' },
+  { value: 4, label: 'Juma' },
+  { value: 5, label: 'Shan' },
+]
 
 const authStore = useAuthStore()
 const branchStore = useBranchStore()
 const router = useRouter()
+const route = useRoute()
 
 const goToStudentDetail = (id) => {
   router.push(`/students/${id}`)
@@ -822,6 +1047,7 @@ const newStudent = ref({
   passport_serie: '',
   passport_number: '',
   category: '',
+  learning_days: [],
   min_payment: null,
   enrolled_free: false,
   has_custom_price: false,
@@ -861,7 +1087,12 @@ const editingStudent = ref({
   passport_number: '',
   category: '',
   status: '',
+  instructor: null,
+  coordinator: null,
+  agent: null,
   notes: '',
+  learning_time: '',
+  learning_days: [],
 })
 const editSaving = ref(false)
 const editModalError = ref('')
@@ -898,45 +1129,11 @@ watch(() => editingStudent.value.phone, (newValue) => {
   }
 })
 
-watch(() => editingStudent.value.phone2, (newValue) => {
-  if (!newValue) return
-  const match = newValue.match(/^(\+?[\d\s-]+)(.*)$/)
-  if (!match) return
-  const phonePart = match[1]
-  const textPart = match[2] || ''
+// phone2 is intentionally free-form (e.g. "+998 90 900 90 90 uncle") — no
+// auto-reformatting here, unlike the primary `phone` field, since it also
+// doubles as a relative/relation label field.
 
-  let digits = phonePart.replace(/\D/g, '')
-
-  if (digits.length > 0 && !digits.startsWith('998')) {
-    digits = '998' + digits
-  }
-
-  digits = digits.substring(0, 12)
-
-  let formatted = ''
-  if (digits.length > 0) {
-    formatted += '+' + digits.substring(0, 3)
-  }
-  if (digits.length > 3) {
-    formatted += ' ' + digits.substring(3, 5)
-  }
-  if (digits.length > 5) {
-    formatted += ' ' + digits.substring(5, 8)
-  }
-  if (digits.length > 8) {
-    formatted += ' ' + digits.substring(8, 10)
-  }
-  if (digits.length > 10) {
-    formatted += ' ' + digits.substring(10, 12)
-  }
-
-  const result = formatted + textPart
-  if (newValue !== result) {
-    editingStudent.value.phone2 = result
-  }
-})
-
-const openEditModal = (student) => {
+const openEditModal = async (student) => {
   selectedEditStudentPhoto.value = null
   selectedEditPassportPhoto.value = null
   editingStudent.value = {
@@ -949,9 +1146,28 @@ const openEditModal = (student) => {
     passport_number: student.passportNumber,
     category: student.categoryId || '',
     status: student.rawStatus,
+    instructor: student.instructor || null,
+    coordinator: student.coordinator || null,
+    agent: student.agent || null,
     notes: student.notes || '',
+    learning_time: student.learning_time || '',
+    learning_days: student.learning_days || [],
   }
   editModalError.value = ''
+
+  // Reset any stray open/search state from a previous use of these selects.
+  isEditInstructorOpen.value = false
+  editInstructorSearch.value = ''
+  isEditCoordinatorOpen.value = false
+  editCoordinatorSearch.value = ''
+  isEditAgentOpen.value = false
+  editAgentSearch.value = ''
+
+  // Belt-and-suspenders: make sure the option lists are populated even if
+  // the initial page-load fetch hasn't resolved yet.
+  if (!staffInstructors.value.length || !staffCoordinators.value.length) fetchStaff()
+  if (!agents.value.length) fetchAgents()
+
   if (editStudentModal.value) {
     editStudentModal.value.showModal()
   }
@@ -997,13 +1213,21 @@ const updateStudent = async () => {
       passport_number: parseInt(s.passport_number, 10),
       category: parseInt(s.category, 10),
       status: s.status,
+      instructor: s.instructor || '',
+      coordinator: s.coordinator || '',
+      agent: s.agent || '',
       notes: s.notes,
+      learning_time: s.learning_time || '',
+      learning_days: s.learning_days || [],
     }
 
     if (selectedEditStudentPhoto.value || selectedEditPassportPhoto.value) {
       const formData = new FormData()
       Object.keys(payload).forEach(key => {
-        if (payload[key] !== null && payload[key] !== undefined) {
+        if (payload[key] === null || payload[key] === undefined) return
+        if (Array.isArray(payload[key])) {
+          payload[key].forEach(v => formData.append(key, v))
+        } else {
           formData.append(key, payload[key])
         }
       })
@@ -1068,31 +1292,9 @@ watch(() => newStudent.value.phone, (newValue) => {
   }
 })
 
-watch(() => newStudent.value.phone2, (newValue) => {
-  if (!newValue) return
-  const match = newValue.match(/^(\+?[\d\s-]+)(.*)$/)
-  if (!match) return
-  const phonePart = match[1]
-  const textPart = match[2] || ''
-
-  let digits = phonePart.replace(/\D/g, '')
-  if (digits.length > 0 && !digits.startsWith('998')) {
-    digits = '998' + digits
-  }
-  digits = digits.substring(0, 12)
-
-  let formatted = ''
-  if (digits.length > 0) formatted += '+' + digits.substring(0, 3)
-  if (digits.length > 3) formatted += ' ' + digits.substring(3, 5)
-  if (digits.length > 5) formatted += ' ' + digits.substring(5, 8)
-  if (digits.length > 8) formatted += ' ' + digits.substring(8, 10)
-  if (digits.length > 10) formatted += ' ' + digits.substring(10, 12)
-
-  const finalVal = formatted + textPart
-  if (newValue !== finalVal) {
-    newStudent.value.phone2 = finalVal
-  }
-})
+// phone2 is intentionally free-form (e.g. "+998 90 900 90 90 uncle") — no
+// auto-reformatting here, unlike the primary `phone` field, since it also
+// doubles as a relative/relation label field.
 
 // Two-way formatting for min_payment
 const formattedMinPayment = computed({
@@ -1197,8 +1399,9 @@ const formatDateDisplay = (dateVal) => {
 const mapStudent = (s) => {
   if (!s) return {}
   let statusText = 'Yangi'
-  if (s.status === 'enrolled') statusText = "Qabul qilingan"
+  if (s.status === 'enrolled') statusText = 'Faol'
   else if (s.status === 'finished') statusText = 'Tugatgan'
+  else if (s.status === 'canceled') statusText = 'Bekor qilingan'
   
   const dateStr = formatDateDisplay(s.date_joined || s.created_at)
   
@@ -1207,6 +1410,12 @@ const mapStudent = (s) => {
     name: s.full_name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Noma\'lum',
     category: s.category || '-',
     categoryId: s.category_id,
+    instructor: s.instructor || null,
+    instructorName: s.instructor_name || '',
+    coordinator: s.coordinator || null,
+    coordinatorName: s.coordinator_name || '',
+    agent: s.agent || null,
+    agentName: s.agent_name || '',
     phone: formatPhoneDisplay(s.phone),
     phone2: s.phone2 ? formatPhoneDisplay(s.phone2) : '',
     jshshr: s.jshshr ? String(s.jshshr) : '-',
@@ -1223,6 +1432,8 @@ const mapStudent = (s) => {
     image: s.image || null,
     pass_img: s.pass_img || null,
     branch_name: s.branch_name || s.branch?.name || null,
+    learning_time: s.learning_time || '',
+    learning_days: s.learning_days || [],
   }
 }
 
@@ -1246,7 +1457,16 @@ onMounted(async () => {
   }
   fetchStudents()
   fetchCategories()
-  
+  // Fetched here (not just when the "add student" modal opens) so the edit
+  // modal's instructor/coordinator/agent selects always have options, even
+  // if the user opens "edit" without ever opening "add" first.
+  fetchStaff()
+  fetchAgents()
+
+  if (route.query.action === 'create') {
+    openModal()
+  }
+
   // Light dismiss fallback
   if (studentModal.value && !('closedBy' in HTMLDialogElement.prototype)) {
     studentModal.value.addEventListener('click', (event) => {
@@ -1263,15 +1483,33 @@ onMounted(async () => {
       }
     })
   }
+
+  document.addEventListener('click', handleSearchSelectOutsideClick)
 })
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleSearchSelectOutsideClick)
+})
+
+// Any click landing outside all instructor/coordinator/agent searchable
+// selects (in either the add or edit student modal) closes whichever is open.
+function handleSearchSelectOutsideClick(event) {
+  if (event.target.closest('.search-select-container')) return
+  isInstructorOpen.value = false
+  isCoordinatorOpen.value = false
+  isAgentOpen.value = false
+  isEditInstructorOpen.value = false
+  isEditCoordinatorOpen.value = false
+  isEditAgentOpen.value = false
+}
 
 
 
 // ── Status badge class ───────────────────────────────────────
 function statusClass(status) {
   if (status === 'Yangi') return 'badge-new'
-  if (status === "Qabul qilingan" || status === "Ro'yxatdan o'tgan") return 'badge-registered'
-  if (status === 'Tugatgan') return 'badge-done'
+  if (status === 'Faol' || status === "Qabul qilingan" || status === "Ro'yxatdan o'tgan") return 'badge-registered'
+  if (status === 'Tugatgan' || status === 'Bekor qilingan') return 'badge-done'
   return ''
 }
 
@@ -1303,6 +1541,8 @@ const selectInstructor = (id) => {
   isInstructorOpen.value = false
   instructorSearch.value = ''
 }
+const instructorKb = useSearchSelectKeyboard()
+const onInstructorKeydown = (e) => instructorKb.onKeydown(e, filteredInstructors.value, (inst) => selectInstructor(inst.id), () => { isInstructorOpen.value = false })
 
 const selectedCoordinator = computed(() => {
   if (!newStudent.value.coordinator) return null
@@ -1323,6 +1563,8 @@ const selectCoordinator = (id) => {
   isCoordinatorOpen.value = false
   coordinatorSearch.value = ''
 }
+const coordinatorKb = useSearchSelectKeyboard()
+const onCoordinatorKeydown = (e) => coordinatorKb.onKeydown(e, filteredCoordinators.value, (c) => selectCoordinator(c.id), () => { isCoordinatorOpen.value = false })
 
 const fetchStaff = async () => {
   try {
@@ -1339,7 +1581,7 @@ const learningPlaces = ref([])
 
 const fetchLearningPlaces = async () => {
   try {
-    const res = await api.get('/learning-places/')
+    const res = await api.get('/learning-places/', { params: { page_size: 1000 } })
     learningPlaces.value = Array.isArray(res.data) ? res.data : (res.data.results || [])
   } catch (err) {
     console.error('Failed to fetch learning places:', err)
@@ -1369,15 +1611,97 @@ const selectAgent = (id) => {
   isAgentOpen.value = false
   agentSearch.value = ''
 }
+const agentKb = useSearchSelectKeyboard()
+const onAgentKeydown = (e) => agentKb.onKeydown(e, filteredAgents.value, (a) => selectAgent(a.id), () => { isAgentOpen.value = false })
 
 const fetchAgents = async () => {
   try {
-    const res = await api.get('/agents/')
+    const res = await api.get('/agents/', { params: { page_size: 1000 } })
     agents.value = Array.isArray(res.data) ? res.data : (res.data.results || [])
   } catch (err) {
     console.error('Failed to fetch agents:', err)
   }
 }
+
+// THE ROOT CAUSE of "instructor/coordinator select not opening": this helper
+// was called throughout the file (filteredInstructors/filteredCoordinators,
+// and the selected-instructor/coordinator display in both modals) but was
+// never actually defined here, unlike CategoryDetailView. Agent never calls
+// it (uses `.full_name` directly), which is why only Agent appeared to work
+// — Instructor/Coordinator threw a ReferenceError during render as soon as
+// the dropdown opened or a selected value needed to be displayed.
+const getUserFullName = (u) => {
+  if (!u) return '-'
+  const full = u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim()
+  return full || u.phone || `Xodim #${u.id}`
+}
+
+// ── Searchable select state for the EDIT modal (separate from the create
+// modal's state above so the two dialogs never fight over the same open/
+// search flags) ──────────────────────────────────────────────
+const isEditInstructorOpen = ref(false)
+const editInstructorSearch = ref('')
+const isEditCoordinatorOpen = ref(false)
+const editCoordinatorSearch = ref('')
+const isEditAgentOpen = ref(false)
+const editAgentSearch = ref('')
+
+const selectedEditInstructor = computed(() => {
+  if (!editingStudent.value.instructor) return null
+  return staffInstructors.value.find(u => u.id === editingStudent.value.instructor) || null
+})
+
+const filteredEditInstructors = computed(() => {
+  const q = editInstructorSearch.value.toLowerCase().trim()
+  if (!q) return staffInstructors.value
+  return staffInstructors.value.filter(u => getUserFullName(u).toLowerCase().includes(q))
+})
+
+const selectEditInstructor = (id) => {
+  editingStudent.value.instructor = id
+  isEditInstructorOpen.value = false
+  editInstructorSearch.value = ''
+}
+const editInstructorKb = useSearchSelectKeyboard()
+const onEditInstructorKeydown = (e) => editInstructorKb.onKeydown(e, filteredEditInstructors.value, (inst) => selectEditInstructor(inst.id), () => { isEditInstructorOpen.value = false })
+
+const selectedEditCoordinator = computed(() => {
+  if (!editingStudent.value.coordinator) return null
+  return staffCoordinators.value.find(u => u.id === editingStudent.value.coordinator) || null
+})
+
+const filteredEditCoordinators = computed(() => {
+  const q = editCoordinatorSearch.value.toLowerCase().trim()
+  if (!q) return staffCoordinators.value
+  return staffCoordinators.value.filter(u => getUserFullName(u).toLowerCase().includes(q))
+})
+
+const selectEditCoordinator = (id) => {
+  editingStudent.value.coordinator = id
+  isEditCoordinatorOpen.value = false
+  editCoordinatorSearch.value = ''
+}
+const editCoordinatorKb = useSearchSelectKeyboard()
+const onEditCoordinatorKeydown = (e) => editCoordinatorKb.onKeydown(e, filteredEditCoordinators.value, (c) => selectEditCoordinator(c.id), () => { isEditCoordinatorOpen.value = false })
+
+const selectedEditAgent = computed(() => {
+  if (!editingStudent.value.agent) return null
+  return agents.value.find(a => a.id === editingStudent.value.agent) || null
+})
+
+const filteredEditAgents = computed(() => {
+  const q = editAgentSearch.value.toLowerCase().trim()
+  if (!q) return agents.value
+  return agents.value.filter(a => (a.full_name || '').toLowerCase().includes(q))
+})
+
+const selectEditAgent = (id) => {
+  editingStudent.value.agent = id
+  isEditAgentOpen.value = false
+  editAgentSearch.value = ''
+}
+const editAgentKb = useSearchSelectKeyboard()
+const onEditAgentKeydown = (e) => editAgentKb.onKeydown(e, filteredEditAgents.value, (a) => selectEditAgent(a.id), () => { isEditAgentOpen.value = false })
 
 // ── Modal Actions ────────────────────────────────────────────
 const openModal = async () => {
@@ -1401,7 +1725,7 @@ const openModal = async () => {
     agent: null,
     learning_place: null,
     learning_time: '',
-    learning_days: '',
+    learning_days: [],
     min_payment: null,
     payment_method: 'cash',
     enrolled_free: false,
@@ -1472,7 +1796,7 @@ const saveStudent = async () => {
       agent: s.agent || null,
       learning_place: s.learning_place || null,
       learning_time: s.learning_time ? s.learning_time.trim() : null,
-      learning_days: s.learning_days || null,
+      learning_days: s.learning_days || [],
       min_payment: parseInt(s.min_payment, 10),
       payment_method: s.payment_method || 'cash',
       enrolled_free: s.enrolled_free || false,
@@ -1484,7 +1808,10 @@ const saveStudent = async () => {
     if (selectedStudentPhoto.value || selectedPassportPhoto.value) {
       const formData = new FormData()
       Object.keys(payload).forEach(key => {
-        if (payload[key] !== null && payload[key] !== undefined) {
+        if (payload[key] === null || payload[key] === undefined) return
+        if (Array.isArray(payload[key])) {
+          payload[key].forEach(v => formData.append(key, v))
+        } else {
           formData.append(key, payload[key])
         }
       })
@@ -1764,7 +2091,7 @@ const saveStudent = async () => {
 }
 
 .badge-done {
-  background: #1B2430;
+  background: #DC2626;
   color: white;
 }
 
@@ -1773,6 +2100,22 @@ const saveStudent = async () => {
   color: #2E7D32;
   border: 1.5px solid #A5D6A7;
 }
+
+.weekday-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.weekday-chip {
+  padding: 8px 12px;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.weekday-chip:hover { border-color: #9CA3AF; }
+.weekday-chip.active { background: #2D6A4F; border-color: #2D6A4F; color: white; }
 
 /* Searchable Select Styles */
 .search-select-container {
@@ -1969,6 +2312,10 @@ const saveStudent = async () => {
 
 .dropdown-option-row.is-active {
   background: #ECFDF5;
+}
+
+.dropdown-option-row.is-highlighted {
+  background: #F3F4F6;
 }
 
 .option-clear {
@@ -2260,7 +2607,22 @@ const saveStudent = async () => {
   width: 175px !important;
   min-width: 175px !important;
   max-width: 175px !important;
-  white-space: nowrap !important;
+  white-space: normal !important;
+}
+
+.td-phone-main {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.td-phone-sub {
+  font-size: 11.5px;
+  color: #6B7280;
+  margin-top: 2px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */

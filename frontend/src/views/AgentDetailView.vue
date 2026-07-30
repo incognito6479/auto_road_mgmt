@@ -120,8 +120,65 @@
           </div>
           <div>
             <span class="metric-label">Jami Berilgan Bonuslar Summasi</span>
-            <h4 class="metric-value font-bold text-amber">{{ formatMoney(totalBonusSum) }} so'm</h4>
+            <h4 class="metric-value font-bold text-amber">{{ formatMoney(totalBonusSum) }}</h4>
           </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </div>
+          <div>
+            <span class="metric-label">O'quvchilar To'lagan Jami Summa</span>
+            <h4 class="metric-value font-bold" style="color: #2D6A4F;">{{ formatMoney(totalStudentsPaid) }}</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters Toolbar -->
+      <div class="filters-toolbar">
+        <div class="filter-item">
+          <label class="flabel-inline">Holati (to'lov):</label>
+          <div class="select-wrap-relative">
+            <select v-model="filterStatus" class="fselect-field">
+              <option value="">Barchasi</option>
+              <option value="paid">Bonus to'langan</option>
+              <option value="pending">Bonus kutilmoqda</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filter-item">
+          <label class="flabel-inline">Kategoriya:</label>
+          <div class="select-wrap-relative">
+            <select v-model="filterCategory" class="fselect-field">
+              <option value="">Barchasi</option>
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filter-item">
+          <label class="flabel-inline">Saralash (to'lov):</label>
+          <div class="select-wrap-relative">
+            <select v-model="filterEnrolledAmount" class="fselect-field">
+              <option value="">Barchasi</option>
+              <option v-for="amt in distinctEnrolledAmounts" :key="amt" :value="amt">{{ formatMoney(amt) }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filter-item">
+          <label class="flabel-inline">Bonus sanasi (dan):</label>
+          <input v-model="filterDateFrom" type="date" class="fselect-field" />
+        </div>
+
+        <div class="filter-item">
+          <label class="flabel-inline">Bonus sanasi (gacha):</label>
+          <input v-model="filterDateTo" type="date" class="fselect-field" />
         </div>
       </div>
 
@@ -129,7 +186,7 @@
       <div class="section-container">
         <div class="section-title-wrap">
           <h3 class="section-title">👥 Jalb Qilingan O'quvchilar va Bonus To'lovlari</h3>
-          <span class="section-badge">{{ enrollmentsWithBonus.length }} ta qabul</span>
+          <span class="section-badge">{{ filteredEnrollmentsWithBonus.length }} ta qabul</span>
         </div>
 
         <div v-if="loadingEnrollments" class="state-container">
@@ -137,7 +194,7 @@
           <p class="state-text">O'quvchilar ro'yxati va bonus to'lovlari yuklanmoqda...</p>
         </div>
 
-        <div v-else-if="enrollmentsWithBonus.length === 0" class="empty-state">
+        <div v-else-if="filteredEnrollmentsWithBonus.length === 0" class="empty-state">
           <div class="empty-icon-wrap">
             <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" width="36" height="36">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -157,12 +214,12 @@
                   <th>Telefon & JSHSHR</th>
                   <th>Kategoriya & Guruh</th>
                   <th>Shartnoma Summasi</th>
-                  <th>Qabul Sanasi</th>
+                  <th>To'langan Summa</th>
                   <th style="min-width: 240px;">Bonus Holati & To'lov</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in enrollmentsWithBonus" :key="item.id" class="table-row">
+                <tr v-for="item in filteredEnrollmentsWithBonus" :key="item.id" class="table-row">
                   <td class="td-name">
                     <router-link :to="`/students/${item.student}`" class="student-link">
                       {{ item.student_name || 'Noma\'lum' }}
@@ -180,9 +237,11 @@
                   </td>
                   <td class="td-amount">
                     <span v-if="item.enrolled_free" class="grant-pill">Bepul (Grant)</span>
-                    <span v-else class="amount-val">{{ formatMoney(item.enrolled_amount) }} so'm</span>
+                    <span v-else class="amount-val">{{ formatMoney(item.enrolled_amount) }}</span>
                   </td>
-                  <td class="td-date">{{ formatDate(item.created_at) }}</td>
+                  <td class="td-amount">
+                    <span class="amount-val" style="color: #2D6A4F;">{{ formatMoney(item.paid_amount) }}</span>
+                  </td>
 
                   <!-- BONUS PAYMENT STATUS & ACTION -->
                   <td class="td-bonus-action">
@@ -190,7 +249,7 @@
                     <div v-if="item.bonusPayment" class="bonus-paid-box">
                       <div class="bonus-badge-paid">
                         <span class="bonus-icon">🎁</span>
-                        <span class="bonus-amount-text">{{ formatMoney(item.bonusPayment.amount) }} so'm</span>
+                        <span class="bonus-amount-text">{{ formatMoney(item.bonusPayment.amount) }}</span>
                         <span class="bonus-chip-tag">Bonus to'langan</span>
                       </div>
                       <div class="bonus-meta">
@@ -276,20 +335,14 @@
             <div class="form-field-group">
               <label class="field-label required">Bonus Summasi *</label>
               <div class="input-with-addon">
-                <div class="input-icon-left">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2" width="18" height="18">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                  </svg>
-                </div>
-                <input 
-                  v-model="payForm.amountFormatted" 
-                  type="text" 
-                  class="field-input amount-field input-has-icon" 
-                  placeholder="0" 
-                  required 
+                <input
+                  v-model="payForm.amountFormatted"
+                  type="text"
+                  class="field-input amount-field"
+                  placeholder="0"
+                  required
                   @input="onBonusAmountInput"
                 />
-                <span class="input-addon-right">so'm</span>
               </div>
             </div>
 
@@ -304,10 +357,10 @@
                   </svg>
                 </div>
                 <select v-model="payForm.method" class="field-input field-select select-has-icon">
-                  <option value="cash">💵 Naqd pulli to'lov</option>
-                  <option value="card">💳 Plastik karta</option>
-                  <option value="transfer">🏦 Bank o'tkazmasi</option>
-                  <option value="qr_code">📱 QR Code to'lovi</option>
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron">
                   <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
@@ -486,6 +539,27 @@ const totalBonusSum = computed(() => {
   return bonusPayments.value.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
 })
 
+const totalStudentsPaid = computed(() => {
+  return enrollments.value.reduce((acc, e) => acc + (Number(e.paid_amount) || 0), 0)
+})
+
+// Filters toolbar state
+const categories = ref([])
+const filterStatus = ref('')
+const filterCategory = ref('')
+const filterEnrolledAmount = ref('')
+const filterDateFrom = ref('')
+const filterDateTo = ref('')
+
+async function fetchCategories() {
+  try {
+    const res = await api.get('/categories/')
+    categories.value = res.data.results ? res.data.results : res.data
+  } catch (err) {
+    console.error(err)
+  }
+}
+
 const enrollmentsWithBonus = computed(() => {
   return enrollments.value.map(e => {
     // Find matching bonus payment for this enrollment or student
@@ -505,6 +579,41 @@ const bonusPaidCount = computed(() => {
 
 const bonusPendingCount = computed(() => {
   return enrollmentsWithBonus.value.filter(e => e.bonusPayment == null).length
+})
+
+// Deduped, sorted list of contract (enrolled) amounts among this agent's
+// students, for the "Saralash (to'lov)" select — free/no-amount enrollments
+// don't get an entry since there's nothing to filter by.
+const distinctEnrolledAmounts = computed(() => {
+  const amounts = new Set()
+  enrollments.value.forEach(e => {
+    if (!e.enrolled_free && e.enrolled_amount) amounts.add(Number(e.enrolled_amount))
+  })
+  return [...amounts].sort((a, b) => a - b)
+})
+
+const filteredEnrollmentsWithBonus = computed(() => {
+  let list = enrollmentsWithBonus.value
+
+  if (filterStatus.value === 'paid') {
+    list = list.filter(e => e.bonusPayment != null)
+  } else if (filterStatus.value === 'pending') {
+    list = list.filter(e => e.bonusPayment == null)
+  }
+  if (filterCategory.value) {
+    list = list.filter(e => String(e.category) === String(filterCategory.value))
+  }
+  if (filterEnrolledAmount.value) {
+    list = list.filter(e => Number(e.enrolled_amount) === Number(filterEnrolledAmount.value))
+  }
+  if (filterDateFrom.value) {
+    list = list.filter(e => e.bonusPayment?.created_at && e.bonusPayment.created_at.slice(0, 10) >= filterDateFrom.value)
+  }
+  if (filterDateTo.value) {
+    list = list.filter(e => e.bonusPayment?.created_at && e.bonusPayment.created_at.slice(0, 10) <= filterDateTo.value)
+  }
+
+  return list
 })
 
 function goBack() {
@@ -544,10 +653,10 @@ async function fetchAgentEnrollmentsAndPayments() {
 
 function methodText(m) {
   switch (m) {
-    case 'cash': return 'Naqd pulli'
-    case 'card': return 'Karta orqali'
-    case 'qr_code': return 'QR Code'
-    case 'transfer': return 'Bank o\'tkazmasi'
+    case 'cash': return 'Naqd'
+    case 'card': return 'Karta'
+    case 'qr_code': return 'QR code'
+    case 'transfer': return "O'tkazma"
     default: return m
   }
 }
@@ -563,7 +672,7 @@ function onBonusAmountInput(e) {
   }
   const num = parseInt(digits, 10)
   payForm.value.amount = num
-  payForm.value.amountFormatted = formatMoney(num)
+  payForm.value.amountFormatted = formatMoney(num, false)
 }
 
 // Open Pay Bonus Modal for specific student enrollment
@@ -594,6 +703,7 @@ async function submitBonusPayment() {
   payModalError.value = null
   try {
     await api.post('/payments/', {
+      user: authStore.user?.id,
       enrollment: selectedEnrollment.value.id,
       agent: agent.value.id,
       amount: payForm.value.amount,
@@ -651,6 +761,7 @@ onMounted(async () => {
     await authStore.fetchCurrentUser()
   }
   fetchAll()
+  fetchCategories()
 })
 </script>
 
@@ -874,6 +985,22 @@ onMounted(async () => {
   &.warning-text { color: #EA580C; }
   &.text-amber { color: #B45309; }
 }
+
+/* Filters Toolbar */
+.filters-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  padding: 14px 18px;
+}
+.filter-item { display: flex; align-items: center; gap: 8px; }
+.flabel-inline { font-size: 13px; font-weight: 600; color: #4B5563; }
+.select-wrap-relative { position: relative; display: inline-block; }
+.fselect-field { appearance: none; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 9px 14px; font-size: 13px; font-weight: 600; color: #374151; outline: none; cursor: pointer; }
 
 /* Table Section */
 .section-container {
@@ -1308,7 +1435,6 @@ onMounted(async () => {
     font-size: 17px;
     font-weight: 800;
     color: #B45309;
-    padding-right: 50px !important;
   }
 }
 

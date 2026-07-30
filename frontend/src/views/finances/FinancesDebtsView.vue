@@ -65,6 +65,19 @@
               <div class="select-chevron-icon">▼</div>
             </div>
           </div>
+
+          <div class="filter-item">
+            <label class="flabel">Guruh:</label>
+            <div class="select-wrap-relative">
+              <select v-model="filterGroup" class="fselect-field">
+                <option value="">Barcha guruhlar</option>
+                <option v-for="g in groupOptions" :key="g" :value="g">
+                  {{ g }}
+                </option>
+              </select>
+              <div class="select-chevron-icon">▼</div>
+            </div>
+          </div>
         </div>
 
         <div class="total-count">
@@ -165,13 +178,14 @@
                   class="finput search-input-field"
                   placeholder="Ism bo'yicha qidiring..."
                   @focus="showStudentDropdown = true"
+                  @keydown="onStudentKeydown"
                 />
                 <div v-if="showStudentDropdown" class="dropdown-options-list">
                   <div
-                    v-for="e in filteredModalDebtEnrollments"
+                    v-for="(e, idx) in filteredModalDebtEnrollments"
                     :key="e.id"
                     class="dropdown-option-item"
-                    :class="{ selected: selectedEnrollmentId === e.id }"
+                    :class="{ selected: selectedEnrollmentId === e.id, highlighted: studentKb.highlightedIndex.value === idx }"
                     @click="selectDebtEnrollment(e)"
                   >
                     <div class="opt-name">{{ e.student_name }}</div>
@@ -220,10 +234,10 @@
               <label class="flabel required">To'lov Usuli *</label>
               <div class="select-wrap-relative">
                 <select v-model="payForm.method" class="fselect-field">
-                  <option value="cash">💵 Naqd</option>
-                  <option value="card">💳 Plastik karta</option>
-                  <option value="transfer">🏦 Bank o'tkazmasi</option>
-                  <option value="qr_code">📱 QR Code</option>
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
               </div>
@@ -257,6 +271,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatPhone } from '@/utils/formatters'
+import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -268,6 +283,7 @@ const loading = ref(true)
 
 const filterSearchQuery = ref('')
 const filterCategory = ref('')
+const filterGroup = ref('')
 
 const showPayModal = ref(false)
 const isGeneralModal = ref(false)
@@ -303,6 +319,11 @@ const filteredModalDebtEnrollments = computed(() => {
   return debtEnrollments.value.filter(e => (e.student_name || '').toLowerCase().includes(q))
 })
 
+const groupOptions = computed(() => {
+  const names = debtEnrollments.value.map(e => e.group_name).filter(Boolean)
+  return [...new Set(names)].sort()
+})
+
 const filteredDebtEnrollments = computed(() => {
   return debtEnrollments.value.filter(e => {
     const q = filterSearchQuery.value.toLowerCase().trim()
@@ -322,7 +343,9 @@ const filteredDebtEnrollments = computed(() => {
       (e.category_name && e.category_name.toLowerCase() === catVal.toString().toLowerCase()) ||
       (catName && e.category_name && e.category_name.toLowerCase() === catName)
 
-    return matchSearch && matchCategory
+    const matchGroup = !filterGroup.value || e.group_name === filterGroup.value
+
+    return matchSearch && matchCategory && matchGroup
   })
 })
 
@@ -345,7 +368,7 @@ async function fetchCategories() {
 function statusText(st) {
   switch (st) {
     case 'new': return 'Yangi'
-    case 'enrolled': return 'Qabul qilingan'
+    case 'enrolled': return 'Faol'
     case 'finished': return 'Tugatgan'
     case 'canceled': return 'Bekor qilingan'
     default: return st
@@ -392,6 +415,10 @@ function selectDebtEnrollment(e) {
   const debtAmt = getDebt(e)
   payForm.value.amount = debtAmt
   payForm.value.amountFormatted = formatMoney(debtAmt, false)
+}
+const studentKb = useSearchSelectKeyboard()
+function onStudentKeydown(e) {
+  studentKb.onKeydown(e, filteredModalDebtEnrollments.value, selectDebtEnrollment, () => { showStudentDropdown.value = false })
 }
 
 function closePayModal() {
@@ -533,7 +560,7 @@ onMounted(() => {
 
 .searchable-select-wrap { position: relative; width: 100%; }
 .dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #2D6A4F; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
-.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #F0FDF4; } &.selected { background: #E8F5E9; font-weight: 700; } }
+.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #F0FDF4; } &.selected { background: #E8F5E9; font-weight: 700; } &.highlighted { background: #F0FDF4; } }
 .opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }
 .opt-sub { font-size: 11.5px; color: #6B7280; margin-top: 1px; }
 .dropdown-empty { padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px; }

@@ -57,9 +57,6 @@
             <tr>
               <th style="width: 50px;">#</th>
               <th>Agent F.I.SH.</th>
-              <th>Telefon raqami</th>
-              <th>Qo'shimcha telefon</th>
-              <th>Yaratilgan sana</th>
               <th v-if="authStore.isAdminOrSuperuser" style="width: 100px; text-align: right;">Amallar</th>
             </tr>
           </thead>
@@ -77,9 +74,6 @@
                   </div>
                 </div>
               </td>
-              <td class="td-phone">{{ formatPhoneDisplay(agent.phone) }}</td>
-              <td class="td-phone">{{ formatPhoneDisplay(agent.phone2) || '-' }}</td>
-              <td class="td-muted">{{ formatDate(agent.created_at) }}</td>
               <td v-if="authStore.isAdminOrSuperuser" style="text-align: right;" @click.stop>
                 <div class="action-btns">
                   <button class="btn-icon btn-edit" @click.stop="openEditModal(agent)" title="Tahrirlash">
@@ -87,7 +81,7 @@
                       <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                     </svg>
                   </button>
-                  <button class="btn-icon btn-delete" @click.stop="confirmDelete(agent)" title="O'chirish">
+                  <button class="btn-icon btn-delete" @click.stop="openDeleteModal(agent)" title="O'chirish">
                     <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
                       <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
                     </svg>
@@ -177,6 +171,16 @@
           </div>
         </form>
       </dialog>
+
+      <ConfirmDeleteModal
+        ref="deleteModal"
+        title="Agentni O'chirish"
+        :deleting="deleting"
+        :error="deleteError"
+        @confirm="performDelete"
+      >
+        Haqiqatan ham <strong>{{ deletingAgent?.full_name }}</strong> agentini o'chirmoqchimisiz?
+      </ConfirmDeleteModal>
     </div>
   </AppLayout>
 </template>
@@ -185,6 +189,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
@@ -344,14 +349,30 @@ const saveAgent = async () => {
   }
 }
 
-const confirmDelete = async (agent) => {
-  if (!confirm(`Haqiqatan ham "${agent.full_name}" agentini o'chirmoqchimisiz?`)) return
+const deleteModal = ref(null)
+const deletingAgent = ref(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+const openDeleteModal = (agent) => {
+  deletingAgent.value = agent
+  deleteError.value = ''
+  deleteModal.value?.show()
+}
+
+const performDelete = async () => {
+  if (!deletingAgent.value) return
+  deleting.value = true
+  deleteError.value = ''
   try {
-    await api.delete(`/agents/${agent.id}/`)
+    await api.delete(`/agents/${deletingAgent.value.id}/`)
+    deleteModal.value?.close()
     fetchAgents(currentPage.value)
   } catch (err) {
     console.error('Failed to delete agent:', err)
-    alert("Agentni o'chirishda xatolik yuz berdi.")
+    deleteError.value = "Agentni o'chirishda xatolik yuz berdi."
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -378,16 +399,6 @@ const handlePhoneInput = (event, key) => {
     return
   }
   form.value[key] = formatPhoneDisplay(val)
-}
-
-const formatDate = (iso) => {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  const day = String(d.getDate()).padStart(2, '0')
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const year = d.getFullYear()
-  return `${day}.${month}.${year}`
 }
 
 onMounted(async () => {
@@ -504,7 +515,8 @@ onMounted(async () => {
   background: white;
   border: 1px solid #E5E7EB;
   border-radius: 14px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 

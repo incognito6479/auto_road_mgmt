@@ -18,7 +18,7 @@
       >
         <span class="tab-icon">📖</span>
         <span>Nazariya (Theory)</span>
-        <span class="tab-badge blue-badge">{{ filteredTheoryTeachers.length }}</span>
+        <span class="tab-badge blue-badge">{{ filteredTheoryEnrollments.length }}</span>
       </button>
 
       <button
@@ -28,7 +28,7 @@
       >
         <span class="tab-icon">🏎️</span>
         <span>Amaliy Haydash (Driving lesson)</span>
-        <span class="tab-badge purple-badge">{{ drivingLessons.length }} ta dars</span>
+        <span class="tab-badge purple-badge">{{ filteredDrivingLessons.length }} ta dars</span>
       </button>
     </div>
 
@@ -43,13 +43,43 @@
           <input
             v-model="theorySearchQuery"
             type="text"
-            placeholder="Nazariya o'qituvchisi ismini kiriting..."
+            placeholder="O'quvchi ismini kiriting..."
             class="search-input"
           />
         </div>
 
+        <div class="filter-controls">
+          <div class="filter-item">
+            <label class="filter-label">O'qituvchi:</label>
+            <div class="select-wrap">
+              <select v-model="theoryTeacherFilter" class="group-filter-select">
+                <option value="">Barchasi</option>
+                <option v-for="t in theoryTeachers" :key="t.id" :value="t.id">{{ t.full_name }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-item">
+            <label class="filter-label">Guruh:</label>
+            <div class="select-wrap">
+              <select v-model="theoryGroupFilter" class="group-filter-select">
+                <option value="">Barchasi</option>
+                <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-item">
+            <label class="filter-label">Kategoriya:</label>
+            <div class="select-wrap">
+              <select v-model="theoryCategoryFilter" class="group-filter-select">
+                <option value="">Barchasi</option>
+                <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div class="total-count">
-          Jami: <strong>{{ filteredTheoryTeachers.length }}</strong> ta nazariya o'qituvchisi
+          Jami: <strong>{{ filteredTheoryEnrollments.length }}</strong> ta o'quvchi
         </div>
       </div>
 
@@ -58,68 +88,51 @@
         <span>Nazariya darslari ma'lumotlari yuklanmoqda...</span>
       </div>
 
-      <div v-else-if="filteredTheoryTeachers.length === 0" class="empty-state">
-        <p>Nazariya o'qituvchilari topilmadi</p>
+      <div v-else-if="filteredTheoryEnrollments.length === 0" class="empty-state">
+        <p>Mos o'quvchilar topilmadi</p>
       </div>
 
-      <div v-else class="teachers-grid">
-        <div v-for="teacher in filteredTheoryTeachers" :key="teacher.id" class="teacher-card">
-          <div class="teacher-card-header" @click="toggleTeacherExpand(teacher.id)">
-            <div class="teacher-info">
-              <div class="teacher-avatar">👨‍🏫</div>
-              <div>
-                <h4 class="teacher-title">{{ teacher.full_name }}</h4>
-                <div class="teacher-sub">
-                  <span>📞 {{ formatPhone(teacher.phone) }}</span>
-                  <span v-if="teacher.passport_serie" style="margin-left: 8px;">({{ teacher.passport_serie }} {{ teacher.passport_number }})</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="header-right font-bold">
-              <span class="students-count-chip blue-chip">
-                {{ getLinkedStudentsCount(teacher.id, 'coordinator') }} ta o'quvchi
-              </span>
-              <span class="chevron-icon" :class="{ rotated: expandedTeachers.has(teacher.id) }">▼</span>
-            </div>
-          </div>
-
-          <!-- Linked Students List -->
-          <div v-if="expandedTeachers.has(teacher.id)" class="students-list-wrap">
-            <div v-if="getLinkedStudents(teacher.id, 'coordinator').length === 0" class="no-students">
-              Ushbu o'qituvchiga hozirda o'quvchilar biriktirilmagan
-            </div>
-
-            <table v-else class="students-table">
-              <thead>
-                <tr>
-                  <th>O'quvchi F.I.SH.</th>
-                  <th>Telefon</th>
-                  <th>Kategoriya / Guruh</th>
-                  <th>Dars Vaqti</th>
-                  <th>Dars Kunlari</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="enr in getLinkedStudents(teacher.id, 'coordinator')" :key="enr.id">
-                  <td class="font-bold text-dark">{{ enr.student_name }}</td>
-                  <td>{{ formatPhone(enr.student_phone) }}</td>
-                  <td>
-                    <span class="cat-chip">{{ enr.category_name }}</span>
-                    <span v-if="enr.group_name" class="group-sub">{{ enr.group_name }}</span>
-                  </td>
-                  <td>
-                    <span v-if="enr.learning_time" class="time-chip">⏰ {{ enr.learning_time }}</span>
-                    <span v-else class="text-muted">-</span>
-                  </td>
-                  <td>
-                    <span v-if="enr.learning_days" class="days-chip">{{ formatDays(enr.learning_days) }}</span>
-                    <span v-else class="text-muted">-</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <!-- Theory Roster Table (one row per student, like the driving lesson history table) -->
+      <div v-else class="table-section-card">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="min-width: 180px;">O'quvchi F.I.SH.</th>
+                <th>Telefon</th>
+                <th style="min-width: 180px;">O'qituvchi</th>
+                <th>Kategoriya</th>
+                <th style="min-width: 190px;">Guruh</th>
+                <th>Dars Vaqti</th>
+                <th>Dars Kunlari</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="enr in filteredTheoryEnrollments" :key="enr.id" class="table-row">
+                <td class="font-bold text-dark link-value" @click="goStudent(enr.student)">{{ enr.student_name }}</td>
+                <td>{{ formatPhone(enr.student_phone) }}</td>
+                <td><span class="instructor-badge link-value" @click="goUser(enr.coordinator)">👨‍🏫 {{ enr.coordinator_name }}</span></td>
+                <td><span class="cat-chip">{{ enr.category_name }}</span></td>
+                <td>
+                  <template v-if="enr.group_name">
+                    <span class="group-badge link-value" @click="goGroup(enr.group)">{{ enr.group_name }}</span>
+                    <div v-if="groupsById[enr.group]" class="group-dates">
+                      {{ formatDate(groupsById[enr.group].started_at) }} — {{ formatDate(groupsById[enr.group].ends_at) }}
+                    </div>
+                  </template>
+                  <span v-else class="text-muted">-</span>
+                </td>
+                <td>
+                  <span v-if="enr.learning_time" class="time-chip">⏰ {{ enr.learning_time }}</span>
+                  <span v-else class="text-muted">-</span>
+                </td>
+                <td>
+                  <span v-if="enr.learning_days" class="days-chip">{{ formatLearningDays(enr.learning_days) }}</span>
+                  <span v-else class="text-muted">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -138,6 +151,44 @@
             placeholder="Instruktor, o'quvchi yoki avtomobil nomi bo'yicha..."
             class="search-input"
           />
+        </div>
+
+        <div class="filter-controls">
+          <div class="filter-item">
+            <label class="filter-label">Instruktor:</label>
+            <div class="select-wrap">
+              <select v-model="drivingInstructorFilter" class="group-filter-select">
+                <option value="">Barchasi</option>
+                <option v-for="i in drivingInstructors" :key="i.id" :value="i.id">{{ i.full_name }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-item">
+            <label class="filter-label">Guruh:</label>
+            <div class="select-wrap">
+              <select v-model="drivingGroupFilter" class="group-filter-select">
+                <option value="">Barchasi</option>
+                <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="filter-item">
+            <label class="filter-label">Avtomobil:</label>
+            <div class="select-wrap">
+              <select v-model="drivingCarFilter" class="group-filter-select">
+                <option value="">Barchasi</option>
+                <option v-for="c in cars" :key="c.id" :value="c.id">{{ c.car_name }}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="date-range-box">
+          <label class="date-range-label">Sana:</label>
+          <input v-model="drivingDateFrom" type="date" class="date-range-input" />
+          <span class="date-range-sep">—</span>
+          <input v-model="drivingDateTo" type="date" class="date-range-input" />
+          <button v-if="drivingDateFrom || drivingDateTo" type="button" class="date-range-clear" @click="drivingDateFrom = ''; drivingDateTo = ''" title="Tozalash">✕</button>
         </div>
 
         <div class="total-count">
@@ -165,6 +216,7 @@
                 <th style="min-width: 180px;">O'quvchi F.I.SH.</th>
                 <th style="min-width: 180px;">Instruktor F.I.SH.</th>
                 <th style="min-width: 170px;">Avtomobil</th>
+                <th style="min-width: 190px;">Guruh</th>
                 <th style="width: 120px;">Holati</th>
                 <th>Izoh / Eslatmalari</th>
               </tr>
@@ -172,10 +224,17 @@
             <tbody>
               <tr v-for="lesson in filteredDrivingLessons" :key="lesson.id" class="table-row">
                 <td class="td-id">#{{ lesson.id }}</td>
-                <td class="font-bold">📅 {{ formatDate(lesson.lesson_date) }}</td>
-                <td class="font-bold text-dark">👤 {{ lesson.student_name }}</td>
-                <td><span class="instructor-badge">🏎️ {{ lesson.instructor_name }}</span></td>
-                <td><span class="car-badge font-bold">🚘 {{ lesson.car_name || '-' }}</span></td>
+                <td class="font-bold">📅 {{ formatDateTime(lesson.lesson_date) }}</td>
+                <td class="font-bold text-dark link-value" @click="goStudent(lesson.student)">👤 {{ lesson.student_name }}</td>
+                <td><span class="instructor-badge link-value" @click="goUser(lesson.instructor)">🏎️ {{ lesson.instructor_name }}</span></td>
+                <td><span class="car-badge font-bold link-value" @click="goCar(lesson.car)">🚘 {{ lesson.car_name || '-' }}</span></td>
+                <td>
+                  <template v-if="getStudentGroupInfo(lesson.student)">
+                    <span class="group-badge">{{ getStudentGroupInfo(lesson.student).group_name }}</span>
+                    <div class="group-dates">{{ formatDate(getStudentGroupInfo(lesson.student).started_at) }} — {{ formatDate(getStudentGroupInfo(lesson.student).ends_at) }}</div>
+                  </template>
+                  <span v-else class="text-muted">-</span>
+                </td>
                 <td><span class="status-badge-pill available">✓ Tasdiqlangan</span></td>
                 <td><span class="notes-text">{{ lesson.notes || '-' }}</span></td>
               </tr>
@@ -190,10 +249,35 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useBranchStore } from '@/stores/branch'
-import { formatPhone } from '@/utils/formatters'
+import { useAuthStore } from '@/stores/auth'
+import { formatPhone, formatDateTime, formatLearningDays } from '@/utils/formatters'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+function goStudent(id) {
+  if (!id) return
+  router.push(`/students/${id}`)
+}
+
+function goUser(id) {
+  if (!id) return
+  router.push(`/users/${id}`)
+}
+
+function goCar(id) {
+  if (!id) return
+  router.push(`/vehicles/${id}`)
+}
+
+function goGroup(id) {
+  if (!id) return
+  router.push(`/groups/${id}`)
+}
 
 const branchStore = useBranchStore()
 const activeTab = ref('theory')
@@ -203,26 +287,70 @@ const theoryTeachers = ref([])
 const drivingInstructors = ref([])
 const enrollments = ref([])
 const drivingLessons = ref([])
+const groups = ref([])
+const categories = ref([])
+const cars = ref([])
 
 const theorySearchQuery = ref('')
+const theoryTeacherFilter = ref('')
+const theoryGroupFilter = ref('')
+const theoryCategoryFilter = ref('')
+
 const drivingSearchQuery = ref('')
+const drivingDateFrom = ref('')
+const drivingDateTo = ref('')
+const drivingInstructorFilter = ref('')
+const drivingGroupFilter = ref('')
+const drivingCarFilter = ref('')
 
-const expandedTeachers = ref(new Set())
-const expandedInstructors = ref(new Set())
+const groupsById = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.id] = g })
+  return map
+})
 
-const filteredTheoryTeachers = computed(() => {
+// Instructors and coordinators only ever see their own lessons — both the
+// theory roster (their own students) and the practical table below.
+const ownStaffId = computed(() =>
+  authStore.isTeachingStaff ? authStore.user?.id : null
+)
+
+// One row per student enrolled with a theory teacher (coordinator) assigned.
+const filteredTheoryEnrollments = computed(() => {
   const q = theorySearchQuery.value.trim().toLowerCase()
-  return theoryTeachers.value.filter(t => {
-    if (!branchStore.isBranchMatch(t)) return false
+  return enrollments.value.filter(e => {
+    if (!e.coordinator) return false
+    if (ownStaffId.value && e.coordinator !== ownStaffId.value) return false
+    if (!branchStore.isBranchMatch(e)) return false
+    if (theoryTeacherFilter.value && e.coordinator !== theoryTeacherFilter.value) return false
+    if (theoryGroupFilter.value && e.group !== theoryGroupFilter.value) return false
+    if (theoryCategoryFilter.value && e.category !== theoryCategoryFilter.value) return false
     if (!q) return true
-    return (t.full_name || '').toLowerCase().includes(q) || (t.phone || '').includes(q)
+    return (e.student_name || '').toLowerCase().includes(q) || (e.student_phone || '').includes(q)
   })
 })
 
+// Look up a student's current enrollment (group + category) for filtering/display
+function getStudentEnrollment(studentId) {
+  if (!studentId) return null
+  return enrollments.value.find(e => e.student === studentId && e.group) || null
+}
+
 const filteredDrivingLessons = computed(() => {
   const q = drivingSearchQuery.value.trim().toLowerCase()
+  const from = drivingDateFrom.value
+  const to = drivingDateTo.value
   return drivingLessons.value.filter(l => {
+    if (ownStaffId.value && l.instructor !== ownStaffId.value) return false
     if (!branchStore.isBranchMatch(l)) return false
+    if (drivingInstructorFilter.value && l.instructor !== drivingInstructorFilter.value) return false
+    if (drivingGroupFilter.value) {
+      const enr = getStudentEnrollment(l.student)
+      if (!enr || enr.group !== drivingGroupFilter.value) return false
+    }
+    if (drivingCarFilter.value && l.car !== drivingCarFilter.value) return false
+    if (from && l.lesson_date && l.lesson_date.slice(0, 10) < from) return false
+    if (to && l.lesson_date && l.lesson_date.slice(0, 10) > to) return false
     if (!q) return true
     return (l.student_name || '').toLowerCase().includes(q) ||
       (l.instructor_name || '').toLowerCase().includes(q) ||
@@ -231,24 +359,38 @@ const filteredDrivingLessons = computed(() => {
   })
 })
 
+// Look up a student's current group (name + start/end dates) via their enrollment
+function getStudentGroupInfo(studentId) {
+  const enr = getStudentEnrollment(studentId)
+  if (!enr) return null
+  const group = groupsById.value[enr.group]
+  return {
+    group_name: enr.group_name || (group ? group.name : ''),
+    started_at: group ? group.started_at : null,
+    ends_at: group ? group.ends_at : null,
+  }
+}
+
 async function fetchData() {
   loading.value = true
   try {
-    const [coordRes, instRes, enrRes, drvRes] = await Promise.all([
-      api.get('/users/', { params: { role: 'coordinator', page_size: 100 } }),
-      api.get('/users/', { params: { role: 'instructor', page_size: 100 } }),
-      api.get('/enrollments/', { params: { page_size: 200 } }),
-      api.get('/driving-lessons/', { params: { page_size: 200 } })
+    const [coordRes, instRes, enrRes, drvRes, grpRes, catRes, carRes] = await Promise.all([
+      api.get('/users/', { params: { role: 'coordinator', page_size: 1000 } }),
+      api.get('/users/', { params: { role: 'instructor', page_size: 1000 } }),
+      api.get('/enrollments/', { params: { page_size: 1000 } }),
+      api.get('/driving-lessons/', { params: { page_size: 1000 } }),
+      api.get('/groups/', { params: { page_size: 1000 } }),
+      api.get('/categories/', { params: { page_size: 100 } }),
+      api.get('/cars/', { params: { page_size: 1000 } })
     ])
 
     theoryTeachers.value = coordRes.data.results || coordRes.data || []
     drivingInstructors.value = instRes.data.results || instRes.data || []
     enrollments.value = enrRes.data.results || enrRes.data || []
     drivingLessons.value = drvRes.data.results || drvRes.data || []
-
-    // Auto-expand all teachers by default
-    theoryTeachers.value.forEach(t => expandedTeachers.value.add(t.id))
-    drivingInstructors.value.forEach(i => expandedInstructors.value.add(i.id))
+    groups.value = grpRes.data.results || grpRes.data || []
+    categories.value = catRes.data.results || catRes.data || []
+    cars.value = carRes.data.results || carRes.data || []
   } catch (err) {
     console.error("Darslar ma'lumotlarini yuklashda xatolik:", err)
   } finally {
@@ -257,29 +399,11 @@ async function fetchData() {
 }
 
 onMounted(() => {
+  // Instructors teach practical lessons only, so open them straight on that
+  // tab rather than an empty theory list.
+  if (authStore.isInstructor) activeTab.value = 'driving'
   fetchData()
 })
-
-function toggleTeacherExpand(id) {
-  if (expandedTeachers.value.has(id)) {
-    expandedTeachers.value.delete(id)
-  } else {
-    expandedTeachers.value.add(id)
-  }
-}
-
-function getLinkedStudents(staffId, roleType) {
-  if (roleType === 'coordinator') {
-    return enrollments.value.filter(e => e.coordinator === staffId)
-  } else if (roleType === 'instructor') {
-    return enrollments.value.filter(e => e.instructor === staffId)
-  }
-  return []
-}
-
-function getLinkedStudentsCount(staffId, roleType) {
-  return getLinkedStudents(staffId, roleType).length
-}
 
 function formatDate(dateStr) {
   if (!dateStr) return '-'
@@ -288,13 +412,6 @@ function formatDate(dateStr) {
   return dateStr
 }
 
-function formatDays(dayStr) {
-  if (!dayStr) return '-'
-  if (dayStr === 'Mo-Wed-Fri') return 'Dushanba - Chorshanba - Juma (Mo-Wed-Fri)'
-  if (dayStr === 'Tue-Thu-Sat') return 'Seshanba - Payshanba - Shanba (Tue-Thu-Sat)'
-  if (dayStr === 'everyday') return 'Har kuni (Har kuni)'
-  return dayStr
-}
 </script>
 
 <style scoped>
@@ -313,10 +430,13 @@ function formatDays(dayStr) {
 .purple-badge { background: #F3E8FF; color: #7E22CE; }
 
 .margin-top { margin-top: 20px; }
-.toolbar-card { background: white; border: 1px solid #E5E7EB; border-radius: 14px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
-.search-box { display: flex; align-items: center; gap: 10px; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 8px 14px; width: 360px; }
+.toolbar-card { background: white; border: 1px solid #E5E7EB; border-radius: 14px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+.search-box { display: flex; align-items: center; gap: 10px; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 8px 14px; width: 300px; }
 .search-input { border: none; background: transparent; outline: none; font-size: 13.5px; width: 100%; }
-.total-count { font-size: 13px; color: #6B7280; }
+.total-count { font-size: 13px; color: #6B7280; white-space: nowrap; }
+.filter-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.filter-item { display: flex; align-items: center; gap: 8px; }
+.filter-label { font-size: 12.5px; font-weight: 600; color: #4B5563; white-space: nowrap; }
 
 .table-section-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
 .table-container { overflow-x: auto; }
@@ -324,33 +444,14 @@ function formatDays(dayStr) {
 
 .instructor-badge { padding: 4px 10px; background: #F3E8FF; color: #7E22CE; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .car-badge { padding: 4px 10px; background: #DCFCE7; color: #15803D; border-radius: 8px; font-size: 12px; font-weight: 700; }
+.link-value { cursor: pointer; }
+.link-value:hover { text-decoration: underline; }
 .status-badge-pill { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-block; }
 .status-badge-pill.available { background: #DCFCE7; color: #15803D; }
 
-.teachers-grid { display: flex; flex-direction: column; gap: 18px; }
-.teacher-card { background: white; border: 1.5px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.03); transition: border-color 0.2s ease; }
-.teacher-card:hover { border-color: #CBD5E1; }
-
-.teacher-card-header { padding: 18px 22px; background: #FAFAFA; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; border-bottom: 1px solid #E5E7EB; }
-.teacher-info { display: flex; align-items: center; gap: 14px; }
-.teacher-avatar { font-size: 28px; width: 44px; height: 44px; background: white; border: 1px solid #E2E8F0; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.teacher-title { font-size: 16px; font-weight: 700; color: #1E293B; }
-.teacher-sub { font-size: 12.5px; color: #64748B; margin-top: 2px; }
-
-.header-right { display: flex; align-items: center; gap: 14px; }
-.students-count-chip { padding: 5px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 700; }
-.purple-chip { background: #F3E8FF; color: #7E22CE; }
-.blue-chip { background: #DBEAFE; color: #1D4ED8; }
-.chevron-icon { font-size: 12px; color: #94A3B8; transition: transform 0.2s ease; }
-.chevron-icon.rotated { transform: rotate(180deg); }
-
-.students-list-wrap { padding: 16px 22px; background: white; }
-.no-students { text-align: center; padding: 20px; color: #94A3B8; font-size: 13px; font-style: italic; }
-.students-table { width: 100%; border-collapse: collapse; th { background: #F8FAFC; padding: 10px 14px; font-size: 11.5px; font-weight: 700; color: #64748B; text-align: left; border-bottom: 1px solid #E2E8F0; } td { padding: 12px 14px; font-size: 13px; color: #334155; border-bottom: 1px solid #F1F5F9; vertical-align: middle; } }
 .font-bold { font-weight: 700; }
 .text-dark { color: #0F172A; }
 .cat-chip { padding: 3px 8px; background: #F1F5F9; color: #334155; border-radius: 6px; font-weight: 700; font-size: 11.5px; }
-.group-sub { margin-left: 6px; font-size: 12px; color: #64748B; }
 .time-chip { padding: 3px 8px; background: #FEF3C7; color: #D97706; border-radius: 6px; font-weight: 600; font-size: 12px; }
 .days-chip { font-size: 12px; color: #475569; }
 .notes-text { font-size: 12.5px; color: #64748B; }
@@ -358,4 +459,19 @@ function formatDays(dayStr) {
 .state-box, .empty-state { text-align: center; padding: 40px 0; color: #6B7280; }
 .spinner { width: 28px; height: 28px; border: 3px solid #E5E7EB; border-top-color: #4F46E5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.group-filter-select { padding: 6px 12px; border: 1.5px solid #E5E7EB; border-radius: 8px; background: #F9FAFB; font-size: 12.5px; font-weight: 500; color: #111827; cursor: pointer; outline: none; }
+
+/* Date range filter (driving tab) */
+.date-range-box { display: flex; align-items: center; gap: 8px; }
+.date-range-label { font-size: 12.5px; font-weight: 600; color: #4B5563; }
+.date-range-input { padding: 6px 10px; border: 1.5px solid #E5E7EB; border-radius: 8px; background: #F9FAFB; font-size: 12.5px; color: #111827; outline: none; }
+.date-range-sep { color: #9CA3AF; font-size: 12px; }
+.date-range-clear { border: none; background: #F3F4F6; color: #6B7280; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 11px; line-height: 1; }
+.date-range-clear:hover { background: #E5E7EB; color: #111827; }
+
+/* Group column in driving lessons table */
+.group-badge { padding: 3px 9px; background: #E0E7FF; color: #4338CA; border-radius: 8px; font-size: 11.5px; font-weight: 700; display: inline-block; }
+.group-dates { font-size: 11px; color: #6B7280; margin-top: 3px; }
+.text-muted { color: #9CA3AF; }
 </style>

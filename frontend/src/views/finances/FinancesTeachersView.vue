@@ -30,7 +30,15 @@
         <div class="card-metric-icon">💵</div>
         <div>
           <span class="metric-lbl">Jami O'qituvchilar Summasi</span>
-          <h4 class="metric-val text-purple">{{ formatMoney(metrics.total) }} so'm</h4>
+          <h4 class="metric-val text-purple">{{ formatMoney(metrics.total) }}</h4>
+        </div>
+      </div>
+
+      <div class="card-metric card-amber font-hero">
+        <div class="card-metric-icon">🎁</div>
+        <div>
+          <span class="metric-lbl">Sertifikat Bonuslari</span>
+          <h4 class="metric-val text-amber">{{ formatMoney(metrics.bonus) }}</h4>
         </div>
       </div>
     </div>
@@ -52,6 +60,17 @@
         </div>
 
         <div class="filter-controls">
+          <div class="filter-item">
+            <label class="flabel">Turi:</label>
+            <div class="select-wrap-relative">
+              <select v-model="filterPaymentType" class="fselect-field">
+                <option value="">Barchasi</option>
+                <option value="paid">Oylik to'lov</option>
+                <option value="bonus_teacher">Sertifikat bonusi</option>
+              </select>
+            </div>
+          </div>
+
           <div class="filter-item">
             <label class="flabel">Dan:</label>
             <input v-model="filterDateFrom" type="date" class="finput-date" />
@@ -83,10 +102,9 @@
             <tr>
               <th style="width: 60px;">ID</th>
               <th>O'qituvchi / Instruktor</th>
-              <th>Qabul / O'quvchi</th>
+              <th>Turi</th>
               <th>To'langan Summa</th>
               <th>Usul</th>
-              <th>Kassir</th>
               <th>Sana & Vaqt</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
             </tr>
@@ -95,33 +113,48 @@
             <tr v-for="p in payments" :key="p.id" class="table-row">
               <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
-                <div class="teacher-name">👨‍🏫 {{ p.user_full_name || p.cashier_name || 'O\'qituvchi' }}</div>
+                <div v-if="p.user" class="teacher-name link-value" @click="goUser(p.user)">👨‍🏫 {{ p.user_full_name || p.cashier_name || 'O\'qituvchi' }}</div>
+                <div v-else class="teacher-name">👨‍🏫 {{ p.user_full_name || p.cashier_name || 'O\'qituvchi' }}</div>
                 <div v-if="p.user_phone || p.cashier_name" class="teacher-phone">📞 {{ formatPhone(p.user_phone || p.cashier_name) }}</div>
               </td>
-              <td class="td-name">
-                <div class="student-name">{{ p.student_name || '-' }}</div>
-                <div v-if="p.student_jshshr" class="student-jshshr">JSHSHR: {{ p.student_jshshr }}</div>
+              <td>
+                <span class="type-chip" :class="{ 'type-chip-bonus': p.status === 'bonus_teacher' }">
+                  {{ paymentTypeText(p) }}
+                </span>
+                <div v-if="p.status === 'bonus_teacher'" class="bonus-student-info">
+                  <span class="bonus-student-name">{{ p.student_name || '-' }}</span>
+                  <span v-if="p.student_paid_amount != null" class="bonus-student-paid">To'lagan: {{ formatMoney(p.student_paid_amount) }}</span>
+                </div>
               </td>
               <td class="td-amount">
-                <span class="amount-val text-purple">{{ formatMoney(p.amount) }} so'm</span>
+                <button
+                  v-if="p.status === 'bonus_teacher' && p.amount === 0 && authStore.isAdminOrSuperuser"
+                  type="button"
+                  class="btn-pay-bonus"
+                  @click="openPayBonusModal(p)"
+                >
+                  To'lash
+                </button>
+                <span v-else class="amount-val text-purple">{{ formatMoney(p.amount) }}</span>
               </td>
               <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
-              <td class="td-cashier">{{ p.cashier_name || '-' }}</td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
               <td style="text-align: right;">
                 <div class="row-actions">
-                  <button class="btn-action-edit" @click="openEditModal(p)" title="Tahrirlash">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                  </button>
-                  <button class="btn-action-delete" @click="confirmDelete(p)" title="O'chirish">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                  </button>
+                  <template v-if="authStore.isSuperuser">
+                    <button class="btn-action-edit" @click="openEditModal(p)" title="Tahrirlash">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                    </button>
+                    <button class="btn-action-delete" @click="openDeleteModal(p)" title="O'chirish">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </template>
                 </div>
               </td>
             </tr>
@@ -163,13 +196,14 @@
                   class="finput search-input-field"
                   placeholder="O'qituvchi/Instruktor ismini kiriting..."
                   @focus="showTeacherDropdown = true"
+                  @keydown="onTeacherKeydown"
                 />
                 <div v-if="showTeacherDropdown" class="dropdown-options-list">
                   <div
-                    v-for="t in filteredTeachers"
+                    v-for="(t, idx) in filteredTeachers"
                     :key="t.id"
                     class="dropdown-option-item"
-                    :class="{ selected: form.teacher === t.id }"
+                    :class="{ selected: form.teacher === t.id, highlighted: teacherKb.highlightedIndex.value === idx }"
                     @click="selectTeacher(t)"
                   >
                     <div class="opt-name">👨‍🏫 {{ getUserFullName(t) }}</div>
@@ -198,14 +232,27 @@
               />
             </div>
 
+            <!-- Payment Status Select -->
+            <div class="form-group">
+              <label class="flabel required">To'lov Turi *</label>
+              <div class="select-wrap-relative">
+                <select v-model="form.status" class="fselect-field">
+                  <option value="paid">Oylik to'lov</option>
+                  <option value="bonus_teacher">Sertifikat bonusi</option>
+                </select>
+                <div class="select-chevron-icon">▼</div>
+              </div>
+            </div>
+
             <!-- Method Select -->
             <div class="form-group">
               <label class="flabel required">To'lov Usuli *</label>
               <div class="select-wrap-relative">
                 <select v-model="form.method" class="fselect-field">
-                  <option value="cash">💵 Naqd</option>
-                  <option value="card">💳 Plastik karta</option>
-                  <option value="transfer">🏦 Bank o'tkazmasi</option>
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
               </div>
@@ -228,17 +275,95 @@
       </div>
     </Transition>
 
+    <ConfirmDeleteModal
+      ref="deleteModal"
+      title="To'lovni O'chirish"
+      :deleting="deleting"
+      :error="deleteError"
+      @confirm="performDelete"
+    >
+      Haqiqatan ham <strong>#{{ deletingPayment?.id }}</strong> raqamli o'qituvchi to'lovini o'chirmoqchimisiz?
+    </ConfirmDeleteModal>
+
+    <!-- Pay Bonus Modal (fills in the amount on a placeholder bonus_teacher payment) -->
+    <Transition name="modal">
+      <div v-if="showPayBonusModal" class="modal-overlay" @click.self="closePayBonusModal">
+        <div class="modal-card">
+          <div class="modal-header-banner indigo-banner">
+            <div class="header-left-info">
+              <div class="header-icon-box indigo-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
+              <div>
+                <h3>Sertifikat Bonusini To'lash</h3>
+                <p v-if="payBonusTarget">{{ payBonusTarget.student_name || payBonusTarget.user_full_name }}</p>
+              </div>
+            </div>
+            <button class="btn-modal-close" @click="closePayBonusModal">✕</button>
+          </div>
+
+          <form @submit.prevent="submitPayBonus" class="modal-body">
+            <div v-if="payBonusError" class="alert-error">{{ payBonusError }}</div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Summasi *</label>
+              <input
+                v-model="payBonusForm.amountFormatted"
+                type="text"
+                class="finput amount-input purple-text"
+                placeholder="0"
+                required
+                @input="onPayBonusAmountInput"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">To'lov Usuli *</label>
+              <div class="select-wrap-relative">
+                <select v-model="payBonusForm.method" class="fselect-field">
+                  <option value="cash">Naqd</option>
+                  <option value="card">Karta</option>
+                  <option value="qr_code">QR code</option>
+                  <option value="transfer">O'tkazma</option>
+                </select>
+                <div class="select-chevron-icon">▼</div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="closePayBonusModal">Bekor qilish</button>
+              <button type="submit" class="btn-save btn-indigo-save" :disabled="payBonusSaving">
+                {{ payBonusSaving ? "Saqlanmoqda..." : "To'lash" }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Transition>
+
   </AppLayout>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatPhone } from '@/utils/formatters'
+import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
 const authStore = useAuthStore()
+const router = useRouter()
+
+function goUser(id) {
+  if (!id) return
+  router.push(`/users/${id}`)
+}
 
 const payments = ref([])
 const teachers = ref([])
@@ -246,6 +371,7 @@ const loading = ref(true)
 const totalCount = ref(0)
 
 const filterTeacherName = ref('')
+const filterPaymentType = ref('')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
 
@@ -259,12 +385,61 @@ const teacherSearchQuery = ref('')
 const showTeacherDropdown = ref(false)
 const selectedTeacherLabel = ref('')
 
-const form = ref({ teacher: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
+const form = ref({ teacher: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' })
 
 const metrics = computed(() => {
   const total = payments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  return { total }
+  const bonus = payments.value.filter(p => p.status === 'bonus_teacher').reduce((s, p) => s + (p.amount || 0), 0)
+  return { total, bonus }
 })
+
+function paymentTypeText(p) {
+  return p.status === 'bonus_teacher' ? 'Sertifikat bonusi' : 'Oylik to\'lov'
+}
+
+// ── Pay Bonus (fills in the amount on a placeholder bonus_teacher payment) ──
+const showPayBonusModal = ref(false)
+const payBonusTarget = ref(null)
+const payBonusForm = ref({ amountFormatted: '', amount: 0, method: 'cash' })
+const payBonusSaving = ref(false)
+const payBonusError = ref('')
+
+function openPayBonusModal(p) {
+  payBonusTarget.value = p
+  payBonusForm.value = { amountFormatted: '', amount: 0, method: 'cash' }
+  payBonusError.value = ''
+  showPayBonusModal.value = true
+}
+function closePayBonusModal() { showPayBonusModal.value = false }
+
+function onPayBonusAmountInput(e) {
+  const digits = e.target.value.replace(/\D/g, '')
+  if (!digits) { payBonusForm.value.amount = 0; payBonusForm.value.amountFormatted = ''; return }
+  const num = parseInt(digits, 10)
+  payBonusForm.value.amount = num
+  payBonusForm.value.amountFormatted = formatMoney(num, false)
+}
+
+async function submitPayBonus() {
+  if (!payBonusTarget.value || !payBonusForm.value.amount) {
+    payBonusError.value = "To'g'ri summa kiriting."
+    return
+  }
+  payBonusSaving.value = true
+  payBonusError.value = ''
+  try {
+    await api.post(`/payments/${payBonusTarget.value.id}/pay-bonus/`, {
+      amount: payBonusForm.value.amount,
+      method: payBonusForm.value.method,
+    })
+    closePayBonusModal()
+    await fetchPayments()
+  } catch (err) {
+    payBonusError.value = err.response?.data?.detail || "Bonus to'lashda xatolik yuz berdi."
+  } finally {
+    payBonusSaving.value = false
+  }
+}
 
 const filteredTeachers = computed(() => {
   const q = teacherSearchQuery.value.toLowerCase().trim()
@@ -286,7 +461,7 @@ function roleText(r) {
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'paid', page_size: 200 }
+    const params = { status: filterPaymentType.value || 'paid,bonus_teacher', page_size: 1000 }
     if (filterDateFrom.value) params.date_from = filterDateFrom.value
     if (filterDateTo.value) params.date_to = filterDateTo.value
     if (filterTeacherName.value) params.student_name = filterTeacherName.value.trim()
@@ -300,13 +475,13 @@ async function fetchPayments() {
 
 async function fetchTeachers() {
   try {
-    const res = await api.get('/users/', { params: { page_size: 200 } })
+    const res = await api.get('/users/', { params: { page_size: 1000 } })
     const allUsers = res.data.results || res.data
     teachers.value = allUsers.filter(u => u.role === 'coordinator' || u.role === 'instructor')
   } catch (err) { console.error(err) }
 }
 
-watch([filterTeacherName, filterDateFrom, filterDateTo], () => { fetchPayments() })
+watch([filterTeacherName, filterPaymentType, filterDateFrom, filterDateTo], () => { fetchPayments() })
 
 function selectTeacher(t) {
   form.value.teacher = t.id
@@ -314,12 +489,16 @@ function selectTeacher(t) {
   teacherSearchQuery.value = getUserFullName(t)
   showTeacherDropdown.value = false
 }
+const teacherKb = useSearchSelectKeyboard()
+function onTeacherKeydown(e) {
+  teacherKb.onKeydown(e, filteredTeachers.value, selectTeacher, () => { showTeacherDropdown.value = false })
+}
 
 function methodText(m) {
   switch (m) {
     case 'cash': return 'Naqd'
     case 'card': return 'Karta'
-    case 'qr_code': return 'QR Code'
+    case 'qr_code': return 'QR code'
     case 'transfer': return "O'tkazma"
     default: return m
   }
@@ -346,7 +525,7 @@ function openCreateModal() {
   teacherSearchQuery.value = ''
   selectedTeacherLabel.value = ''
   showTeacherDropdown.value = false
-  form.value = { teacher: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
+  form.value = { teacher: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' }
   showModal.value = true
 }
 
@@ -354,7 +533,7 @@ function openEditModal(p) {
   isEditing.value = true
   editingId.value = p.id
   modalError.value = null
-  form.value = { teacher: p.user, amountFormatted: formatMoney(p.amount, false), amount: p.amount, method: p.method || 'cash', notes: p.notes || '' }
+  form.value = { teacher: p.user, amountFormatted: formatMoney(p.amount, false), amount: p.amount, status: p.status || 'paid', method: p.method || 'cash', notes: p.notes || '' }
   showModal.value = true
 }
 
@@ -367,12 +546,12 @@ async function savePayment() {
   modalError.value = null
   try {
     if (isEditing.value) {
-      await api.patch(`/payments/${editingId.value}/`, { amount: form.value.amount, method: form.value.method, notes: form.value.notes })
+      await api.patch(`/payments/${editingId.value}/`, { amount: form.value.amount, status: form.value.status, method: form.value.method, notes: form.value.notes })
     } else {
       await api.post('/payments/', {
         user: form.value.teacher || authStore.user?.id,
         amount: form.value.amount,
-        status: 'paid',
+        status: form.value.status,
         method: form.value.method,
         notes: form.value.notes
       })
@@ -383,10 +562,30 @@ async function savePayment() {
   finally { saving.value = false }
 }
 
-async function confirmDelete(p) {
-  if (!confirm(`Haqiqatan ham #${p.id} raqamli o'qituvchi to'lovini o'chirmoqchimisiz?`)) return
-  try { await api.delete(`/payments/${p.id}/`); fetchPayments() }
-  catch (err) { alert("O'chirishda xatolik yuz berdi") }
+const deleteModal = ref(null)
+const deletingPayment = ref(null)
+const deleting = ref(false)
+const deleteError = ref('')
+
+function openDeleteModal(p) {
+  deletingPayment.value = p
+  deleteError.value = ''
+  deleteModal.value?.show()
+}
+
+async function performDelete() {
+  if (!deletingPayment.value) return
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await api.delete(`/payments/${deletingPayment.value.id}/`)
+    deleteModal.value?.close()
+    fetchPayments()
+  } catch (err) {
+    deleteError.value = "O'chirishda xatolik yuz berdi"
+  } finally {
+    deleting.value = false
+  }
 }
 
 onMounted(() => { fetchPayments(); fetchTeachers() })
@@ -405,6 +604,8 @@ onMounted(() => { fetchPayments(); fetchTeachers() })
 .metric-val { font-size: 18px; font-weight: 800; color: #111827; margin-top: 4px; }
 .text-indigo { color: #4F46E5; font-weight: 800; }
 .text-purple { color: #9333EA; font-weight: 800; }
+.text-amber { color: #D97706; font-weight: 800; }
+.card-amber .card-metric-icon { filter: none; }
 .margin-top { margin-top: 24px; }
 .table-section-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
 .toolbar-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; gap: 16px; flex-wrap: wrap; }
@@ -418,10 +619,27 @@ onMounted(() => { fetchPayments(); fetchTeachers() })
 .table-container { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
 .teacher-name { font-weight: 700; color: #4F46E5; }
+.link-value { cursor: pointer; }
+.link-value:hover { text-decoration: underline; }
 .teacher-phone { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
-.student-name { font-weight: 600; color: #111827; }
-.student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.type-chip { padding: 4px 10px; background: #EEF2FF; color: #4338CA; border-radius: 8px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.type-chip-bonus { background: #FEF3C7; color: #92400E; }
+.bonus-student-info { display: flex; flex-direction: column; gap: 1px; margin-top: 4px; }
+.bonus-student-name { font-size: 12px; font-weight: 600; color: #374151; }
+.bonus-student-paid { font-size: 11px; color: #6B7280; }
+.btn-pay-bonus {
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.btn-pay-bonus:hover { transform: translateY(-1px); }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .btn-action-edit, .btn-action-delete { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 1px solid #E5E7EB; background: #F9FAFB; cursor: pointer; transition: all 0.15s ease; }
 .btn-action-edit { color: #2563EB; &:hover { background: #EFF6FF; border-color: #BFDBFE; transform: translateY(-1px); } }
@@ -455,7 +673,7 @@ onMounted(() => { fetchPayments(); fetchTeachers() })
 
 .searchable-select-wrap { position: relative; width: 100%; }
 .dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #4F46E5; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
-.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #EEF2FF; } &.selected { background: #C7D2FE; font-weight: 700; } }
+.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #EEF2FF; } &.selected { background: #C7D2FE; font-weight: 700; } &.highlighted { background: #EEF2FF; } }
 .opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }
 .opt-sub { font-size: 11.5px; color: #6B7280; margin-top: 1px; }
 .dropdown-empty { padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px; }

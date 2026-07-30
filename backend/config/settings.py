@@ -168,6 +168,16 @@ SIMPLE_JWT = {
 }
 
 # ---------------------------------------------------------------------------
+# Celery — periodic background jobs (e.g. auto-finishing expired groups)
+# ---------------------------------------------------------------------------
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+
+# ---------------------------------------------------------------------------
 # Silenced checks
 # ---------------------------------------------------------------------------
 SILENCED_SYSTEM_CHECKS = ["auth.E003"]

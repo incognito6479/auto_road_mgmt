@@ -44,12 +44,16 @@
             <span class="summary-val">{{ formatDate(group.started_at) }}</span>
           </div>
           <div class="summary-item">
+            <span class="summary-label">Tugash sanasi</span>
+            <span class="summary-val font-bold">{{ group.ends_at ? formatDate(group.ends_at) : '-' }}</span>
+          </div>
+          <div class="summary-item">
             <span class="summary-label">Ish kunlari</span>
             <span class="summary-val font-bold">{{ group.working_days ? group.working_days + ' kun' : '-' }}</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">Dars kunlari</span>
-            <span class="summary-val">{{ weekendsText(group.working_weekends) }}</span>
+            <span class="summary-val">{{ weekdaysText(group) }}</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">Davomiyligi</span>
@@ -102,8 +106,8 @@
                 <th>JSHSHR</th>
                 <th>Eslatmasi</th>
                 <th>O'quv Joyi & Vaqti</th>
-                <th v-if="authStore.isSuperuser || authStore.isMechanic">Instruktor</th>
-                <th v-if="authStore.isSuperuser || authStore.isMechanic">O'qituvchi</th>
+                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">Instruktor</th>
+                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">O'qituvchi</th>
                 <th v-if="!authStore.isMechanic">Shartnoma summasi</th>
                 <th v-if="!authStore.isMechanic">To'langan</th>
                 <th v-if="!authStore.isMechanic">Qoldiq</th>
@@ -144,10 +148,10 @@
                 </td>
 
                 <!-- Instructor Column -->
-                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
+                <td v-if="authStore.isAdminOrSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
                   <div class="assign-cell">
                     <template v-if="e.instructor_name">
-                      <span class="assign-name">{{ e.instructor_name }}</span>
+                      <span class="assign-name link-value" @click="goUser(e.instructor)">{{ e.instructor_name }}</span>
                       <button class="btn-assign-edit" @click.stop="openAssignModal(e, 'instructor')" title="Instruktorni o'zgartirish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -162,10 +166,10 @@
                 </td>
 
                 <!-- Coordinator Column -->
-                <td v-if="authStore.isSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
+                <td v-if="authStore.isAdminOrSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
                   <div class="assign-cell">
                     <template v-if="e.coordinator_name">
-                      <span class="assign-name">{{ e.coordinator_name }}</span>
+                      <span class="assign-name link-value" @click="goUser(e.coordinator)">{{ e.coordinator_name }}</span>
                       <button class="btn-assign-edit" @click.stop="openAssignModal(e, 'coordinator')" title="O'qituvchini o'zgartirish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -182,16 +186,16 @@
                 <!-- Payment Info Columns (Hidden for mechanic) -->
                 <td v-if="!authStore.isMechanic">
                   <span v-if="e.enrolled_free" class="free-badge">Tekin</span>
-                  <span v-else>{{ formatMoney(e.enrolled_amount) }} so'm</span>
+                  <span v-else>{{ formatMoney(e.enrolled_amount) }}</span>
                 </td>
                 <td v-if="!authStore.isMechanic">
                   <span v-if="e.enrolled_free">-</span>
-                  <span v-else class="paid-val">{{ formatMoney(e.paid_amount) }} so'm</span>
+                  <span v-else class="paid-val">{{ formatMoney(e.paid_amount) }}</span>
                 </td>
                 <td v-if="!authStore.isMechanic">
                   <span v-if="e.enrolled_free">-</span>
                   <span v-else :class="{'balance-warning': (e.enrolled_amount - e.paid_amount) > 0}">
-                    {{ formatMoney(e.enrolled_amount - e.paid_amount) }} so'm
+                    {{ formatMoney(e.enrolled_amount - e.paid_amount) }}
                   </span>
                 </td>
                 <td v-if="!authStore.isMechanic" style="text-align: center;" @click.stop>
@@ -227,9 +231,9 @@
 
         <div v-if="activeEnrollment" class="pay-info-summary">
           <p>O'quvchi: <strong>{{ activeEnrollment.student_name }}</strong></p>
-          <p>Jami shartnoma: <strong>{{ formatMoney(activeEnrollment.enrolled_amount) }} so'm</strong></p>
-          <p>Shu vaqtgacha to'langan: <strong>{{ formatMoney(activeEnrollment.paid_amount) }} so'm</strong></p>
-          <p>Qolgan qarzdorlik: <strong class="balance-warning">{{ formatMoney(activeEnrollment.enrolled_amount - activeEnrollment.paid_amount) }} so'm</strong></p>
+          <p>Jami shartnoma: <strong>{{ formatMoney(activeEnrollment.enrolled_amount) }}</strong></p>
+          <p>Shu vaqtgacha to'langan: <strong>{{ formatMoney(activeEnrollment.paid_amount) }}</strong></p>
+          <p>Qolgan qarzdorlik: <strong class="balance-warning">{{ formatMoney(activeEnrollment.enrolled_amount - activeEnrollment.paid_amount) }}</strong></p>
         </div>
 
         <div class="form-group">
@@ -247,12 +251,10 @@
           <label class="form-label">To'lov usuli <span class="req">*</span></label>
           <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
             <select v-model="paymentForm.method" required class="form-input select-input" style="width: 100%; appearance: none;">
-              <option value="cash">Naqd pullar (Cash)</option>
-              <option value="click">Click</option>
-              <option value="payme">Payme</option>
-              <option value="uzum">Uzum</option>
-              <option value="card">Bank kartasi (Terminal)</option>
-              <option value="transfer">Bank o'tkazmasi (Perevod)</option>
+              <option value="cash">Naqd</option>
+              <option value="card">Karta</option>
+              <option value="qr_code">QR code</option>
+              <option value="transfer">O'tkazma</option>
             </select>
             <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -303,17 +305,61 @@
           <label class="form-label">
             {{ assignType === 'instructor' ? "Instruktorni tanlang" : "O'qituvchini tanlang" }}
           </label>
-          <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
-            <select v-model="selectedAssignUserId" class="form-input select-input" style="width: 100%; appearance: none;">
-              <option :value="null">&lt; Biriktirilmagan &gt;</option>
-              <option v-for="u in assignUserOptions" :key="u.id" :value="u.id">
-                {{ getUserDisplayName(u) }}
-              </option>
-            </select>
-            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-            </svg>
+
+          <div class="assign-search-wrap" ref="assignSelectRef">
+            <div class="assign-search-input-row">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2" width="15" height="15">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                v-model="assignSearchQuery"
+                type="text"
+                class="assign-search-input"
+                :placeholder="assignType === 'instructor' ? 'Instruktor ismi yoki telefoni...' : &quot;O'qituvchi ismi yoki telefoni...&quot;"
+                @click="assignDropdownOpen = !assignDropdownOpen"
+                @input="assignDropdownOpen = true"
+              />
+              <button
+                v-if="assignSearchQuery"
+                type="button"
+                class="assign-clear-btn"
+                title="Tozalash"
+                @click="assignSearchQuery = ''; assignDropdownOpen = true"
+              >✕</button>
+            </div>
+
+            <div v-if="assignDropdownOpen" class="assign-dropdown">
+              <div
+                class="assign-option assign-option-clear"
+                :class="{ 'is-active': selectedAssignUserId === null }"
+                @click="pickAssignUser(null)"
+              >
+                &lt; Biriktirilmagan &gt;
+              </div>
+              <div
+                v-for="u in filteredAssignUserOptions"
+                :key="u.id"
+                class="assign-option"
+                :class="{ 'is-active': selectedAssignUserId === u.id }"
+                @click="pickAssignUser(u.id)"
+              >
+                <div class="assign-option-avatar">{{ (getUserName(u) || '?').charAt(0).toUpperCase() }}</div>
+                <div class="assign-option-info">
+                  <span class="assign-option-name">{{ getUserName(u) || formatPhone(u.phone) }}</span>
+                  <span class="assign-option-phone">{{ formatPhone(u.phone) }}</span>
+                </div>
+                <span v-if="selectedAssignUserId === u.id" class="assign-option-check">✓</span>
+              </div>
+              <div v-if="filteredAssignUserOptions.length === 0" class="assign-empty">
+                {{ assignType === 'instructor' ? 'Instruktor topilmadi' : "O'qituvchi topilmadi" }}
+              </div>
+            </div>
           </div>
+
+          <p class="assign-selected-hint">
+            Tanlangan: <strong>{{ selectedAssignUserLabel }}</strong>
+          </p>
         </div>
 
         <div class="modal-actions">
@@ -370,16 +416,11 @@
 
         <div class="form-group">
           <label class="form-label">Dars kunlari</label>
-          <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
-            <select v-model="scheduleForm.learning_days" class="form-input select-input" style="width: 100%; appearance: none;">
-              <option :value="null">&lt; Tanlanmagan &gt;</option>
-              <option value="Mo-Wed-Fri">Mo-Wed-Fri (Dushanba - Chorshanba - Juma)</option>
-              <option value="Tue-Thu-Sat">Tue-Thu-Sat (Seshanba - Payshanba - Shanba)</option>
-              <option value="everyday">everyday (Har kuni)</option>
-            </select>
-            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
-              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-            </svg>
+          <div class="weekday-picker">
+            <label v-for="d in weekdayOptions" :key="d.value" class="weekday-chip" :class="{ active: scheduleForm.learning_days.includes(d.value) }">
+              <input type="checkbox" :value="d.value" v-model="scheduleForm.learning_days" style="display: none;" />
+              {{ d.label }}
+            </label>
           </div>
         </div>
 
@@ -397,11 +438,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { formatLearningDays } from '@/utils/formatters'
 
 const router = useRouter()
 const route = useRoute()
@@ -412,6 +454,10 @@ const goToStudentDetail = (studentId) => {
   if (studentId) {
     router.push(`/students/${studentId}`)
   }
+}
+
+function goUser(id) {
+  if (id) router.push(`/users/${id}`)
 }
 
 const group = ref(null)
@@ -427,6 +473,18 @@ const weekendsText = (w) => {
     case 'tue-wed-sat': return 'Ses-Paysh-Shanba'
     default: return w || '-'
   }
+}
+
+const weekdayLabels = ['Dush', 'Sesh', 'Chor', 'Pay', 'Juma', 'Shan']
+const weekdaysText = (g) => {
+  if (Array.isArray(g.selected_weekdays) && g.selected_weekdays.length > 0) {
+    return g.selected_weekdays
+      .slice()
+      .sort((a, b) => a - b)
+      .map(v => weekdayLabels[v] || v)
+      .join(', ')
+  }
+  return weekendsText(g.working_weekends)
 }
 
 // Search state
@@ -458,12 +516,21 @@ const scheduleError = ref('')
 const scheduleForm = ref({
   learning_place: null,
   learning_time: '',
-  learning_days: null,
+  learning_days: [],
 })
+
+const weekdayOptions = [
+  { value: 0, label: 'Dush' },
+  { value: 1, label: 'Sesh' },
+  { value: 2, label: 'Chor' },
+  { value: 3, label: 'Pay' },
+  { value: 4, label: 'Juma' },
+  { value: 5, label: 'Shan' },
+]
 
 const tableColspan = computed(() => {
   let count = 5 // Student Name, Phone, JSHSHR, Notes, Learning Place & Time
-  if (authStore.isSuperuser || authStore.isMechanic) count += 2 // Instructor, Coordinator
+  if (authStore.isAdminOrSuperuser || authStore.isMechanic) count += 2 // Instructor, Coordinator
   if (!authStore.isMechanic) count += 4 // Shartnoma, Paid, Qoldiq, Amallar
   return count
 })
@@ -472,9 +539,50 @@ const assignUserOptions = computed(() => {
   return allUsers.value.filter(u => u.role === assignType.value)
 })
 
+// ── Searchable assignment select ──────────────────────────────
+const assignSearchQuery = ref('')
+const assignDropdownOpen = ref(false)
+const assignSelectRef = ref(null)
+
+const filteredAssignUserOptions = computed(() => {
+  const q = assignSearchQuery.value.trim().toLowerCase()
+  if (!q) return assignUserOptions.value
+  const qDigits = q.replace(/\D/g, '')
+  return assignUserOptions.value.filter(u => {
+    const name = getUserName(u).toLowerCase()
+    const phone = (u.phone || '').replace(/\D/g, '')
+    return name.includes(q) || (qDigits && phone.includes(qDigits))
+  })
+})
+
+const selectedAssignUserLabel = computed(() => {
+  if (selectedAssignUserId.value === null) return 'Biriktirilmagan'
+  const u = assignUserOptions.value.find(x => x.id === selectedAssignUserId.value)
+  return u ? getUserDisplayName(u) : 'Biriktirilmagan'
+})
+
+function pickAssignUser(id) {
+  selectedAssignUserId.value = id
+  assignDropdownOpen.value = false
+  assignSearchQuery.value = ''
+}
+
+// Close the dropdown when the click lands outside the select. The input's own
+// @click toggle handles clicks inside it.
+function handleAssignOutsideClick(e) {
+  if (assignSelectRef.value && !assignSelectRef.value.contains(e.target)) {
+    assignDropdownOpen.value = false
+  }
+}
+
+const getUserName = (u) => {
+  if (!u) return ''
+  return u.full_name?.trim() || `${u.first_name || ''} ${u.last_name || ''}`.trim()
+}
+
 const getUserDisplayName = (u) => {
   if (!u) return ''
-  const name = `${u.first_name || ''} ${u.last_name || ''}`.trim()
+  const name = getUserName(u)
   return name ? `${name} (${formatPhone(u.phone)})` : formatPhone(u.phone)
 }
 
@@ -482,7 +590,7 @@ const formatSchedule = (e) => {
   const parts = []
   if (e.learning_place_name) parts.push(e.learning_place_name)
   if (e.learning_time) parts.push(e.learning_time)
-  if (e.learning_days) parts.push(e.learning_days)
+  if (e.learning_days) parts.push(formatLearningDays(e.learning_days))
   return parts.join(' - ') || '-'
 }
 
@@ -520,7 +628,7 @@ const fetchGroupDetail = async () => {
 
 const fetchUsers = async () => {
   try {
-    const response = await api.get('/users/')
+    const response = await api.get('/users/', { params: { page_size: 1000 } })
     allUsers.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
   } catch (err) {
     console.error("Foydalanuvchilarni yuklashda xatolik:", err)
@@ -529,7 +637,7 @@ const fetchUsers = async () => {
 
 const fetchLearningPlaces = async () => {
   try {
-    const response = await api.get('/learning-places/')
+    const response = await api.get('/learning-places/', { params: { page_size: 1000 } })
     learningPlaces.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
   } catch (err) {
     console.error("O'quv joylarini yuklashda xatolik:", err)
@@ -645,6 +753,8 @@ const openAssignModal = (enrollment, type) => {
   activeEnrollment.value = enrollment
   assignType.value = type
   assignError.value = ''
+  assignSearchQuery.value = ''
+  assignDropdownOpen.value = false
   if (type === 'instructor') {
     selectedAssignUserId.value = enrollment.instructor || null
   } else {
@@ -690,7 +800,7 @@ const openScheduleModal = (enrollment) => {
   scheduleForm.value = {
     learning_place: enrollment.learning_place || null,
     learning_time: enrollment.learning_time || '',
-    learning_days: enrollment.learning_days || null,
+    learning_days: enrollment.learning_days || [],
   }
   if (scheduleModal.value) {
     scheduleModal.value.showModal()
@@ -731,6 +841,7 @@ onMounted(async () => {
   fetchGroupDetail()
   fetchUsers()
   fetchLearningPlaces()
+  document.addEventListener('click', handleAssignOutsideClick)
 
   const dialogs = [payModal.value, assignModal.value, scheduleModal.value]
   dialogs.forEach(dialog => {
@@ -750,6 +861,10 @@ onMounted(async () => {
       })
     }
   })
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleAssignOutsideClick)
 })
 </script>
 
@@ -1011,6 +1126,8 @@ onMounted(async () => {
   color: #111827;
   font-size: 13px;
 }
+.link-value { cursor: pointer; }
+.link-value:hover { text-decoration: underline; }
 .btn-assign-plus {
   width: 26px;
   height: 26px;
@@ -1191,6 +1308,22 @@ onMounted(async () => {
   color: #374151;
 }
 
+.weekday-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.weekday-chip {
+  padding: 8px 12px;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.weekday-chip:hover { border-color: #9CA3AF; }
+.weekday-chip.active { background: #2D6A4F; border-color: #2D6A4F; color: white; }
+
 .form-input {
   padding: 10px 12px;
   border: 1.5px solid #D1D5DB;
@@ -1255,6 +1388,108 @@ onMounted(async () => {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
+/* ── Searchable assignment select ─────────────────────── */
+.assign-search-wrap { position: relative; width: 100%; }
+
+.assign-search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 10px;
+  background: #F9FAFB;
+  transition: all 0.15s ease;
+}
+.assign-search-input-row:focus-within {
+  border-color: #2D6A4F;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+}
+
+.assign-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13.5px;
+  color: #111827;
+  font-family: inherit;
+}
+
+.assign-clear-btn {
+  border: none;
+  background: #E5E7EB;
+  color: #4B5563;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.assign-clear-btn:hover { background: #D1D5DB; color: #111827; }
+
+.assign-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: white;
+  border: 1.5px solid #2D6A4F;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  z-index: 60;
+}
+
+.assign-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #F3F4F6;
+  transition: background 0.12s ease;
+}
+.assign-option:last-child { border-bottom: none; }
+.assign-option:hover { background: #F0FDF4; }
+.assign-option.is-active { background: #E8F5E9; }
+
+.assign-option-clear {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6B7280;
+  font-style: italic;
+}
+
+.assign-option-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #2D6A4F;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.assign-option-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.assign-option-name { font-size: 13px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.assign-option-phone { font-size: 11.5px; color: #6B7280; }
+.assign-option-check { color: #2D6A4F; font-weight: 700; flex-shrink: 0; }
+
+.assign-empty { padding: 14px; text-align: center; color: #9CA3AF; font-size: 12.5px; }
+
+.assign-selected-hint { margin-top: 8px; font-size: 12.5px; color: #6B7280; }
+.assign-selected-hint strong { color: #2D6A4F; }
 
 /* States */
 .state-container {

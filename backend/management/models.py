@@ -91,10 +91,10 @@ class User(AbstractUser):
     )
 
     phone2 = models.CharField(
-        max_length=20,
+        max_length=100,
         blank=True,
         null=True,
-        help_text="Qo'shimcha telefon raqami (namuna: 998909009090)",
+        help_text="Qo'shimcha telefon raqami, xohlasa qarindoshi nomi bilan (namuna: +998 90 900 90 90 amakisi)",
     )
 
     jshshr = models.BigIntegerField(
@@ -276,6 +276,11 @@ class Group(BaseModel):
         blank=True,
         help_text="Boshlanish sanasi",
     )
+    ends_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Tugash sanasi (avtomatik hisoblanadi: ish kunlari + bayramlar + dars bo'lmagan kunlar)",
+    )
     working_days = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -285,7 +290,12 @@ class Group(BaseModel):
         max_length=20,
         choices=WorkingWeekends.choices,
         default=WorkingWeekends.MWF,
-        help_text="Dars kunlari jadvali",
+        help_text="Dars kunlari jadvali (eski, selected_weekdays yo'q bo'lsa ishlatiladi)",
+    )
+    selected_weekdays = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Dars kunlari, Dushanba-Shanba: 0=Dushanba, 1=Seshanba, 2=Chorshanba, 3=Payshanba, 4=Juma, 5=Shanba",
     )
     duration = models.FloatField(
         blank=True,
@@ -356,14 +366,9 @@ class Enrollment(BaseModel):
 
     class Status(models.TextChoices):
         NEW = "new", "Yangi"
-        ENROLLED = "enrolled", "Qabul qilingan"
+        ENROLLED = "enrolled", "Faol"
         FINISHED = "finished", "Tugatgan"
         CANCELED = "canceled", "Bekor qilingan"
-
-    class LearningDays(models.TextChoices):
-        MWF = "Mo-Wed-Fri", "Mo-Wed-Fri"
-        TTS = "Tue-Thu-Sat", "Tue-Thu-Sat"
-        EVERYDAY = "everyday", "Everyday"
 
     branch = models.ForeignKey(
         "Branch",
@@ -426,16 +431,15 @@ class Enrollment(BaseModel):
         blank=True,
         help_text="Masalan: 09:00",
     )
-    learning_days = models.CharField(
-        max_length=20,
-        choices=LearningDays.choices,
-        null=True,
+    learning_days = models.JSONField(
+        default=list,
         blank=True,
+        help_text="Dars kunlari, Dushanba-Shanba: 0=Dushanba, 1=Seshanba, 2=Chorshanba, 3=Payshanba, 4=Juma, 5=Shanba",
     )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
-        default=Status.ENROLLED,
+        default=Status.NEW,
     )
     enrolled_free = models.BooleanField(
         default=False,
@@ -465,6 +469,7 @@ class Payment(BaseModel):
         PAID = "paid", "To'langan"
         BONUS = "bonus", "Bonus"
         BANK = "bank", "Bank"
+        BONUS_TEACHER = "bonus_teacher", "O'qituvchi bonusi"
 
     class Method(models.TextChoices):
         CASH = "cash", "Naqd"
@@ -559,6 +564,39 @@ class Car(BaseModel):
         default=Status.AVAILABLE,
         help_text="Avtomobil holati: available, repairing, not_available",
     )
+    instructor = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={"role": "instructor"},
+        related_name="assigned_cars",
+        help_text="Ushbu avtomobilga biriktirilgan instruktor",
+    )
+    mileage = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Probeg (km)",
+    )
+    oil_change_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Moy so'nggi almashtirilgan sana",
+    )
+    oil_change_mileage = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Moy so'nggi almashtirilgandagi probeg (km). Joriy probeg bilan solishtirib, keyingi almashtirishgacha necha km qolganini hisoblash uchun ishlatiladi.",
+    )
+    oil_change_interval_km = models.PositiveIntegerField(
+        default=5000,
+        help_text="Moy almashtirish oralig'i (km). Necha km da moy almashtirilishi kerakligini belgilaydi (standart: 5000 km).",
+    )
+    last_washed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Oxirgi marta yuvilgan sana va vaqt (avtomatik to'ldiriladi)",
+    )
 
     class Meta:
         db_table = "car"
@@ -568,6 +606,79 @@ class Car(BaseModel):
 
     def __str__(self):
         return f"{self.car_name} ({self.status})"
+
+
+class CarAssignmentHistory(BaseModel):
+    """
+    Tracks which instructor was assigned to a car and when — a full history
+    of assignments, not just the current one on Car.instructor.
+    """
+
+    car = models.ForeignKey(
+        Car,
+        on_delete=models.CASCADE,
+        related_name="assignment_history",
+    )
+    instructor = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={"role": "instructor"},
+        related_name="car_assignment_history",
+    )
+    assigned_at = models.DateTimeField(default=timezone.now)
+    unassigned_at = models.DateTimeField(null=True, blank=True)
+
+    # Snapshot of the car's oil-service state at the moment this instructor
+    # was unassigned, so the history row shows what they handed the car over
+    # with (rather than the car's current, possibly since-updated, values).
+    mileage_at_unassignment = models.PositiveIntegerField(null=True, blank=True)
+    oil_change_date_at_unassignment = models.DateField(null=True, blank=True)
+    oil_change_mileage_at_unassignment = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "car_assignment_history"
+        verbose_name = "Avtomobil biriktirish tarixi"
+        verbose_name_plural = "Avtomobil biriktirish tarixi"
+        ordering = ["-assigned_at"]
+
+    def __str__(self):
+        who = self.instructor.full_name if self.instructor else "Noma'lum"
+        return f"{self.car.car_name} - {who} ({self.assigned_at:%Y-%m-%d})"
+
+
+class CarWash(BaseModel):
+    """
+    A single car-washing record. `washed_at` is always set server-side to the
+    current time when the record is created — it is never accepted from the
+    client, so instructors cannot backdate a wash.
+    """
+
+    car = models.ForeignKey(
+        Car,
+        on_delete=models.CASCADE,
+        related_name="wash_history",
+    )
+    instructor = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={"role": "instructor"},
+        related_name="car_washes",
+    )
+    washed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "car_wash"
+        verbose_name = "Avtomobil yuvish tarixi"
+        verbose_name_plural = "Avtomobil yuvish tarixi"
+        ordering = ["-washed_at"]
+
+    def __str__(self):
+        who = self.instructor.full_name if self.instructor else "Noma'lum"
+        return f"{self.car.car_name} - {who} ({self.washed_at:%Y-%m-%d %H:%M})"
 
 
 class DrivingLessons(BaseModel):
@@ -599,9 +710,9 @@ class DrivingLessons(BaseModel):
         blank=True,
         related_name="driving_lessons",
     )
-    lesson_date = models.DateField(
+    lesson_date = models.DateTimeField(
         default=timezone.now,
-        help_text="Amaliy dars sanasi",
+        help_text="Amaliy dars sanasi va vaqti",
     )
 
     class Meta:
@@ -622,6 +733,7 @@ class Notification(BaseModel):
         CERTIFICATE_UPLOAD = "certificate_upload", "Sertifikat Yuklash"
         PAYMENT = "payment", "To'lov"
         AGENT_PAYMENT = "agent_payment", "Agent To'lovi"
+        REVIEW = "review", "Sharh"
 
     branch = models.ForeignKey(
         "Branch",
@@ -647,6 +759,15 @@ class Notification(BaseModel):
         choices=Status.choices,
         default=Status.DRIVING_LESSON,
     )
+    target_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Bog'liq obyekt IDsi — status'ga qarab qayerga ishora qilishini "
+            "frontend hal qiladi (driving_lesson/certificate_upload -> "
+            "o'quvchi ID, review -> o'qituvchi/instruktor ID)."
+        ),
+    )
 
     class Meta:
         db_table = "notification"
@@ -656,5 +777,99 @@ class Notification(BaseModel):
 
     def __str__(self):
         return f"{self.title} ({self.status})"
+
+
+class TeacherReview(BaseModel):
+    """A review a student leaves for one of their teachers (coordinator or instructor)."""
+
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="teacher_reviews",
+    )
+    student = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": "student"},
+        related_name="reviews_given",
+        help_text="Sharh qoldirgan o'quvchi",
+    )
+    teacher = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        limit_choices_to={"role__in": ["instructor", "coordinator"]},
+        related_name="reviews_received",
+        help_text="Sharh qoldirilgan o'qituvchi yoki instruktor",
+    )
+    rating = models.PositiveSmallIntegerField(
+        default=5,
+        help_text="Baho (1 dan 5 gacha)",
+    )
+    comment = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Sharh matni",
+    )
+
+    class Meta:
+        db_table = "teacher_review"
+        verbose_name = "O'qituvchi sharhi"
+        verbose_name_plural = "O'qituvchi sharhlari"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.student.full_name} -> {self.teacher.full_name} ({self.rating}/5)"
+
+
+class StudentCertificate(BaseModel):
+    """A certificate photo an instructor uploads for a specific student."""
+
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="student_certificates",
+    )
+    student = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": "student"},
+        related_name="certificates",
+        help_text="Sertifikat tegishli bo'lgan o'quvchi",
+    )
+    instructor = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={"role": "instructor"},
+        related_name="uploaded_certificates",
+        help_text="Sertifikatni yuklagan instruktor",
+    )
+    image = models.FileField(
+        upload_to="certificates/",
+        help_text="Sertifikat rasmi",
+    )
+    bonus_payment = models.ForeignKey(
+        "Payment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="certificate",
+        help_text="Ushbu sertifikat uchun instruktorga to'langan bonus to'lovi (agar to'langan bo'lsa)",
+    )
+
+    class Meta:
+        db_table = "student_certificate"
+        verbose_name = "O'quvchi sertifikati"
+        verbose_name_plural = "O'quvchi sertifikatlari"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        who = self.instructor.full_name if self.instructor else "Noma'lum"
+        return f"{self.student.full_name} - {who}"
 
 
