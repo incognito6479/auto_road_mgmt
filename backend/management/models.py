@@ -116,6 +116,28 @@ class User(AbstractUser):
         help_text="Namuna: 2275679",
     )
 
+    certificate_series = models.CharField(
+        max_length=2,
+        blank=True,
+        null=True,
+        help_text="Kursni tugatganlik sertifikati seriyasi. Namuna: AB",
+    )
+
+    certificate_number = models.CharField(
+        max_length=9,
+        blank=True,
+        null=True,
+        help_text="Kursni tugatganlik sertifikati raqami (9 ta raqam). Bu imtihon sertifikati emas, faqat kursni tugatganlik sertifikati — qo'shilishi hech qanday holatni o'zgartirmaydi.",
+    )
+
+    certificate_added_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Kursni tugatganlik sertifikati qo'shilgan sana",
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+
     full_name = models.CharField(
         max_length=255,
         blank=True,
@@ -682,7 +704,14 @@ class CarWash(BaseModel):
 
 
 class DrivingLessons(BaseModel):
-    """Driving lesson confirmation model."""
+    """Driving lesson confirmation model. Also covers autodrome (Avtodrom)
+    practice sessions, which are capped at 6 total hours per student."""
+
+    class LessonType(models.TextChoices):
+        DRIVING = "driving", "Amaliy haydash"
+        AUTODROME = "autodrome", "Avtodrom"
+
+    AUTODROME_MAX_HOURS = 6
 
     branch = models.ForeignKey(
         "Branch",
@@ -690,6 +719,16 @@ class DrivingLessons(BaseModel):
         null=True,
         blank=True,
         related_name="driving_lessons",
+    )
+    lesson_type = models.CharField(
+        max_length=20,
+        choices=LessonType.choices,
+        default=LessonType.DRIVING,
+    )
+    hours = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Avtodromda o'tkazilgan soatlar soni (faqat Avtodrom turi uchun, 1-6)",
     )
     student = models.ForeignKey(
         User,

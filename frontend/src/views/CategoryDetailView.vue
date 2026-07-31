@@ -79,10 +79,10 @@
       <table class="stbl">
         <thead>
           <tr>
+            <th>To'liq Ismi</th>
             <th>
               <input type="checkbox" @change="toggleSelectAll" :checked="isAllSelected" class="th-chk" />
             </th>
-            <th>To'liq Ismi</th>
             <th class="th-phone">Telefon Raqami</th>
             <th>JSHSHR</th>
             <th>Passport Ma'lumotlari</th>
@@ -98,10 +98,10 @@
             <td colspan="10" class="no-data">Hozircha ushbu kategoriyada yangi o'quvchilar mavjud emas</td>
           </tr>
           <tr v-for="s in filteredStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
+            <td class="td-name">{{ s.name }}</td>
             <td @click.stop>
               <input type="checkbox" :value="s.id" v-model="selectedStudentIds" class="td-chk" />
             </td>
-            <td class="td-name">{{ s.name }}</td>
             <td class="td-muted td-phone">
               <div>{{ s.phone }}</div>
               <div v-if="s.phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">

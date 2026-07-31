@@ -31,6 +31,9 @@
         <button class="quick-action-btn action-indigo" @click="openPayTeacherModal">
           <span class="qa-icon">+</span> O'qituvchiga to'lov
         </button>
+        <button class="quick-action-btn action-amber" @click="openAddCertModal">
+          <span class="qa-icon">+</span> Sertifikat qo'shish
+        </button>
       </div>
     </div>
 
@@ -95,17 +98,49 @@
             <div v-if="payModalError" class="alert-error">{{ payModalError }}</div>
 
             <div class="form-group">
+              <label class="flabel required">Guruhni Tanlang *</label>
+              <div class="searchable-select-wrap" ref="payGroupSelectRef">
+                <input
+                  v-model="payGroupQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  placeholder="Guruh nomi bo'yicha qidiring..."
+                  @click="showPayGroupDropdown = !showPayGroupDropdown"
+                  @input="showPayGroupDropdown = true"
+                  @keydown="onPayGroupKeydown"
+                />
+                <button v-if="selectedPayGroupId" type="button" class="input-clear-btn" title="Guruhni bekor qilish" @click="clearPayGroupSelection">✕</button>
+                <div v-if="showPayGroupDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(g, idx) in filteredPayGroups"
+                    :key="g.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: selectedPayGroupId === g.id, highlighted: payGroupKb.highlightedIndex.value === idx }"
+                    @click="selectPayGroup(g)"
+                  >
+                    <div class="opt-name">{{ g.name }}</div>
+                  </div>
+                  <div v-if="filteredPayGroups.length === 0" class="dropdown-empty">
+                    Mos guruh topilmadi
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
               <label class="flabel required">O'quvchini Ism bo'yicha Qidirish *</label>
               <div class="searchable-select-wrap" ref="studentSelectRef">
                 <input
                   v-model="studentSearchQuery"
                   type="text"
                   class="finput search-input-field"
-                  placeholder="Ism bo'yicha qidiring..."
+                  :placeholder="selectedPayGroupId ? 'Ism bo\'yicha qidiring...' : 'Avval guruhni tanlang'"
+                  :disabled="!selectedPayGroupId"
                   @click="showStudentDropdown = !showStudentDropdown"
                   @input="showStudentDropdown = true"
                   @keydown="onStudentPayKeydown"
                 />
+                <button v-if="payForm.enrollment" type="button" class="input-clear-btn" title="O'quvchini bekor qilish" @click="clearPayStudentSelection">✕</button>
                 <div v-if="showStudentDropdown" class="dropdown-options-list">
                   <div
                     v-for="(e, idx) in filteredEnrollments"
@@ -373,6 +408,113 @@
       </div>
     </Transition>
 
+    <!-- ── Add Certificate Modal ──────────────────────── -->
+    <Transition name="modal">
+      <div v-if="showAddCertModal" class="modal-overlay" @click.self="closeAddCertModal">
+        <div class="modal-card">
+          <div class="modal-header-banner amber-banner">
+            <div class="header-left-info">
+              <div class="header-icon-box amber-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                  <circle cx="12" cy="8" r="6"></circle><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"></path>
+                </svg>
+              </div>
+              <div>
+                <h3>Sertifikat Qo'shish</h3>
+                <p>O'quvchining kursni tugatganlik sertifikatini kiriting</p>
+              </div>
+            </div>
+            <button class="btn-modal-close" @click="closeAddCertModal">✕</button>
+          </div>
+
+          <form @submit.prevent="submitAddCert" class="modal-body">
+            <div v-if="addCertModalError" class="alert-error">{{ addCertModalError }}</div>
+
+            <div class="form-group">
+              <label class="flabel required">Guruhni Tanlang *</label>
+              <div class="searchable-select-wrap" ref="certGroupSelectRef">
+                <input
+                  v-model="certGroupQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  placeholder="Guruh nomi bo'yicha qidiring..."
+                  @click="showCertGroupDropdown = !showCertGroupDropdown"
+                  @input="showCertGroupDropdown = true"
+                  @keydown="onCertGroupKeydown"
+                />
+                <button v-if="selectedCertGroupId" type="button" class="input-clear-btn" title="Guruhni bekor qilish" @click="clearCertGroupSelection">✕</button>
+                <div v-if="showCertGroupDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(g, idx) in filteredCertGroups"
+                    :key="g.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: selectedCertGroupId === g.id, highlighted: certGroupKb.highlightedIndex.value === idx }"
+                    @click="selectCertGroup(g)"
+                  >
+                    <div class="opt-name">{{ g.name }}</div>
+                  </div>
+                  <div v-if="filteredCertGroups.length === 0" class="dropdown-empty">
+                    Mos guruh topilmadi
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">O'quvchini Ism bo'yicha Qidirish *</label>
+              <div class="searchable-select-wrap" ref="certStudentSelectRef">
+                <input
+                  v-model="certStudentSearchQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  :placeholder="selectedCertGroupId ? 'Ism bo\'yicha qidiring...' : 'Avval guruhni tanlang'"
+                  :disabled="!selectedCertGroupId"
+                  @click="showCertStudentDropdown = !showCertStudentDropdown"
+                  @input="showCertStudentDropdown = true"
+                  @keydown="onCertStudentKeydown"
+                />
+                <button v-if="addCertForm.student" type="button" class="input-clear-btn" title="O'quvchini bekor qilish" @click="clearCertStudentSelection">✕</button>
+                <div v-if="showCertStudentDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(s, idx) in filteredCertStudents"
+                    :key="s.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: addCertForm.student === s.id, highlighted: certStudentKb.highlightedIndex.value === idx }"
+                    @click="selectCertStudent(s)"
+                  >
+                    <div class="opt-name">{{ s.student_name }}</div>
+                  </div>
+                  <div v-if="filteredCertStudents.length === 0" class="dropdown-empty">
+                    Mos o'quvchi topilmadi
+                  </div>
+                </div>
+              </div>
+              <div v-if="selectedCertStudentLabel" class="selected-chip">
+                Tanlandi: <strong>{{ selectedCertStudentLabel }}</strong>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">Seriya *</label>
+              <input v-model="addCertForm.certificate_series" type="text" maxlength="2" class="finput text-upper" placeholder="AB" />
+            </div>
+
+            <div class="form-group">
+              <label class="flabel required">Raqami *</label>
+              <input v-model="addCertForm.certificate_number" type="text" maxlength="9" class="finput" placeholder="9 ta raqam" />
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="closeAddCertModal">Bekor qilish</button>
+              <button type="submit" class="btn-save btn-amber-save" :disabled="addCertSaving">
+                {{ addCertSaving ? "Saqlanmoqda..." : "Saqlash" }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Transition>
+
   </AppLayout>
 </template>
 
@@ -384,6 +526,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatNumber } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+import { useGroupSelect } from '@/composables/useGroupSelect'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -437,6 +580,7 @@ const totalDebt = ref(0)
 const enrollments = ref([])
 const agents = ref([])
 const teachers = ref([])
+const groups = ref([])
 
 function listOf(data) {
   return data && data.results ? data.results : (data || [])
@@ -473,7 +617,8 @@ async function fetchCountStats() {
 
     enrolledStudentsCount.value = countOf(studentsRes.data)
     activeStaffCount.value = countOf(coordinatorsRes.data) + countOf(instructorsRes.data)
-    activeGroupsCount.value = listOf(groupsRes.data).filter(g => g.status === 'started').length
+    groups.value = listOf(groupsRes.data)
+    activeGroupsCount.value = groups.value.filter(g => g.status === 'started').length
     activeCarsCount.value = countOf(carsRes.data)
   } catch (err) {
     console.error('Failed to load dashboard stats:', err)
@@ -548,10 +693,50 @@ const selectedStudentLabel = ref('')
 const studentSelectRef = ref(null)
 const payForm = ref({ enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
+// Group-first cascade: pick a group, then the student list narrows to that group.
+const {
+  query: payGroupQuery,
+  showDropdown: showPayGroupDropdown,
+  selectedId: selectedPayGroupId,
+  selectRef: payGroupSelectRef,
+  filtered: filteredPayGroups,
+  select: selectPayGroupRaw,
+  reset: resetPayGroupSelect,
+  isOutside: isPayGroupOutside,
+} = useGroupSelect(groups)
+
+function selectPayGroup(g) {
+  selectPayGroupRaw(g)
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  payForm.value.enrollment = ''
+}
+
+function clearPayGroupSelection() {
+  resetPayGroupSelect()
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  payForm.value.enrollment = ''
+}
+
+function clearPayStudentSelection() {
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  payForm.value.enrollment = ''
+}
+
+const payGroupKb = useSearchSelectKeyboard()
+function onPayGroupKeydown(e) {
+  payGroupKb.onKeydown(e, filteredPayGroups.value, selectPayGroup, () => { showPayGroupDropdown.value = false })
+}
+
 const filteredEnrollments = computed(() => {
+  if (!selectedPayGroupId.value) return []
   const q = studentSearchQuery.value.toLowerCase().trim()
-  if (!q) return enrollments.value
-  return enrollments.value.filter(e => (e.student_name || '').toLowerCase().includes(q))
+  return enrollments.value.filter(e => {
+    if (e.group !== selectedPayGroupId.value) return false
+    return !q || (e.student_name || '').toLowerCase().includes(q)
+  })
 })
 
 function openAcceptPaymentModal() {
@@ -559,6 +744,7 @@ function openAcceptPaymentModal() {
   studentSearchQuery.value = ''
   selectedStudentLabel.value = ''
   showStudentDropdown.value = false
+  resetPayGroupSelect()
   payForm.value = { enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
   showAcceptPaymentModal.value = true
 }
@@ -741,6 +927,118 @@ async function submitPayTeacher() {
   }
 }
 
+// ── Add Certificate Modal ───────────────────────────────
+const showAddCertModal = ref(false)
+const addCertSaving = ref(false)
+const addCertModalError = ref(null)
+const certEnrollments = ref([])
+const certStudentSearchQuery = ref('')
+const showCertStudentDropdown = ref(false)
+const selectedCertStudentLabel = ref('')
+const certStudentSelectRef = ref(null)
+const addCertForm = ref({ student: '', certificate_series: '', certificate_number: '' })
+
+// Group-first cascade: pick a group, then the student list narrows to that group.
+const {
+  query: certGroupQuery,
+  showDropdown: showCertGroupDropdown,
+  selectedId: selectedCertGroupId,
+  selectRef: certGroupSelectRef,
+  filtered: filteredCertGroups,
+  select: selectCertGroupRaw,
+  reset: resetCertGroupSelect,
+  isOutside: isCertGroupOutside,
+} = useGroupSelect(groups)
+
+function selectCertGroup(g) {
+  selectCertGroupRaw(g)
+  certStudentSearchQuery.value = ''
+  selectedCertStudentLabel.value = ''
+  addCertForm.value.student = ''
+}
+
+function clearCertGroupSelection() {
+  resetCertGroupSelect()
+  certStudentSearchQuery.value = ''
+  selectedCertStudentLabel.value = ''
+  addCertForm.value.student = ''
+}
+
+function clearCertStudentSelection() {
+  certStudentSearchQuery.value = ''
+  selectedCertStudentLabel.value = ''
+  addCertForm.value.student = ''
+}
+
+const certGroupKb = useSearchSelectKeyboard()
+function onCertGroupKeydown(e) {
+  certGroupKb.onKeydown(e, filteredCertGroups.value, selectCertGroup, () => { showCertGroupDropdown.value = false })
+}
+
+const filteredCertStudents = computed(() => {
+  if (!selectedCertGroupId.value) return []
+  const q = certStudentSearchQuery.value.toLowerCase().trim()
+  return certEnrollments.value.filter(e => {
+    if (e.group !== selectedCertGroupId.value) return false
+    return !q || (e.student_name || '').toLowerCase().includes(q)
+  })
+})
+
+async function fetchCertEnrollments() {
+  if (certEnrollments.value.length > 0) return
+  try {
+    const res = await api.get('/enrollments/', { params: { page_size: 1000 } })
+    certEnrollments.value = listOf(res.data)
+  } catch (err) {
+    console.error('Failed to load enrollments:', err)
+  }
+}
+
+function openAddCertModal() {
+  addCertModalError.value = null
+  certStudentSearchQuery.value = ''
+  selectedCertStudentLabel.value = ''
+  showCertStudentDropdown.value = false
+  resetCertGroupSelect()
+  addCertForm.value = { student: '', certificate_series: '', certificate_number: '' }
+  showAddCertModal.value = true
+  fetchCertEnrollments()
+}
+function closeAddCertModal() { showAddCertModal.value = false }
+
+function selectCertStudent(s) {
+  addCertForm.value.student = s.student
+  selectedCertStudentLabel.value = s.student_name
+  certStudentSearchQuery.value = s.student_name
+  showCertStudentDropdown.value = false
+}
+const certStudentKb = useSearchSelectKeyboard()
+function onCertStudentKeydown(e) {
+  certStudentKb.onKeydown(e, filteredCertStudents.value, selectCertStudent, () => { showCertStudentDropdown.value = false })
+}
+
+async function submitAddCert() {
+  if (!addCertForm.value.student) { addCertModalError.value = "O'quvchini tanlang."; return }
+  const series = addCertForm.value.certificate_series.trim().toUpperCase()
+  const number = addCertForm.value.certificate_number.trim()
+  if (!/^[A-Z]{2}$/.test(series)) { addCertModalError.value = "Seriya 2 ta harfdan iborat bo'lishi kerak (masalan: AB)."; return }
+  if (!/^\d{9}$/.test(number)) { addCertModalError.value = "Raqam 9 ta raqamdan iborat bo'lishi kerak."; return }
+  addCertSaving.value = true
+  addCertModalError.value = null
+  try {
+    await api.patch(`/students/${addCertForm.value.student}/`, {
+      certificate_series: series,
+      certificate_number: number,
+      certificate_added_date: new Date().toISOString(),
+    })
+    closeAddCertModal()
+  } catch (err) {
+    addCertModalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi"
+  } finally {
+    addCertSaving.value = false
+  }
+}
+
 // Both searchable selects close when the click lands outside their own wrapper.
 // Clicking the input itself is handled by its own @click toggle, and since the
 // input sits inside the wrapper this handler leaves that toggle alone.
@@ -753,6 +1051,15 @@ function handleSelectOutsideClick(e) {
   }
   if (teacherSelectRef.value && !teacherSelectRef.value.contains(e.target)) {
     showTeacherDropdown.value = false
+  }
+  if (certStudentSelectRef.value && !certStudentSelectRef.value.contains(e.target)) {
+    showCertStudentDropdown.value = false
+  }
+  if (isPayGroupOutside(e.target)) {
+    showPayGroupDropdown.value = false
+  }
+  if (isCertGroupOutside(e.target)) {
+    showCertGroupDropdown.value = false
   }
 }
 
@@ -904,12 +1211,14 @@ onUnmounted(() => {
 .modal-header-banner.green-banner { background: linear-gradient(180deg, #F0FDF4 0%, #FFFFFF 100%); }
 .modal-header-banner.gold-banner { background: linear-gradient(180deg, #FEF3C7 0%, #FFFFFF 100%); }
 .modal-header-banner.indigo-banner { background: linear-gradient(180deg, #EEF2FF 0%, #FFFFFF 100%); }
+.modal-header-banner.amber-banner { background: linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 100%); }
 .header-left-info { display: flex; align-items: center; gap: 12px; }
 .header-left-info h3 { font-size: 17px; font-weight: 700; color: #111827; }
 .header-left-info p { font-size: 12px; color: #6B7280; margin-top: 2px; }
 .header-icon-box { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%); color: white; display: flex; align-items: center; justify-content: center; }
 .header-icon-box.gold-box { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
 .header-icon-box.indigo-box { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
+.header-icon-box.amber-box { background: linear-gradient(135deg, #D97706 0%, #92400E 100%); }
 .btn-modal-close { background: none; border: none; font-size: 18px; color: #9CA3AF; cursor: pointer; }
 .modal-body { padding: 24px; }
 
@@ -927,6 +1236,14 @@ onUnmounted(() => {
 .select-chevron-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9CA3AF; font-size: 10px; }
 
 .searchable-select-wrap { position: relative; width: 100%; }
+.input-clear-btn {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%; border: none;
+  background: #E5E7EB; color: #4B5563; font-size: 11px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.input-clear-btn:hover { background: #D1D5DB; color: #111827; }
+.searchable-select-wrap .finput { padding-right: 34px; }
 .dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #2D6A4F; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
 .dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; }
 .dropdown-option-item:hover { background: #F0FDF4; }
@@ -947,6 +1264,8 @@ onUnmounted(() => {
 .btn-save { padding: 10px 22px; background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%); color: white; border-radius: 10px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
 .btn-gold-save { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
 .btn-indigo-save { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
+.btn-amber-save { background: linear-gradient(135deg, #D97706 0%, #92400E 100%); }
+.finput.text-upper { text-transform: uppercase; }
 .alert-error { background: #FEE2E2; color: #991B1B; padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
 
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }

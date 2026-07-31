@@ -175,10 +175,16 @@
                 <td class="td-name">
                   <div class="student-name-link" @click="goStudent(e.student)">{{ e.student_name || "Noma'lum" }}</div>
                   <div v-if="e.student_phone" class="student-sub">📞 {{ formatPhone(e.student_phone) }}</div>
+                  <div v-if="e.student_phone2" class="student-sub">📞 {{ formatPhone(e.student_phone2) }} (qo'shimcha)</div>
                 </td>
-                <td>
-                  <span class="cat-pill">{{ e.category_name || '-' }}</span>
-                  <div v-if="e.group_name" class="group-sub">{{ e.group_name }}</div>
+                <td class="td-cat">
+                  <div class="cat-pill-wrap">
+                    <span class="cat-badge">{{ e.category_name || '-' }}</span>
+                    <span v-if="e.group_name" class="group-pill">{{ e.group_name }}</span>
+                  </div>
+                  <div v-if="groupsById[e.group]" class="group-dates">
+                    {{ formatDate(groupsById[e.group].started_at) }} — {{ formatDate(groupsById[e.group].ends_at) }}
+                  </div>
                 </td>
                 <td class="td-muted">{{ e.instructor_name || '-' }}</td>
                 <td class="td-muted">{{ e.coordinator_name || '-' }}</td>
@@ -219,7 +225,14 @@ const router = useRouter()
 
 const place = ref(null)
 const enrollments = ref([])
+const groups = ref([])
 const loading = ref(true)
+
+const groupsById = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.id] = g })
+  return map
+})
 const error = ref('')
 const searchQuery = ref('')
 const filterStatus = ref('')
@@ -321,12 +334,14 @@ async function fetchAll() {
   loading.value = true
   error.value = ''
   try {
-    const [placeRes, enrRes] = await Promise.all([
+    const [placeRes, enrRes, groupsRes] = await Promise.all([
       api.get(`/learning-places/${route.params.id}/`),
       api.get('/enrollments/', { params: { learning_place: route.params.id, page_size: 1000 } }),
+      api.get('/groups/', { params: { page_size: 1000 } }),
     ])
     place.value = placeRes.data
     enrollments.value = enrRes.data.results ? enrRes.data.results : enrRes.data
+    groups.value = groupsRes.data.results ? groupsRes.data.results : groupsRes.data
   } catch (err) {
     console.error(err)
     error.value = "O'quv joyi ma'lumotlarini yuklashda xatolik yuz berdi."
@@ -413,8 +428,10 @@ onMounted(fetchAll)
 .student-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .td-muted { color: #6B7280; }
 .td-amount { font-weight: 600; white-space: nowrap; }
-.cat-pill { padding: 4px 10px; background: #E8F5E9; color: #2D6A4F; border-radius: 8px; font-size: 12px; font-weight: 700; }
-.group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.cat-pill-wrap { display: flex; align-items: center; gap: 6px; }
+.cat-badge { padding: 3px 8px; background: #E8F5E9; color: #2D6A4F; border-radius: 6px; font-size: 12px; font-weight: 700; }
+.group-pill { padding: 3px 8px; background: #EFF6FF; color: #2563EB; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .debt-chip { padding: 4px 10px; background: #FEE2E2; color: #991B1B; border-radius: 8px; font-size: 12.5px; font-weight: 700; display: inline-block; }
 .paid-chip { padding: 4px 10px; background: #DCFCE7; color: #15803D; border-radius: 8px; font-size: 12.5px; font-weight: 700; display: inline-block; }
 .free-chip { padding: 4px 10px; background: #EDE9FE; color: #6D28D9; border-radius: 8px; font-size: 12.5px; font-weight: 700; display: inline-block; }

@@ -104,7 +104,31 @@
                   </svg>
                   Pasport rasmini ko'rish
                 </button>
+                <button v-else-if="authStore.isAdminOrSuperuser" type="button" class="btn-view-pass" @click="openPassportUploadModal">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Yuklash
+                </button>
                 <span v-else style="color: #9CA3AF; font-size: 13px;">Yuklanmagan</span>
+              </span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Sertifikat</span>
+              <span class="info-value">
+                <template v-if="student.certificate_number">
+                  {{ student.certificate_series || '' }} {{ student.certificate_number }}
+                  <span v-if="student.certificate_added_date" style="color: #6B7280; font-size: 12px;">({{ formatDate(student.certificate_added_date) }})</span>
+                </template>
+                <button v-else-if="authStore.isAdminOrSuperuser" type="button" class="btn-view-pass" @click="openCertAddModal">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  Qo'shish
+                </button>
+                <span v-else style="color: #9CA3AF; font-size: 13px;">Yo'q</span>
               </span>
             </div>
             <div class="info-row"><span class="info-label">Ro'yxatdan o'tgan</span><span class="info-value">{{ formatDate(student.date_joined) }}</span></div>
@@ -123,12 +147,12 @@
           <div class="info-grid">
             <div class="info-row"><span class="info-label">Kategoriya</span><span class="info-value"><span class="cat-badge">{{ enrollment.category_name || '-' }}</span></span></div>
             <div class="info-row"><span class="info-label">Holat</span><span class="info-value"><span class="status-badge" :class="statusClass(activeStatus)">{{ statusText(activeStatus) }}</span></span></div>
-            <div class="info-row" v-if="enrollment.instructor_name"><span class="info-label">Instruktor</span><span class="info-value">{{ enrollment.instructor_name }}</span></div>
-            <div class="info-row" v-if="enrollment.coordinator_name"><span class="info-label">O'qituvchi</span><span class="info-value">{{ enrollment.coordinator_name }}</span></div>
+            <div class="info-row" v-if="enrollment.instructor_name"><span class="info-label">Instruktor</span><span class="info-value link-value" @click="goTeacher(enrollment.instructor)">{{ enrollment.instructor_name }}</span></div>
+            <div class="info-row" v-if="enrollment.coordinator_name"><span class="info-label">O'qituvchi</span><span class="info-value link-value" @click="goTeacher(enrollment.coordinator)">{{ enrollment.coordinator_name }}</span></div>
             <div class="info-row" v-if="enrollment.learning_place_name"><span class="info-label">O'quv joyi</span><span class="info-value">{{ enrollment.learning_place_name }}</span></div>
             <div class="info-row" v-if="enrollment.learning_time"><span class="info-label">O'quv vaqti</span><span class="info-value">{{ enrollment.learning_time }}</span></div>
             <div class="info-row" v-if="enrollment.learning_days"><span class="info-label">O'quv kunlari</span><span class="info-value">{{ formatLearningDays(enrollment.learning_days) }}</span></div>
-            <div class="info-row" v-if="enrollment.agent_name"><span class="info-label">Agent</span><span class="info-value">{{ enrollment.agent_name }}</span></div>
+            <div class="info-row" v-if="enrollment.agent_name"><span class="info-label">Agent</span><span class="info-value link-value" @click="goAgent(enrollment.agent)">{{ enrollment.agent_name }}</span></div>
             <div class="info-row" v-if="canSeePaymentInfo"><span class="info-label">Shartnoma summasi</span><span class="info-value fw"><span v-if="enrollment.enrolled_free" class="badge-free">Tekin (Bonus)</span><span v-else>{{ formatMoney(enrollment.enrolled_amount) }}</span></span></div>
           </div>
         </div>
@@ -350,7 +374,7 @@
             <span>Yuklanmoqda...</span>
           </div>
 
-          <div v-else-if="drivingLessons.length === 0" class="mini-state">
+          <div v-else-if="drivingLessonsOnly.length === 0" class="mini-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5" width="32" height="32">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="8" x2="12" y2="12"/>
@@ -371,10 +395,66 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="l in drivingLessons" :key="l.id" class="pay-row">
+                <tr v-for="l in drivingLessonsOnly" :key="l.id" class="pay-row">
                   <td class="td-date font-bold">📅 {{ formatDateTime(l.lesson_date) }}</td>
                   <td><span class="instructor-chip font-bold">👤 {{ l.instructor_name || '-' }}</span></td>
                   <td><span class="car-chip font-bold">🚘 {{ l.car_name || '-' }}</span></td>
+                  <td><span class="pay-status-badge pstatus-accepted">✓ Tasdiqlangan</span></td>
+                  <td class="td-notes">{{ l.notes || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Avtodrom History -->
+        <div class="detail-card margin-top-card">
+          <div class="card-header">
+            <span class="card-icon card-icon-purple">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+            </span>
+            <h2 class="card-title">Avtodrom</h2>
+            <span style="font-size: 12px; color: #6B7280; margin-right: 10px;">Qolgan: {{ autodromeHoursRemaining }} / {{ autodromeMaxHours }} soat</span>
+            <button class="btn-add-payment btn-add-lesson" v-if="canAddLesson && autodromeHoursRemaining > 0" @click="openAutodromeModal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Avtodrom tasdiqlash
+            </button>
+          </div>
+
+          <div v-if="loadingLessons" class="mini-state">
+            <div class="spinner spinner-sm"></div>
+            <span>Yuklanmoqda...</span>
+          </div>
+
+          <div v-else-if="autodromeLessons.length === 0" class="mini-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5" width="32" height="32">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>Tasdiqlangan avtodrom mashg'ulotlari mavjud emas</span>
+          </div>
+
+          <div v-else class="pay-table-wrap">
+            <table class="pay-table">
+              <thead>
+                <tr>
+                  <th>Sana</th>
+                  <th>Soat</th>
+                  <th>Holat</th>
+                  <th>Izoh</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="l in autodromeLessons" :key="l.id" class="pay-row">
+                  <td class="td-date font-bold">📅 {{ formatDateTime(l.lesson_date) }}</td>
+                  <td><span class="instructor-chip font-bold">{{ l.hours }} soat</span></td>
                   <td><span class="pay-status-badge pstatus-accepted">✓ Tasdiqlangan</span></td>
                   <td class="td-notes">{{ l.notes || '-' }}</td>
                 </tr>
@@ -398,10 +478,12 @@
           <div class="form-grid-2">
             <div class="form-group fg-full"><label class="form-label">To'liq Ismi <span class="req">*</span></label><input v-model="editForm.full_name" type="text" class="form-input" placeholder="Ali Valiyev" required/></div>
             <div class="form-group"><label class="form-label">Telefon <span class="req">*</span></label><input v-model="editForm.phone" type="text" class="form-input" placeholder="+998 90 123 45 67" @input="onEditPhoneInput" required/></div>
-            <div class="form-group"><label class="form-label">Qo'shimcha Telefon</label><input v-model="editForm.phone2" type="text" class="form-input" placeholder="+998 90 123 45 67 otasi / amakisi"/></div>
+            <div class="form-group"><label class="form-label">Qo'shimcha Telefon</label><input v-model="editForm.phone2" type="text" class="form-input" placeholder="+998 90 123 45 67 otasi / amakisi" @input="onEditPhone2Input"/></div>
             <div class="form-group"><label class="form-label">JSHSHR</label><input v-model="editForm.jshshr" type="text" maxlength="14" class="form-input mono" placeholder="14 ta raqam"/></div>
             <div class="form-group"><label class="form-label">Pasport Seriyasi</label><input v-model="editForm.passport_serie" type="text" maxlength="2" class="form-input text-upper" placeholder="AA"/></div>
             <div class="form-group"><label class="form-label">Pasport Raqami</label><input v-model="editForm.passport_number" type="text" maxlength="7" class="form-input mono" placeholder="1234567"/></div>
+            <div class="form-group"><label class="form-label">Sertifikat Seriyasi</label><input v-model="editForm.certificate_series" type="text" maxlength="2" class="form-input text-upper" placeholder="AB"/></div>
+            <div class="form-group"><label class="form-label">Sertifikat Raqami</label><input v-model="editForm.certificate_number" type="text" maxlength="9" class="form-input mono" placeholder="9 ta raqam"/></div>
             <div class="form-group">
               <label class="form-label">O'quvchi Rasmi (Foto)</label>
               <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
@@ -552,6 +634,64 @@
       </form>
     </dialog>
 
+    <!-- AVTODROM CONFIRMATION MODAL -->
+    <dialog ref="autodromeModal" class="modal-dialog" closedby="any">
+      <form class="modal-form" @submit.prevent="submitAutodromeConfirmation">
+        <div class="modal-head">
+          <h3 class="modal-title">🏁 Avtodrom Mashg'ulotini Tasdiqlash</h3>
+          <button type="button" class="btn-close" @click="autodromeModal?.close()">✕</button>
+        </div>
+        <div v-if="autodromeError" class="modal-error">{{ autodromeError }}</div>
+        <div v-if="autodromeSuccess" class="alert-success-box">{{ autodromeSuccess }}</div>
+
+        <div class="form-section">
+          <div class="form-grid-2">
+
+            <!-- Student (Disabled) -->
+            <div class="form-group fg-full">
+              <label class="form-label">O'quvchi F.I.SH. (Cheklangan)</label>
+              <input :value="student?.full_name" type="text" class="form-input disabled-input" disabled />
+            </div>
+
+            <!-- Instructor (Disabled) -->
+            <div class="form-group">
+              <label class="form-label">Instruktor (Cheklangan)</label>
+              <input :value="enrollment?.instructor_name || 'Instruktor biriktirilmagan'" type="text" class="form-input disabled-input" disabled />
+            </div>
+
+            <!-- Date (Disabled) -->
+            <div class="form-group">
+              <label class="form-label">Sana (Cheklangan)</label>
+              <input :value="todayDateFormatted" type="text" class="form-input disabled-input" disabled />
+            </div>
+
+            <!-- Hours (limited to what's left of the 6-hour total) -->
+            <div class="form-group fg-full">
+              <label class="form-label">Necha Soat O'tkazildi (Qolgan: {{ autodromeHoursRemaining }} soat)</label>
+              <select v-model.number="autodromeForm.hours" class="form-input">
+                <option v-for="h in autodromeHourOptions" :key="h" :value="h">{{ h }} soat</option>
+              </select>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-group fg-full">
+              <label class="form-label">Izoh / Eslatma</label>
+              <input v-model="autodromeForm.notes" type="text" class="form-input" placeholder="Avtodrom mashg'uloti bo'yicha qo'shimcha izoh..." />
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="autodromeModal?.close()">Bekor qilish</button>
+          <button type="submit" class="btn-save btn-green" :disabled="autodromeSaving">
+            <span v-if="autodromeSaving" class="btn-spinner"></span>
+            {{ autodromeSaving ? 'Tasdiqlanmoqda...' : 'Tasdiqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- LEAVE REVIEW MODAL -->
     <dialog ref="reviewModal" class="modal-dialog modal-sm" closedby="any">
       <form class="modal-form" @submit.prevent="submitReview">
@@ -615,6 +755,60 @@
           <button type="button" class="btn-cancel" @click="certModal?.close()">Bekor qilish</button>
           <button type="submit" class="btn-save" :disabled="certUploading || !selectedCertFile">
             <span v-if="certUploading" class="btn-spinner"></span>{{ certUploading ? 'Yuklanmoqda...' : 'Yuklash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Passport Photo Upload Modal (dedicated — just the file field) -->
+    <dialog ref="passportUploadModal" class="modal-dialog modal-sm" closedby="any">
+      <form class="modal-form" @submit.prevent="submitPassportUpload">
+        <div class="modal-head">
+          <h3 class="modal-title">Pasport Rasmini Yuklash</h3>
+          <button type="button" class="btn-close" @click="passportUploadModal?.close()">✕</button>
+        </div>
+        <div v-if="passportUploadError" class="modal-error">{{ passportUploadError }}</div>
+
+        <div class="form-section">
+          <div class="form-group">
+            <label class="form-label">Pasport rasmi / nusxasi <span class="req">*</span></label>
+            <input type="file" accept="image/*,.pdf" class="form-input" @change="onPassportUploadFileChange" required />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="passportUploadModal?.close()">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="passportUploadSaving || !passportUploadFile">
+            <span v-if="passportUploadSaving" class="btn-spinner"></span>{{ passportUploadSaving ? 'Yuklanmoqda...' : 'Yuklash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Course-Completion Certificate Add Modal (dedicated — just series/number) -->
+    <dialog ref="certAddModal" class="modal-dialog modal-sm" closedby="any">
+      <form class="modal-form" @submit.prevent="submitCertAdd">
+        <div class="modal-head">
+          <h3 class="modal-title">Kursni Tugatganlik Sertifikati</h3>
+          <button type="button" class="btn-close" @click="certAddModal?.close()">✕</button>
+        </div>
+        <div v-if="certAddError" class="modal-error">{{ certAddError }}</div>
+
+        <div class="form-section">
+          <div class="form-group">
+            <label class="form-label">Seriya <span class="req">*</span></label>
+            <input v-model="certAddForm.certificate_series" type="text" maxlength="2" class="form-input text-upper" placeholder="AB" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Raqami <span class="req">*</span></label>
+            <input v-model="certAddForm.certificate_number" type="text" maxlength="9" class="form-input" placeholder="9 ta raqam" />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="certAddModal?.close()">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="certAddSaving">
+            <span v-if="certAddSaving" class="btn-spinner"></span>{{ certAddSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
           </button>
         </div>
       </form>
@@ -750,6 +944,11 @@ function goTeacher(id) {
 function goCar(id) {
   if (!id || authStore.isStudent) return
   router.push(`/vehicles/${id}`)
+}
+
+function goAgent(id) {
+  if (!id || !(authStore.isAdminOrSuperuser || authStore.isMechanic)) return
+  router.push(`/agents/${id}`)
 }
 
 function carStatusText(st) {
@@ -915,6 +1114,78 @@ async function uploadCertificate() {
   }
 }
 
+// Passport photo upload — dedicated modal, only the file field (not the
+// full edit-student form).
+const passportUploadModal = ref(null)
+const passportUploadFile = ref(null)
+const passportUploadSaving = ref(false)
+const passportUploadError = ref('')
+
+function openPassportUploadModal() {
+  passportUploadFile.value = null
+  passportUploadError.value = ''
+  passportUploadModal.value?.showModal()
+}
+
+function onPassportUploadFileChange(e) {
+  passportUploadFile.value = e.target.files?.[0] || null
+}
+
+async function submitPassportUpload() {
+  if (!passportUploadFile.value || !student.value) return
+  passportUploadSaving.value = true
+  passportUploadError.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('pass_img', passportUploadFile.value)
+    const res = await api.patch(`/students/${student.value.id}/`, formData)
+    student.value = res.data
+    passportUploadModal.value?.close()
+  } catch (err) {
+    console.error(err)
+    passportUploadError.value = err.response?.data?.detail || "Yuklashda xatolik yuz berdi."
+  } finally {
+    passportUploadSaving.value = false
+  }
+}
+
+// Course-completion certificate — dedicated modal, only series/number (not
+// the full edit-student form).
+const certAddModal = ref(null)
+const certAddForm = ref({ certificate_series: '', certificate_number: '' })
+const certAddSaving = ref(false)
+const certAddError = ref('')
+
+function openCertAddModal() {
+  certAddForm.value = { certificate_series: '', certificate_number: '' }
+  certAddError.value = ''
+  certAddModal.value?.showModal()
+}
+
+async function submitCertAdd() {
+  if (!student.value) return
+  const series = certAddForm.value.certificate_series.trim().toUpperCase()
+  const number = certAddForm.value.certificate_number.trim()
+  if (!/^[A-Z]{2}$/.test(series)) { certAddError.value = "Seriya 2 ta harfdan iborat bo'lishi kerak (masalan: AB)."; return }
+  if (!/^\d{9}$/.test(number)) { certAddError.value = "Raqam 9 ta raqamdan iborat bo'lishi kerak."; return }
+  certAddSaving.value = true
+  certAddError.value = ''
+  try {
+    const res = await api.patch(`/students/${student.value.id}/`, {
+      certificate_series: series,
+      certificate_number: number,
+      certificate_added_date: new Date().toISOString(),
+    })
+    student.value = res.data
+    certAddModal.value?.close()
+  } catch (err) {
+    console.error(err)
+    certAddError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi."
+  } finally {
+    certAddSaving.value = false
+  }
+}
+
 const bonusModal = ref(null)
 const bonusTarget = ref(null)
 const bonusForm = ref({ amountFormatted: '', amount: 0, method: 'cash' })
@@ -975,7 +1246,7 @@ const lessonSaving = ref(false)
 const instructorCar = ref(null)
 const lessonForm    = ref({ car: '', notes: '' })
 
-const editForm = ref({ full_name: '', phone: '', phone2: '', jshshr: '', passport_serie: '', passport_number: '', status: 'enrolled', notes: '', learning_time: '', learning_days: [] })
+const editForm = ref({ full_name: '', phone: '', phone2: '', jshshr: '', passport_serie: '', passport_number: '', certificate_series: '', certificate_number: '', status: 'enrolled', notes: '', learning_time: '', learning_days: [] })
 const weekdayOptions = [
   { value: 0, label: 'Dush' },
   { value: 1, label: 'Sesh' },
@@ -1122,6 +1393,73 @@ const fetchDrivingLessons = async () => {
   }
 }
 
+// ── Avtodrom (capped at 6 total hours per student) ────────────
+const drivingLessonsOnly = computed(() => drivingLessons.value.filter(l => l.lesson_type !== 'autodrome'))
+const autodromeLessons = computed(() => drivingLessons.value.filter(l => l.lesson_type === 'autodrome'))
+
+const autodromeMaxHours = 6
+const autodromeHoursUsed = computed(() => autodromeLessons.value.reduce((sum, l) => sum + (l.hours || 0), 0))
+const autodromeHoursRemaining = computed(() => Math.max(0, autodromeMaxHours - autodromeHoursUsed.value))
+const autodromeHourOptions = computed(() => Array.from({ length: autodromeHoursRemaining.value }, (_, i) => i + 1))
+
+const autodromeModal = ref(null)
+const autodromeForm = ref({ hours: 1, notes: '' })
+const autodromeSaving = ref(false)
+const autodromeError = ref('')
+const autodromeSuccess = ref('')
+
+const openAutodromeModal = () => {
+  autodromeError.value = ''
+  autodromeSuccess.value = ''
+  autodromeForm.value = { hours: autodromeHourOptions.value[0] || 1, notes: '' }
+  autodromeModal.value?.showModal()
+}
+
+const submitAutodromeConfirmation = async () => {
+  if (!enrollment.value?.instructor) {
+    autodromeError.value = "Ushbu o'quvchiga instruktor biriktirilmagan."
+    return
+  }
+  if (!autodromeForm.value.hours || autodromeForm.value.hours > autodromeHoursRemaining.value) {
+    autodromeError.value = "To'g'ri soat sonini tanlang."
+    return
+  }
+  autodromeSaving.value = true
+  autodromeError.value = ''
+  autodromeSuccess.value = ''
+
+  try {
+    const nowISO = new Date().toISOString()
+
+    await api.post('/driving-lessons/', {
+      student: student.value.id,
+      instructor: enrollment.value.instructor,
+      lesson_type: 'autodrome',
+      hours: autodromeForm.value.hours,
+      lesson_date: nowISO,
+      notes: autodromeForm.value.notes || ''
+    })
+
+    await api.post('/notifications/', {
+      title: `Avtodrom mashg'uloti tasdiqlandi: ${student.value.full_name}`,
+      note: `O'quvchi: ${student.value.full_name} | Instruktor: ${enrollment.value.instructor_name || '-'} | Soat: ${autodromeForm.value.hours} | Sana: ${todayDateFormatted.value}`,
+      status: 'driving_lesson',
+      target_id: student.value.id,
+    })
+
+    await fetchDrivingLessons()
+    autodromeSuccess.value = "Avtodrom mashg'uloti muvaffaqiyatli tasdiqlandi!"
+    setTimeout(() => {
+      autodromeModal.value?.close()
+    }, 1500)
+  } catch (err) {
+    console.error("Avtodromni tasdiqlashda xatolik:", err)
+    autodromeError.value = err.response?.data?.hours?.[0] || err.response?.data?.detail || "Tasdiqlashda xatolik yuz berdi."
+  } finally {
+    autodromeSaving.value = false
+  }
+}
+
 const fetchAll = async () => {
   loading.value = true; error.value = ''
   try {
@@ -1194,6 +1532,8 @@ const openEditModal = () => {
     jshshr: s.jshshr ? String(s.jshshr) : '',
     passport_serie: s.passport_serie || '',
     passport_number: s.passport_number ? String(s.passport_number) : '',
+    certificate_series: s.certificate_series || '',
+    certificate_number: s.certificate_number || '',
     status: activeStatus.value,
     notes: s.notes || '',
     existingImage: s.image || null,
@@ -1218,8 +1558,17 @@ const maskPhone = (val) => {
 }
 const onEditPhoneInput = (e) => { editForm.value.phone = maskPhone(e.target.value) }
 
-// phone2 is intentionally free-form (e.g. "+998 90 900 90 90 uncle") — no
-// auto-reformatting, unlike the primary `phone` field.
+// phone2 auto-formats its leading phone-number run just like the primary
+// `phone` field, but stops re-masking the moment a non-phone character
+// shows up — everything from there on is left untouched, so the user can
+// still freely append a relationship label (e.g. "otasi" / "amakisi").
+function onEditPhone2Input(e) {
+  const raw = e.target.value
+  const match = raw.match(/^[\d+\s()-]*/)
+  const phonePart = match ? match[0] : ''
+  const restPart = raw.slice(phonePart.length)
+  editForm.value.phone2 = phonePart ? maskPhone(phonePart) + restPart : restPart
+}
 
 const saveStudent = async () => {
   editError.value = ''
@@ -1227,6 +1576,11 @@ const saveStudent = async () => {
   const phoneCleaned = f.phone.replace(/\D/g, '')
   if (!f.full_name.trim())      { editError.value = "Ism kiritilishi shart."; return }
   if (phoneCleaned.length < 12) { editError.value = "Telefon raqami noto'g'ri."; return }
+  const certSeries = f.certificate_series ? f.certificate_series.trim().toUpperCase() : null
+  const certNumber = f.certificate_number ? f.certificate_number.trim() : null
+  if (certSeries && !/^[A-Z]{2}$/.test(certSeries)) { editError.value = "Sertifikat seriyasi 2 ta harfdan iborat bo'lishi kerak (masalan: AB)."; return }
+  if (certNumber && !/^\d{9}$/.test(certNumber)) { editError.value = "Sertifikat raqami 9 ta raqamdan iborat bo'lishi kerak."; return }
+  const certChanged = certSeries !== (student.value.certificate_series || null) || certNumber !== (student.value.certificate_number || null)
   editSaving.value = true
   try {
     const payload = {
@@ -1236,10 +1590,15 @@ const saveStudent = async () => {
       jshshr: f.jshshr ? parseInt(f.jshshr, 10) : null,
       passport_serie: f.passport_serie ? f.passport_serie.trim().toUpperCase() : null,
       passport_number: f.passport_number ? parseInt(f.passport_number, 10) : null,
+      certificate_series: certSeries,
+      certificate_number: certNumber,
       status: f.status,
       notes: f.notes || '',
       learning_time: f.learning_time || '',
       learning_days: f.learning_days || [],
+    }
+    if (certChanged) {
+      payload.certificate_added_date = (certSeries || certNumber) ? new Date().toISOString() : null
     }
 
     if (selectedStudentPhoto.value || selectedPassportPhoto.value) {
@@ -1495,6 +1854,8 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .info-value{font-size:13.5px;color:#1F2937;flex:1;line-height:1.5}
 .info-value.fw{font-weight:600}
 .info-value.mono{font-family:monospace}
+.info-value.link-value{cursor:pointer;color:#2D6A4F}
+.info-value.link-value:hover{text-decoration:underline}
 
 .status-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.02em}
 .badge-new{background:#F3F4F6;color:#4B5563}

@@ -290,6 +290,16 @@
               </select>
             </div>
           </div>
+
+          <div class="filter-item">
+            <label class="filter-label">Guruh sanasi (dan):</label>
+            <input v-model="groupDateFrom" type="date" class="group-date-input" />
+          </div>
+
+          <div class="filter-item">
+            <label class="filter-label">Guruh sanasi (gacha):</label>
+            <input v-model="groupDateTo" type="date" class="group-date-input" />
+          </div>
         </div>
 
         <div v-if="loadingEnrollments" class="state-container">
@@ -322,6 +332,7 @@
                 <th>To'langan</th>
                 <th v-if="showCoordinatorColumn">O'qituvchi</th>
                 <th v-if="showInstructorColumn">Instruktor</th>
+                <th>Sertifikat</th>
                 <th>Imtihondan o'tganligi haqida</th>
               </tr>
             </thead>
@@ -336,7 +347,7 @@
                   <div v-if="e.student_phone2" class="td-phone-sub">Qo'shimcha: {{ formatPhone(e.student_phone2) }}</div>
                 </td>
                 <td><span class="group-badge">{{ e.category_name || '-' }}</span></td>
-                <td>
+                <td class="td-group">
                   {{ e.group_name || '-' }}
                   <div v-if="groupsById[e.group]" class="group-dates">
                     {{ formatDate(groupsById[e.group].started_at) }} — {{ formatDate(groupsById[e.group].ends_at) }}
@@ -358,6 +369,14 @@
                 <td class="text-green">{{ formatMoney(e.paid_amount || 0) }}</td>
                 <td v-if="showCoordinatorColumn">{{ e.coordinator_name || '-' }}</td>
                 <td v-if="showInstructorColumn">{{ e.instructor_name || '-' }}</td>
+                <td @click.stop>
+                  <template v-if="e.student_certificate_number">
+                    {{ e.student_certificate_series || '' }} {{ e.student_certificate_number }}
+                    <button v-if="authStore.isAdminOrSuperuser" type="button" class="btn-upload-cert" @click="openCourseCertModal(e)">Tahrirlash</button>
+                  </template>
+                  <button v-else-if="authStore.isAdminOrSuperuser" type="button" class="btn-upload-cert" @click="openCourseCertModal(e)">+ Qo'shish</button>
+                  <span v-else>-</span>
+                </td>
                 <td @click.stop>
                   <span class="cert-status-chip" :class="studentHasCertificate(e.student) ? 'cert-yes' : 'cert-no'">
                     {{ studentHasCertificate(e.student) ? '✓ Yuklangan' : 'Yuklanmagan' }}
@@ -422,7 +441,7 @@
 
           <div class="form-group">
             <label class="form-label">Qo'shimcha telefon</label>
-            <input v-model="editForm.phone2" type="text" class="form-input" placeholder="+998 90 900 90 90 otasi" />
+            <input v-model="editForm.phone2" type="text" class="form-input" placeholder="+998 90 900 90 90" @input="onEditPhone2Input" />
           </div>
         </div>
 
@@ -603,6 +622,39 @@
           <button type="button" class="btn-cancel" @click="closeCertUploadModal">Bekor qilish</button>
           <button type="submit" class="btn-submit" :disabled="certUploadSaving || !certUploadFile">
             {{ certUploadSaving ? 'Yuklanmoqda...' : 'Yuklash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Course-Completion Certificate Modal (series/number — dedicated, not the full edit modal) -->
+    <dialog ref="courseCertModal" class="modal-dialog modal-sm" closedby="any">
+      <form class="user-modal-form" @submit.prevent="submitCourseCert">
+        <div class="user-modal-header">
+          <div class="header-badge-wrap">
+            <div>
+              <h3 class="user-modal-title">Kursni Tugatganlik Sertifikati</h3>
+              <p class="user-modal-sub" v-if="courseCertTarget">{{ courseCertTarget.student_name }}</p>
+            </div>
+          </div>
+          <button type="button" class="user-btn-close" @click="closeCourseCertModal">✕</button>
+        </div>
+        <div v-if="courseCertError" class="modal-alert modal-alert-error"><span>{{ courseCertError }}</span></div>
+
+        <div class="form-group">
+          <label class="form-label required">Seriya</label>
+          <input v-model="courseCertForm.certificate_series" type="text" maxlength="2" class="form-input" placeholder="AB" style="text-transform: uppercase;" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label required">Raqami</label>
+          <input v-model="courseCertForm.certificate_number" type="text" maxlength="9" class="form-input" placeholder="9 ta raqam" />
+        </div>
+
+        <div class="user-modal-footer">
+          <button type="button" class="btn-cancel" @click="closeCourseCertModal">Bekor qilish</button>
+          <button type="submit" class="btn-submit" :disabled="courseCertSaving">
+            {{ courseCertSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
           </button>
         </div>
       </form>
@@ -884,6 +936,51 @@ async function submitCertUpload() {
   }
 }
 
+// ── Course-completion certificate (series/number, dedicated small modal) ──
+const courseCertModal = ref(null)
+const courseCertTarget = ref(null)
+const courseCertForm = ref({ certificate_series: '', certificate_number: '' })
+const courseCertSaving = ref(false)
+const courseCertError = ref('')
+
+function openCourseCertModal(enrollment) {
+  courseCertTarget.value = enrollment
+  courseCertForm.value = {
+    certificate_series: enrollment.student_certificate_series || '',
+    certificate_number: enrollment.student_certificate_number || '',
+  }
+  courseCertError.value = ''
+  courseCertModal.value?.showModal()
+}
+
+function closeCourseCertModal() {
+  courseCertModal.value?.close()
+}
+
+async function submitCourseCert() {
+  if (!courseCertTarget.value) return
+  const series = courseCertForm.value.certificate_series.trim().toUpperCase()
+  const number = courseCertForm.value.certificate_number.trim()
+  if (!/^[A-Z]{2}$/.test(series)) { courseCertError.value = "Seriya 2 ta harfdan iborat bo'lishi kerak (masalan: AB)."; return }
+  if (!/^\d{9}$/.test(number)) { courseCertError.value = "Raqam 9 ta raqamdan iborat bo'lishi kerak."; return }
+  courseCertSaving.value = true
+  courseCertError.value = ''
+  try {
+    await api.patch(`/students/${courseCertTarget.value.student}/`, {
+      certificate_series: series,
+      certificate_number: number,
+      certificate_added_date: new Date().toISOString(),
+    })
+    closeCourseCertModal()
+    await fetchLinkedEnrollments()
+  } catch (err) {
+    console.error(err)
+    courseCertError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi."
+  } finally {
+    courseCertSaving.value = false
+  }
+}
+
 const bonusModal = ref(null)
 const bonusTarget = ref(null)
 const bonusForm = ref({ amountFormatted: '', amount: 0, method: 'cash' })
@@ -951,6 +1048,10 @@ function onEditPhoneInput(e) {
   editForm.value.phone = formatPhoneInput(e.target.value)
 }
 
+function onEditPhone2Input(e) {
+  editForm.value.phone2 = formatPhoneInput(e.target.value)
+}
+
 const userInitials = computed(() => {
   if (!user.value) return 'U'
   const name = user.value.full_name || `${user.value.first_name || ''} ${user.value.last_name || ''}`.strip()
@@ -964,6 +1065,8 @@ const studentTableSearch = ref('')
 const studentTableGroupFilter = ref('')
 const studentTableCategoryFilter = ref('')
 const studentTableCertFilter = ref('')
+const groupDateFrom = ref('')
+const groupDateTo = ref('')
 
 // Distinct groups/categories among this staff member's linked students, for
 // the filter dropdowns — no point offering options that would match nothing.
@@ -998,6 +1101,13 @@ const filteredLinkedEnrollments = computed(() => {
       const hasCert = studentHasCertificate(e.student)
       if (studentTableCertFilter.value === 'uploaded' && !hasCert) return false
       if (studentTableCertFilter.value === 'not_uploaded' && hasCert) return false
+    }
+    if (groupDateFrom.value || groupDateTo.value) {
+      const g = groupsById.value[e.group]
+      if (!g) return false
+      // Keep groups whose active period overlaps the selected date range.
+      if (groupDateFrom.value && g.ends_at && g.ends_at < groupDateFrom.value) return false
+      if (groupDateTo.value && g.started_at && g.started_at > groupDateTo.value) return false
     }
     if (!q) return true
     return (e.student_name || '').toLowerCase().includes(q) || (e.student_phone || '').includes(q)
@@ -1095,7 +1205,7 @@ function openEditModal() {
   editForm.value = {
     full_name: user.value.full_name || '',
     phone: formatPhoneInput(user.value.phone),
-    phone2: user.value.phone2 || '',
+    phone2: user.value.phone2 ? formatPhoneInput(user.value.phone2) : '',
     role: user.value.role || 'instructor',
     branch: user.value.branch ?? null,
     jshshr: user.value.jshshr || '',
@@ -1134,7 +1244,7 @@ async function saveUser() {
     const payload = {
       full_name: editForm.value.full_name.trim(),
       phone: phoneCleaned,
-      phone2: editForm.value.phone2 ? editForm.value.phone2.trim() : null,
+      phone2: editForm.value.phone2 ? editForm.value.phone2.replace(/\D/g, '') : null,
       role: editForm.value.role,
       branch: editForm.value.branch ?? null,
       jshshr: editForm.value.jshshr ? parseInt(editForm.value.jshshr, 10) : null,
@@ -1412,12 +1522,19 @@ onMounted(() => {
   margin-top: 2px;
 }
 
+/* Phone and group columns size to their full content instead of wrapping —
+   the table already scrolls horizontally via .table-wrap. */
+.td-phone, .td-phone-sub, .td-group {
+  white-space: nowrap;
+}
+
 /* Bigger, more legible group start/end dates under the group name */
 .group-dates {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: #374151;
   margin-top: 3px;
+  white-space: nowrap;
 }
 
 .free-chip {
@@ -1481,6 +1598,17 @@ onMounted(() => {
   font-weight: 500;
   color: #111827;
   cursor: pointer;
+  outline: none;
+}
+
+.group-date-input {
+  padding: 6px 12px;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 8px;
+  background: #F9FAFB;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #111827;
   outline: none;
 }
 

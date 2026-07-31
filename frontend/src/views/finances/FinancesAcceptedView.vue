@@ -87,19 +87,22 @@
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
           </div>
-          <h3 v-if="!hasActiveFilters">Oylik Tushumlar ({{ monthNameStr }})</h3>
-          <h3 v-else>
-            Filtr Natijasi — Oylar Bo'yicha
-            <span v-if="activeDateRangeLabel" class="date-range-badge">📅 {{ activeDateRangeLabel }}</span>
-          </h3>
+          <h3 v-if="!monthlyHasActiveFilters">Oylik Tushumlar ({{ monthNameStr }})</h3>
+          <h3 v-else>Filtr Natijasi — Oylar Bo'yicha</h3>
+          <div class="monthly-date-filters">
+            <input v-model="monthlyDateFrom" type="date" class="finput-date" />
+            <span class="date-range-sep">—</span>
+            <input v-model="monthlyDateTo" type="date" class="finput-date" />
+            <button v-if="monthlyHasActiveFilters" type="button" class="btn-clear-monthly-filter" title="Filtrni tozalash" @click="clearMonthlyDateFilter">✕</button>
+          </div>
         </div>
         <span class="section-total-badge blue-badge font-bold">
-          {{ formatMoney(hasActiveFilters ? filteredGrandTotal : monthMetrics.total) }}
+          {{ formatMoney(monthlyHasActiveFilters ? filteredGrandTotal : monthMetrics.total) }}
         </span>
       </div>
 
       <!-- No filters applied: show the current calendar month only -->
-      <div v-if="!hasActiveFilters" class="metrics-cards-grid big-cards">
+      <div v-if="!monthlyHasActiveFilters" class="metrics-cards-grid big-cards">
         <div class="card-metric card-red card-hero">
           <div class="card-metric-icon">📊</div>
           <div class="metric-info">
@@ -147,10 +150,6 @@
           <p>Filtrga mos tushumlar topilmadi</p>
         </div>
         <div v-for="m in monthlyBreakdown" :key="m.key" class="month-card-group">
-          <div class="month-card-header">
-            <h4>{{ m.label }}</h4>
-            <span class="month-total-badge">{{ formatMoney(m.total) }}</span>
-          </div>
           <div class="metrics-cards-grid big-cards">
             <div class="card-metric card-red card-hero">
               <div class="card-metric-icon">📊</div>
@@ -265,7 +264,6 @@
         <table v-else class="data-table">
           <thead>
             <tr>
-              <th style="width: 60px;">ID</th>
               <th>O'quvchi F.I.SH.</th>
               <th>Kategoriya</th>
               <th>Tushum Summasi</th>
@@ -276,7 +274,6 @@
           </thead>
           <tbody>
             <tr v-for="p in filteredPayments" :key="p.id" class="table-row">
-              <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
@@ -285,6 +282,9 @@
               <td>
                 <span class="cat-pill">{{ p.category_name || '-' }}</span>
                 <div v-if="p.group_name" class="group-sub">{{ p.group_name }}</div>
+                <div v-if="groupsByName[p.group_name]" class="group-dates">
+                  {{ formatDate(groupsByName[p.group_name].started_at) }} — {{ formatDate(groupsByName[p.group_name].ends_at) }}
+                </div>
               </td>
               <td class="td-amount">
                 <span class="amount-val text-green">{{ formatMoney(p.amount) }}</span>
@@ -338,18 +338,49 @@
           <form @submit.prevent="savePayment" class="modal-body">
             <div v-if="modalError" class="alert-error">{{ modalError }}</div>
 
-            <!-- Searchable Student Select -->
+            <!-- Group-first cascade, then Searchable Student Select -->
+            <div class="form-group" v-if="!isEditing">
+              <label class="flabel required">Guruhni Tanlang *</label>
+              <div class="searchable-select-wrap" ref="groupSelectWrapRef">
+                <input
+                  v-model="groupSearchQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  placeholder="Guruh nomi bo'yicha qidiring..."
+                  @focus="showGroupDropdown = true"
+                  @keydown="onGroupKeydown"
+                />
+                <button v-if="selectedGroupId" type="button" class="input-clear-btn" title="Guruhni bekor qilish" @click="clearGroupSelection">✕</button>
+                <div v-if="showGroupDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(g, idx) in filteredGroups"
+                    :key="g.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: selectedGroupId === g.id, highlighted: groupKb.highlightedIndex.value === idx }"
+                    @click="selectGroup(g)"
+                  >
+                    <div class="opt-name">{{ g.name }}</div>
+                  </div>
+                  <div v-if="filteredGroups.length === 0" class="dropdown-empty">
+                    Mos guruh topilmadi
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="form-group" v-if="!isEditing">
               <label class="flabel required">O'quvchini Ism bo'yicha Qidirish *</label>
-              <div class="searchable-select-wrap">
+              <div class="searchable-select-wrap" ref="studentSelectWrapRef">
                 <input
                   v-model="studentSearchQuery"
                   type="text"
                   class="finput search-input-field"
-                  placeholder="Ism bo'yicha qidiring..."
+                  :placeholder="selectedGroupId ? 'Ism bo\'yicha qidiring...' : 'Avval guruhni tanlang'"
+                  :disabled="!selectedGroupId"
                   @focus="showStudentDropdown = true"
                   @keydown="onStudentKeydown"
                 />
+                <button v-if="form.enrollment" type="button" class="input-clear-btn" title="O'quvchini bekor qilish" @click="clearStudentSelection">✕</button>
                 <div v-if="showStudentDropdown" class="dropdown-options-list">
                   <div
                     v-for="(e, idx) in filteredEnrollments"
@@ -429,7 +460,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
@@ -438,6 +469,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatDate } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+import { useGroupSelect } from '@/composables/useGroupSelect'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -451,7 +483,62 @@ const branchStore = useBranchStore()
 const payments = ref([])
 const enrollments = ref([])
 const categories = ref([])
+const groups = ref([])
 const loading = ref(true)
+
+// Payments only carry the group's name (not its id), so map by name here.
+const groupsByName = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.name] = g })
+  return map
+})
+
+// Group-first cascade: pick a group, then the student list narrows to that group.
+const {
+  query: groupSearchQuery,
+  showDropdown: showGroupDropdown,
+  selectedId: selectedGroupId,
+  filtered: filteredGroups,
+  select: selectGroupRaw,
+  reset: resetGroupSelect,
+  isOutside: isGroupSelectOutside,
+  selectRef: groupSelectWrapRef,
+} = useGroupSelect(groups)
+
+function selectGroup(g) {
+  selectGroupRaw(g)
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+
+function clearGroupSelection() {
+  resetGroupSelect()
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+
+function clearStudentSelection() {
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+
+const studentSelectWrapRef = ref(null)
+function handleSelectOutsideClick(e) {
+  if (isGroupSelectOutside(e.target)) {
+    showGroupDropdown.value = false
+  }
+  if (studentSelectWrapRef.value && !studentSelectWrapRef.value.contains(e.target)) {
+    showStudentDropdown.value = false
+  }
+}
+
+const groupKb = useSearchSelectKeyboard()
+function onGroupKeydown(e) {
+  groupKb.onKeydown(e, filteredGroups.value, selectGroup, () => { showGroupDropdown.value = false })
+}
 
 const filterStudentName = ref('')
 const filterCategory = ref('')
@@ -496,27 +583,36 @@ const monthMetrics = computed(() => {
   return { cash, card, transfer, qr_code, total: cash + card + transfer + qr_code }
 })
 
-// Whether any of the toolbar filters (search/category/method/date range) is active.
-const hasActiveFilters = computed(() => !!(
-  filterStudentName.value || filterCategory.value || filterMethod.value ||
-  filterDateFrom.value || filterDateTo.value
-))
+// Date range filter for the monthly cards section, independent of the
+// payments table's own toolbar filters below.
+const monthlyDateFrom = ref('')
+const monthlyDateTo = ref('')
 
-// Human-readable label for the active date-range filter, shown next to the
-// monthly breakdown so it's clear which window the totals below cover.
-const activeDateRangeLabel = computed(() => {
-  if (!filterDateFrom.value && !filterDateTo.value) return ''
-  const fmt = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('uz-UZ')
-  if (filterDateFrom.value && filterDateTo.value) return `${fmt(filterDateFrom.value)} – ${fmt(filterDateTo.value)}`
-  if (filterDateFrom.value) return `${fmt(filterDateFrom.value)} dan`
-  return `${fmt(filterDateTo.value)} gacha`
+function clearMonthlyDateFilter() {
+  monthlyDateFrom.value = ''
+  monthlyDateTo.value = ''
+}
+
+const monthlyHasActiveFilters = computed(() => !!(monthlyDateFrom.value || monthlyDateTo.value))
+
+// Payments within the monthly cards' own date range, independent of the
+// table's toolbar filters.
+const monthlyFilteredPayments = computed(() => {
+  return allAcceptedPayments.value.filter(p => {
+    if (!branchStore.isBranchMatch(p)) return false
+    if (!p.created_at) return false
+    const dateStr = p.created_at.slice(0, 10)
+    if (monthlyDateFrom.value && dateStr < monthlyDateFrom.value) return false
+    if (monthlyDateTo.value && dateStr > monthlyDateTo.value) return false
+    return true
+  })
 })
 
-// Breaks the currently filtered payment list (`payments`, already server-filtered
-// by fetchPayments()) down into one bucket per calendar month, newest first.
+// Breaks the monthly-filtered payment list down into one bucket per
+// calendar month, newest first.
 const monthlyBreakdown = computed(() => {
   const buckets = {}
-  for (const p of filteredPayments.value) {
+  for (const p of monthlyFilteredPayments.value) {
     if (!p.created_at) continue
     const key = p.created_at.slice(0, 7) // "YYYY-MM"
     if (!buckets[key]) {
@@ -541,9 +637,12 @@ const monthlyBreakdown = computed(() => {
 const filteredGrandTotal = computed(() => monthlyBreakdown.value.reduce((s, m) => s + m.total, 0))
 
 const filteredEnrollments = computed(() => {
+  if (!selectedGroupId.value) return []
   const q = studentSearchQuery.value.toLowerCase().trim()
-  if (!q) return enrollments.value
-  return enrollments.value.filter(e => (e.student_name || '').toLowerCase().includes(q))
+  return enrollments.value.filter(e => {
+    if (e.group !== selectedGroupId.value) return false
+    return !q || (e.student_name || '').toLowerCase().includes(q)
+  })
 })
 
 const filteredPayments = computed(() => {
@@ -598,6 +697,13 @@ async function fetchEnrollments() {
   } catch (err) { console.error(err) }
 }
 
+async function fetchGroups() {
+  try {
+    const res = await api.get('/groups/', { params: { page_size: 1000 } })
+    groups.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
+
 watch([filterStudentName, filterCategory, filterMethod, filterDateFrom, filterDateTo], () => { fetchPayments() })
 
 function selectEnrollment(e) {
@@ -642,6 +748,7 @@ function openCreateModal() {
   studentSearchQuery.value = ''
   selectedStudentLabel.value = ''
   showStudentDropdown.value = false
+  resetGroupSelect()
   form.value = { enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
   showModal.value = true
 }
@@ -706,6 +813,12 @@ onMounted(() => {
   fetchAllAcceptedMetrics()
   fetchEnrollments()
   fetchCategories()
+  fetchGroups()
+  document.addEventListener('click', handleSelectOutsideClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleSelectOutsideClick)
 })
 </script>
 
@@ -725,20 +838,25 @@ onMounted(() => {
 .finance-section { margin-bottom: 26px; }
 .section-header-wrap { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .section-header-title { display: flex; align-items: center; gap: 10px; h3 { font-size: 17px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } }
-.date-range-badge { font-size: 16px; font-weight: 700; color: #2563EB; background: #EFF6FF; padding: 5px 14px; border-radius: 20px; white-space: nowrap; }
+.monthly-date-filters { display: flex; align-items: center; gap: 6px; margin-left: 6px; }
+.monthly-date-filters .finput-date { padding: 6px 10px; font-size: 12.5px; }
+.date-range-sep { color: #9CA3AF; font-size: 13px; }
+.btn-clear-monthly-filter { width: 24px; height: 24px; border-radius: 50%; border: none; background: #E5E7EB; color: #4B5563; font-size: 11px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; &:hover { background: #D1D5DB; color: #111827; } }
 .icon-pulse { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; &.green-pulse { background: #E8F5E9; } &.blue-pulse { background: #EFF6FF; } }
 .section-total-badge { font-size: 14px; padding: 6px 14px; border-radius: 20px; &.green-badge { color: #2D6A4F; background: #E8F5E9; } &.blue-badge { color: #2563EB; background: #EFF6FF; } }
 
-.metrics-cards-grid.big-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+.metrics-cards-grid.big-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; min-height: 140px; }
 
 /* Fixed footprint regardless of how many months the active date range spans —
    without this, the section above the date-range inputs grows/shrinks as the
    filter changes and visibly shoves the inputs the user is interacting with. */
-.monthly-breakdown-list { display: flex; flex-direction: column; gap: 20px; height: 380px; overflow-y: auto; padding-right: 4px; }
+/* Bounded, not fixed: a single filtered month should be roughly the same
+   height as the unfiltered card row above (no jump when the date-range
+   inputs are first touched), while many months still cap out and scroll
+   instead of growing without limit. */
+.monthly-breakdown-list { display: flex; flex-direction: column; gap: 20px; min-height: 140px; max-height: 380px; overflow-y: auto; padding-right: 4px; }
 .monthly-breakdown-list .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; }
-.month-card-group { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 16px; padding: 16px; }
-.month-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; h4 { font-size: 14.5px; font-weight: 700; color: #111827; text-transform: capitalize; } }
-.month-total-badge { font-size: 12.5px; font-weight: 700; color: #2563EB; background: #EFF6FF; padding: 4px 12px; border-radius: 20px; }
+.month-card-group { padding: 4px 0; }
 .card-metric { background: white; border: 1.5px solid #E5E7EB; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03); transition: all 0.2s ease; &:hover { transform: translateY(-2px); border-color: #CBD5E1; box-shadow: 0 6px 16px rgba(0,0,0,0.06); } }
 .card-hero { border-width: 2px; background: linear-gradient(180deg, #FFFFFF 0%, #F9FAFB 100%); grid-column: span 2; }
 .card-red { border-color: #FCA5A5; background: linear-gradient(180deg, #FEF2F2 0%, #FEE2E2 100%); }
@@ -783,6 +901,7 @@ onMounted(() => {
 .student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #E8F5E9; color: #2D6A4F; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
 
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
@@ -803,6 +922,14 @@ onMounted(() => {
 .modal-body { padding: 24px; }
 
 .searchable-select-wrap { position: relative; width: 100%; }
+.input-clear-btn {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%; border: none;
+  background: #E5E7EB; color: #4B5563; font-size: 11px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.input-clear-btn:hover { background: #D1D5DB; color: #111827; }
+.searchable-select-wrap .finput { padding-right: 34px; }
 .dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #2D6A4F; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
 .dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #F0FDF4; } &.selected { background: #E8F5E9; font-weight: 700; } &.highlighted { background: #F0FDF4; } }
 .opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }

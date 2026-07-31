@@ -237,7 +237,7 @@ class CategoryViewSet(SoftDeleteModelViewSet):
 class UserViewSet(SoftDeleteModelViewSet):
     """CRUD for system users (staff/instructors/etc.)."""
 
-    queryset = User.objects.filter(is_active=True).order_by("-date_joined")
+    queryset = User.objects.filter(is_active=True).order_by("-updated_at", "-date_joined")
     serializer_class = UserSerializer
     pagination_class = StandardPagination
 
@@ -322,7 +322,7 @@ class UserViewSet(SoftDeleteModelViewSet):
 class StudentViewSet(SoftDeleteModelViewSet):
     """CRUD for driving school students (User model with role=student)."""
 
-    queryset = User.objects.filter(role=User.Role.STUDENT, is_active=True).order_by("-date_joined")
+    queryset = User.objects.filter(role=User.Role.STUDENT, is_active=True).order_by("-updated_at", "-date_joined")
     serializer_class = StudentSerializer
     pagination_class = StandardPagination
 
@@ -412,6 +412,7 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
         agent = self.request.query_params.get("agent")
         group = self.request.query_params.get("group")
         learning_place = self.request.query_params.get("learning_place")
+        has_certificate = self.request.query_params.get("has_certificate")
 
         if student:
             queryset = queryset.filter(student_id=student)
@@ -429,6 +430,8 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(group_id=group)
         if learning_place:
             queryset = queryset.filter(learning_place_id=learning_place)
+        if has_certificate and has_certificate.lower() in ("1", "true", "yes"):
+            queryset = queryset.exclude(student__certificate_number__isnull=True).exclude(student__certificate_number="")
         return filter_by_branch(queryset, self.request, "branch")
 
 
@@ -456,6 +459,7 @@ class PaymentViewSet(SoftDeleteModelViewSet):
         student = self.request.query_params.get("student")
         agent = self.request.query_params.get("agent")
         user_param = self.request.query_params.get("user")
+        user_role = self.request.query_params.get("user_role")
 
         if enrollment:
             queryset = queryset.filter(enrollment_id=enrollment)
@@ -463,6 +467,8 @@ class PaymentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(enrollment__student_id=student)
         if user_param:
             queryset = queryset.filter(user_id=user_param)
+        if user_role:
+            queryset = queryset.filter(user__role=user_role)
         if agent:
             queryset = queryset.filter(Q(agent_id=agent) | Q(enrollment__agent_id=agent))
         if status:
@@ -746,12 +752,15 @@ class DrivingLessonsViewSet(SoftDeleteModelViewSet):
         student = self.request.query_params.get("student")
         instructor = self.request.query_params.get("instructor")
         car = self.request.query_params.get("car")
+        lesson_type = self.request.query_params.get("lesson_type")
         if student:
             qs = qs.filter(student_id=student)
         if instructor:
             qs = qs.filter(instructor_id=instructor)
         if car:
             qs = qs.filter(car_id=car)
+        if lesson_type:
+            qs = qs.filter(lesson_type=lesson_type)
         return filter_by_branch(qs, self.request, "branch")
 
 

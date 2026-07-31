@@ -105,9 +105,14 @@
                 <th class="th-phone">Telefon</th>
                 <th>JSHSHR</th>
                 <th>Eslatmasi</th>
-                <th>O'quv Joyi & Vaqti</th>
-                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">Instruktor</th>
+                <th>O'quv Joyi</th>
+                <th>Dars Vaqti</th>
+                <th>Dars Kunlari</th>
+                <th>Sertifikat</th>
+                <th>Imtihondan o'tganligi haqida rasm</th>
                 <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">O'qituvchi</th>
+                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">Instruktor</th>
+                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">Agent</th>
                 <th v-if="!authStore.isMechanic">Shartnoma summasi</th>
                 <th v-if="!authStore.isMechanic">To'langan</th>
                 <th v-if="!authStore.isMechanic">Qoldiq</th>
@@ -129,12 +134,12 @@
                 <td class="td-jshshr">{{ e.student_jshshr }}</td>
                 <td class="td-notes">{{ e.notes || '-' }}</td>
 
-                <!-- Learning Place & Time Column -->
+                <!-- Learning Place Column -->
                 <td class="td-assign" @click.stop>
                   <div class="assign-cell">
-                    <template v-if="e.learning_place_name || e.learning_time || e.learning_days">
-                      <span class="assign-name">{{ formatSchedule(e) }}</span>
-                      <button class="btn-assign-edit" @click.stop="openScheduleModal(e)" title="O'quv joyi va vaqtini o'zgartirish">
+                    <template v-if="e.learning_place_name">
+                      <span class="assign-name">{{ e.learning_place_name }}</span>
+                      <button class="btn-assign-edit" @click.stop="openScheduleModal(e, 'place')" title="O'quv joyini o'zgartirish">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                           <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -142,7 +147,90 @@
                       </button>
                     </template>
                     <template v-else>
-                      <button class="btn-assign-plus" @click.stop="openScheduleModal(e)" title="O'quv joyi va vaqtini biriktirish">+</button>
+                      <button class="btn-assign-plus" @click.stop="openScheduleModal(e, 'place')" title="O'quv joyi biriktirish">+</button>
+                    </template>
+                  </div>
+                </td>
+
+                <!-- Learning Time Column -->
+                <td class="td-assign" @click.stop>
+                  <div class="assign-cell">
+                    <template v-if="e.learning_time">
+                      <span class="assign-name">{{ e.learning_time }}</span>
+                      <button class="btn-assign-edit" @click.stop="openScheduleModal(e, 'time')" title="Dars vaqtini o'zgartirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="btn-assign-plus" @click.stop="openScheduleModal(e, 'time')" title="Dars vaqtini biriktirish">+</button>
+                    </template>
+                  </div>
+                </td>
+
+                <!-- Learning Days Column -->
+                <td class="td-assign" @click.stop>
+                  <div class="assign-cell">
+                    <template v-if="e.learning_days && e.learning_days.length">
+                      <span class="assign-name">{{ formatLearningDays(e.learning_days) }}</span>
+                      <button class="btn-assign-edit" @click.stop="openScheduleModal(e, 'days')" title="Dars kunlarini o'zgartirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="btn-assign-plus" @click.stop="openScheduleModal(e, 'days')" title="Dars kunlarini biriktirish">+</button>
+                    </template>
+                  </div>
+                </td>
+
+                <!-- Certificate (course completion) Column -->
+                <td class="td-assign" @click.stop>
+                  <div class="assign-cell">
+                    <template v-if="e.student_certificate_number">
+                      <div class="assign-name-col">
+                        <span class="assign-name">{{ e.student_certificate_series || '' }} {{ e.student_certificate_number }}</span>
+                        <div v-if="e.student_certificate_added_date" class="cert-date-sub">{{ formatDate(e.student_certificate_added_date) }}</div>
+                      </div>
+                      <button v-if="authStore.isAdminOrSuperuser" class="btn-assign-edit" @click.stop="openCertModal(e)" title="Sertifikatni o'zgartirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button v-if="authStore.isAdminOrSuperuser" class="btn-assign-plus" @click.stop="openCertModal(e)" title="Sertifikat qo'shish">+</button>
+                      <span v-else>-</span>
+                    </template>
+                  </div>
+                </td>
+
+                <!-- Exam-Pass Certificate Image Column -->
+                <td class="td-assign" @click.stop>
+                  <span v-if="studentHasExamCert(e.student)" class="fully-paid-badge">✓ Yuklangan</span>
+                  <button v-else-if="authStore.canUploadCertificates" type="button" class="btn-assign-plus" @click.stop="openExamCertModal(e)" title="Imtihon sertifikatini yuklash">+</button>
+                  <span v-else>-</span>
+                </td>
+
+                <!-- Coordinator ("Teacher") Column -->
+                <td v-if="authStore.isAdminOrSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
+                  <div class="assign-cell">
+                    <template v-if="e.coordinator_name">
+                      <span class="assign-name link-value" @click="goUser(e.coordinator)">{{ e.coordinator_name }}</span>
+                      <button class="btn-assign-edit" @click.stop="openAssignModal(e, 'coordinator')" title="O'qituvchini o'zgartirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button class="btn-assign-plus" @click.stop="openAssignModal(e, 'coordinator')" title="O'qituvchi biriktirish">+</button>
                     </template>
                   </div>
                 </td>
@@ -165,22 +253,10 @@
                   </div>
                 </td>
 
-                <!-- Coordinator Column -->
+                <!-- Agent Column -->
                 <td v-if="authStore.isAdminOrSuperuser || authStore.isMechanic" class="td-assign" @click.stop>
-                  <div class="assign-cell">
-                    <template v-if="e.coordinator_name">
-                      <span class="assign-name link-value" @click="goUser(e.coordinator)">{{ e.coordinator_name }}</span>
-                      <button class="btn-assign-edit" @click.stop="openAssignModal(e, 'coordinator')" title="O'qituvchini o'zgartirish">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                          <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                      </button>
-                    </template>
-                    <template v-else>
-                      <button class="btn-assign-plus" @click.stop="openAssignModal(e, 'coordinator')" title="O'qituvchi biriktirish">+</button>
-                    </template>
-                  </div>
+                  <span v-if="e.agent_name" class="assign-name link-value" @click="goAgent(e.agent)">{{ e.agent_name }}</span>
+                  <span v-else>-</span>
                 </td>
 
                 <!-- Payment Info Columns (Hidden for mechanic) -->
@@ -372,10 +448,10 @@
       </form>
     </dialog>
 
-    <!-- Schedule Modal Dialog (Learning Place, Time & Days) -->
+    <!-- Schedule Modal Dialog (Learning Place / Time / Days — one at a time) -->
     <dialog ref="scheduleModal" class="modal-dialog">
       <div class="modal-header">
-        <h3 class="modal-title">O'quv Joyi va Vaqtini Belgilash</h3>
+        <h3 class="modal-title">{{ scheduleModalTitle }}</h3>
         <button class="btn-close" @click="closeScheduleModal">✕</button>
       </div>
 
@@ -389,7 +465,7 @@
           <p>Telefon: <strong>{{ formatPhone(activeEnrollment.student_phone) }}</strong></p>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" v-if="scheduleEditField === 'place'">
           <label class="form-label">O'quv joyi (Filial / Xona)</label>
           <div class="select-wrap" style="position: relative; display: flex; width: 100%;">
             <select v-model="scheduleForm.learning_place" class="form-input select-input" style="width: 100%; appearance: none;">
@@ -404,7 +480,7 @@
           </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" v-if="scheduleEditField === 'time'">
           <label class="form-label">Dars vaqti</label>
           <input
             v-model="scheduleForm.learning_time"
@@ -414,7 +490,7 @@
           />
         </div>
 
-        <div class="form-group">
+        <div class="form-group" v-if="scheduleEditField === 'days'">
           <label class="form-label">Dars kunlari</label>
           <div class="weekday-picker">
             <label v-for="d in weekdayOptions" :key="d.value" class="weekday-chip" :class="{ active: scheduleForm.learning_days.includes(d.value) }">
@@ -429,6 +505,91 @@
           <button type="submit" class="btn-save" :disabled="scheduleSaving">
             <span v-if="scheduleSaving" class="btn-spinner"></span>
             {{ scheduleSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Certificate (course completion) Modal Dialog -->
+    <dialog ref="certModal" class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Kursni Tugatganlik Sertifikati</h3>
+        <button class="btn-close" @click="closeCertModal">✕</button>
+      </div>
+
+      <form @submit.prevent="submitCertificate" class="modal-form">
+        <div v-if="certError" class="modal-error">
+          {{ certError }}
+        </div>
+
+        <div v-if="activeEnrollment" class="pay-info-summary">
+          <p>O'quvchi: <strong>{{ activeEnrollment.student_name }}</strong></p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Seriya</label>
+          <input
+            v-model="certForm.certificate_series"
+            type="text"
+            maxlength="2"
+            placeholder="Masalan: AB"
+            class="form-input"
+            style="text-transform: uppercase;"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Raqami</label>
+          <input
+            v-model="certForm.certificate_number"
+            type="text"
+            maxlength="9"
+            placeholder="9 ta raqam"
+            class="form-input"
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="closeCertModal">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="certSaving">
+            <span v-if="certSaving" class="btn-spinner"></span>
+            {{ certSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Exam-Pass Certificate Upload Modal (image, distinct from course-completion) -->
+    <dialog ref="examCertModal" class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Imtihon Sertifikatini Yuklash</h3>
+        <button class="btn-close" @click="closeExamCertModal">✕</button>
+      </div>
+
+      <form @submit.prevent="submitExamCertUpload" class="modal-form">
+        <div v-if="examCertError" class="modal-error">
+          {{ examCertError }}
+        </div>
+
+        <div v-if="activeEnrollment" class="pay-info-summary">
+          <p>O'quvchi: <strong>{{ activeEnrollment.student_name }}</strong></p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Rasm</label>
+          <input type="file" accept="image/*" class="form-input" @change="onExamCertFileChange" required />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Izoh (ixtiyoriy)</label>
+          <input v-model="examCertNotes" type="text" placeholder="Izoh..." class="form-input" />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="closeExamCertModal">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="examCertUploading || !examCertFile">
+            <span v-if="examCertUploading" class="btn-spinner"></span>
+            {{ examCertUploading ? 'Yuklanmoqda...' : 'Yuklash' }}
           </button>
         </div>
       </form>
@@ -458,6 +619,11 @@ const goToStudentDetail = (studentId) => {
 
 function goUser(id) {
   if (id) router.push(`/users/${id}`)
+}
+
+function goAgent(id) {
+  if (!id || !(authStore.isAdminOrSuperuser || authStore.isMechanic)) return
+  router.push(`/agents/${id}`)
 }
 
 const group = ref(null)
@@ -509,14 +675,21 @@ const selectedAssignUserId = ref(null)
 const assignSaving = ref(false)
 const assignError = ref('')
 
-// Schedule modal state
+// Schedule modal state — one modal, scoped to a single field at a time
 const scheduleModal = ref(null)
 const scheduleSaving = ref(false)
 const scheduleError = ref('')
+const scheduleEditField = ref('place') // 'place' | 'time' | 'days'
 const scheduleForm = ref({
   learning_place: null,
   learning_time: '',
   learning_days: [],
+})
+
+const scheduleModalTitle = computed(() => {
+  if (scheduleEditField.value === 'time') return 'Dars Vaqtini Belgilash'
+  if (scheduleEditField.value === 'days') return 'Dars Kunlarini Belgilash'
+  return "O'quv Joyini Belgilash"
 })
 
 const weekdayOptions = [
@@ -529,8 +702,8 @@ const weekdayOptions = [
 ]
 
 const tableColspan = computed(() => {
-  let count = 5 // Student Name, Phone, JSHSHR, Notes, Learning Place & Time
-  if (authStore.isAdminOrSuperuser || authStore.isMechanic) count += 2 // Instructor, Coordinator
+  let count = 9 // Student Name, Phone, JSHSHR, Notes, Learning Place, Learning Time, Learning Days, Sertifikat, Imtihon sertifikati
+  if (authStore.isAdminOrSuperuser || authStore.isMechanic) count += 3 // Coordinator, Instructor, Agent
   if (!authStore.isMechanic) count += 4 // Shartnoma, Paid, Qoldiq, Amallar
   return count
 })
@@ -586,14 +759,6 @@ const getUserDisplayName = (u) => {
   return name ? `${name} (${formatPhone(u.phone)})` : formatPhone(u.phone)
 }
 
-const formatSchedule = (e) => {
-  const parts = []
-  if (e.learning_place_name) parts.push(e.learning_place_name)
-  if (e.learning_time) parts.push(e.learning_time)
-  if (e.learning_days) parts.push(formatLearningDays(e.learning_days))
-  return parts.join(' - ') || '-'
-}
-
 // Two-way space formatting for payment amount
 const formattedInputPrice = computed({
   get() {
@@ -623,6 +788,17 @@ const fetchGroupDetail = async () => {
     error.value = "Guruh tafsilotlarini yuklashda xatolik yuz berdi."
   } finally {
     loading.value = false
+  }
+}
+
+// After any row edit (schedule, assignment, payment), the just-edited
+// enrollment jumps to the top of the table — same logic for every edit type.
+const moveEnrollmentToTop = (id) => {
+  if (!id || !group.value?.enrollments) return
+  const idx = group.value.enrollments.findIndex(e => e.id === id)
+  if (idx > 0) {
+    const [item] = group.value.enrollments.splice(idx, 1)
+    group.value.enrollments.unshift(item)
   }
 }
 
@@ -729,9 +905,10 @@ const submitPayment = async () => {
 
   paySaving.value = true
   payError.value = ''
+  const enrollmentId = activeEnrollment.value.id
   try {
     const payload = {
-      enrollment: activeEnrollment.value.id,
+      enrollment: enrollmentId,
       amount: parseInt(paymentForm.value.amount, 10),
       method: paymentForm.value.method,
       notes: paymentForm.value.notes.trim() || null,
@@ -740,6 +917,7 @@ const submitPayment = async () => {
     await api.post('/payments/', payload)
     closePayModal()
     await fetchGroupDetail()
+    moveEnrollmentToTop(enrollmentId)
   } catch (err) {
     console.error(err)
     payError.value = "To'lovni saqlashda xatolik yuz berdi. Qayta urinib ko'ring."
@@ -775,6 +953,7 @@ const submitAssign = async () => {
   if (!activeEnrollment.value) return
   assignSaving.value = true
   assignError.value = ''
+  const enrollmentId = activeEnrollment.value.id
   try {
     const payload = {}
     if (assignType.value === 'instructor') {
@@ -782,9 +961,10 @@ const submitAssign = async () => {
     } else {
       payload.coordinator = selectedAssignUserId.value
     }
-    await api.patch(`/enrollments/${activeEnrollment.value.id}/`, payload)
+    await api.patch(`/enrollments/${enrollmentId}/`, payload)
     closeAssignModal()
     await fetchGroupDetail()
+    moveEnrollmentToTop(enrollmentId)
   } catch (err) {
     console.error(err)
     assignError.value = "Biriktirishda xatolik yuz berdi. Qayta urinib ko'ring."
@@ -794,8 +974,9 @@ const submitAssign = async () => {
 }
 
 // Schedule modal actions
-const openScheduleModal = (enrollment) => {
+const openScheduleModal = (enrollment, field) => {
   activeEnrollment.value = enrollment
+  scheduleEditField.value = field
   scheduleError.value = ''
   scheduleForm.value = {
     learning_place: enrollment.learning_place || null,
@@ -817,20 +998,142 @@ const submitSchedule = async () => {
   if (!activeEnrollment.value) return
   scheduleSaving.value = true
   scheduleError.value = ''
+  const enrollmentId = activeEnrollment.value.id
   try {
     const payload = {
       learning_place: scheduleForm.value.learning_place,
       learning_time: scheduleForm.value.learning_time ? scheduleForm.value.learning_time.trim() : null,
       learning_days: scheduleForm.value.learning_days,
     }
-    await api.patch(`/enrollments/${activeEnrollment.value.id}/`, payload)
+    await api.patch(`/enrollments/${enrollmentId}/`, payload)
     closeScheduleModal()
     await fetchGroupDetail()
+    moveEnrollmentToTop(enrollmentId)
   } catch (err) {
     console.error(err)
     scheduleError.value = "Saqlashda xatolik yuz berdi. Qayta urinib ko'ring."
   } finally {
     scheduleSaving.value = false
+  }
+}
+
+// Certificate (course completion) modal actions
+const certModal = ref(null)
+const certSaving = ref(false)
+const certError = ref('')
+const certForm = ref({
+  certificate_series: '',
+  certificate_number: '',
+})
+
+const openCertModal = (enrollment) => {
+  activeEnrollment.value = enrollment
+  certError.value = ''
+  certForm.value = {
+    certificate_series: enrollment.student_certificate_series || '',
+    certificate_number: enrollment.student_certificate_number || '',
+  }
+  if (certModal.value) {
+    certModal.value.showModal()
+  }
+}
+
+const closeCertModal = () => {
+  if (certModal.value) {
+    certModal.value.close()
+  }
+}
+
+const submitCertificate = async () => {
+  if (!activeEnrollment.value) return
+  const series = certForm.value.certificate_series.trim().toUpperCase()
+  const number = certForm.value.certificate_number.trim()
+  if (series && !/^[A-Z]{2}$/.test(series)) {
+    certError.value = "Seriya 2 ta harfdan iborat bo'lishi kerak (masalan: AB)."
+    return
+  }
+  if (number && !/^\d{9}$/.test(number)) {
+    certError.value = "Raqam 9 ta raqamdan iborat bo'lishi kerak."
+    return
+  }
+  certSaving.value = true
+  certError.value = ''
+  const enrollmentId = activeEnrollment.value.id
+  const studentId = activeEnrollment.value.student
+  try {
+    await api.patch(`/students/${studentId}/`, {
+      certificate_series: series || null,
+      certificate_number: number || null,
+      certificate_added_date: new Date().toISOString(),
+    })
+    closeCertModal()
+    await fetchGroupDetail()
+    moveEnrollmentToTop(enrollmentId)
+  } catch (err) {
+    console.error(err)
+    certError.value = "Saqlashda xatolik yuz berdi. Qayta urinib ko'ring."
+  } finally {
+    certSaving.value = false
+  }
+}
+
+// Exam-pass certificate (image upload) — a separate concept from the
+// course-completion series/number certificate above. Tracks which students
+// (across any instructor) already have one uploaded.
+const studentExamCerts = ref([])
+
+function studentHasExamCert(studentId) {
+  return studentExamCerts.value.some(c => c.student === studentId)
+}
+
+async function fetchStudentExamCerts() {
+  try {
+    const res = await api.get('/student-certificates/', { params: { page_size: 1000 } })
+    studentExamCerts.value = res.data.results || res.data || []
+  } catch (err) {
+    console.error("Sertifikatlar holatini yuklashda xatolik:", err)
+  }
+}
+
+const examCertModal = ref(null)
+const examCertFile = ref(null)
+const examCertNotes = ref('')
+const examCertUploading = ref(false)
+const examCertError = ref('')
+
+function openExamCertModal(enrollment) {
+  activeEnrollment.value = enrollment
+  examCertFile.value = null
+  examCertNotes.value = ''
+  examCertError.value = ''
+  examCertModal.value?.showModal()
+}
+
+function closeExamCertModal() {
+  examCertModal.value?.close()
+}
+
+function onExamCertFileChange(e) {
+  examCertFile.value = e.target.files?.[0] || null
+}
+
+async function submitExamCertUpload() {
+  if (!examCertFile.value || !activeEnrollment.value) return
+  examCertUploading.value = true
+  examCertError.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('student', activeEnrollment.value.student)
+    formData.append('image', examCertFile.value)
+    if (examCertNotes.value) formData.append('notes', examCertNotes.value)
+    await api.post('/student-certificates/', formData)
+    closeExamCertModal()
+    await fetchStudentExamCerts()
+  } catch (err) {
+    console.error(err)
+    examCertError.value = err.response?.data?.detail || "Sertifikatni yuklashda xatolik yuz berdi."
+  } finally {
+    examCertUploading.value = false
   }
 }
 
@@ -841,9 +1144,10 @@ onMounted(async () => {
   fetchGroupDetail()
   fetchUsers()
   fetchLearningPlaces()
+  fetchStudentExamCerts()
   document.addEventListener('click', handleAssignOutsideClick)
 
-  const dialogs = [payModal.value, assignModal.value, scheduleModal.value]
+  const dialogs = [payModal.value, assignModal.value, scheduleModal.value, certModal.value, examCertModal.value]
   dialogs.forEach(dialog => {
     if (dialog && !('closedBy' in HTMLDialogElement.prototype)) {
       dialog.addEventListener('click', (event) => {
@@ -1085,10 +1389,8 @@ onUnmounted(() => {
 }
 
 .th-phone, .td-phone {
-  width: 175px !important;
-  min-width: 175px !important;
-  max-width: 175px !important;
-  white-space: nowrap !important;
+  min-width: 175px;
+  white-space: normal;
   font-family: monospace;
   font-size: 12px;
 }
@@ -1125,6 +1427,16 @@ onUnmounted(() => {
   font-weight: 500;
   color: #111827;
   font-size: 13px;
+}
+.assign-name-col {
+  display: flex;
+  flex-direction: column;
+}
+.cert-date-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: #6B7280;
+  margin-top: 2px;
 }
 .link-value { cursor: pointer; }
 .link-value:hover { text-decoration: underline; }

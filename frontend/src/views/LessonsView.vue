@@ -472,6 +472,6 @@ function formatDate(dateStr) {
 
 /* Group column in driving lessons table */
 .group-badge { padding: 3px 9px; background: #E0E7FF; color: #4338CA; border-radius: 8px; font-size: 11.5px; font-weight: 700; display: inline-block; }
-.group-dates { font-size: 11px; color: #6B7280; margin-top: 3px; }
+.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 3px; white-space: nowrap; }
 .text-muted { color: #9CA3AF; }
 </style>

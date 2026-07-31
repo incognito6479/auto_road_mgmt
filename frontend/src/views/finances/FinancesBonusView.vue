@@ -110,7 +110,6 @@
         <table v-else class="data-table">
           <thead>
             <tr>
-              <th style="width: 60px;">ID</th>
               <th>Agent F.I.SH.</th>
               <th>O'quvchi F.I.SH.</th>
               <th>Kategoriya</th>
@@ -122,11 +121,11 @@
           </thead>
           <tbody>
             <tr v-for="p in payments" :key="p.id" class="table-row">
-              <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
                 <div v-if="p.agent" class="agent-name link-value" @click="goAgent(p.agent)">👤 {{ p.agent_name || 'Noma\'lum Agent' }}</div>
                 <div v-else class="agent-name">👤 {{ p.agent_name || 'Noma\'lum Agent' }}</div>
                 <div v-if="p.agent_phone" class="agent-phone">{{ p.agent_phone }}</div>
+                <div v-if="p.agent_phone2" class="agent-phone">{{ p.agent_phone2 }} (qo'shimcha)</div>
               </td>
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || '-' }}</div>
@@ -136,6 +135,9 @@
               <td>
                 <span class="cat-pill">{{ p.category_name || '-' }}</span>
                 <div v-if="p.group_name" class="group-sub">{{ p.group_name }}</div>
+                <div v-if="groupsByName[p.group_name]" class="group-dates">
+                  {{ formatDate(groupsByName[p.group_name].started_at) }} — {{ formatDate(groupsByName[p.group_name].ends_at) }}
+                </div>
               </td>
               <td class="td-amount">
                 <span class="amount-val text-amber">{{ formatMoney(p.amount) }}</span>
@@ -418,7 +420,7 @@ import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
-import { formatMoney } from '@/utils/formatters'
+import { formatMoney, formatDate } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
 const authStore = useAuthStore()
@@ -438,8 +440,23 @@ const payments = ref([])
 const enrollments = ref([])
 const agents = ref([])
 const categories = ref([])
+const groups = ref([])
 const loading = ref(true)
 const totalCount = ref(0)
+
+// Payments only carry the group's name (not its id), so map by name here.
+const groupsByName = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.name] = g })
+  return map
+})
+
+async function fetchGroups() {
+  try {
+    const res = await api.get('/groups/', { params: { page_size: 1000 } })
+    groups.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
 
 const filterAgentName = ref('')
 const filterAgent = ref('')
@@ -705,7 +722,7 @@ async function performDelete() {
   }
 }
 
-onMounted(() => { fetchPayments(); fetchEnrollments(); fetchAgents(); fetchCategories() })
+onMounted(() => { fetchPayments(); fetchEnrollments(); fetchAgents(); fetchCategories(); fetchGroups() })
 </script>
 
 <style scoped>
@@ -743,6 +760,7 @@ onMounted(() => { fetchPayments(); fetchEnrollments(); fetchAgents(); fetchCateg
 .agent-phone { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .student-name { font-weight: 600; color: #111827; }
 .group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #FEF3C7; color: #92400E; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }

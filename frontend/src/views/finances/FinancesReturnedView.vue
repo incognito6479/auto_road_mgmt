@@ -91,7 +91,6 @@
         <table v-else class="data-table">
           <thead>
             <tr>
-              <th style="width: 60px;">ID</th>
               <th>O'quvchi F.I.SH.</th>
               <th>Kategoriya</th>
               <th>Qaytarilgan Summa</th>
@@ -102,7 +101,6 @@
           </thead>
           <tbody>
             <tr v-for="p in payments" :key="p.id" class="table-row">
-              <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
@@ -111,6 +109,9 @@
               <td>
                 <span class="cat-pill">{{ p.category_name || '-' }}</span>
                 <div v-if="p.group_name" class="group-sub">{{ p.group_name }}</div>
+                <div v-if="groupsByName[p.group_name]" class="group-dates">
+                  {{ formatDate(groupsByName[p.group_name].started_at) }} — {{ formatDate(groupsByName[p.group_name].ends_at) }}
+                </div>
               </td>
               <td class="td-amount">
                 <span class="amount-val text-red">-{{ formatMoney(p.amount) }}</span>
@@ -163,7 +164,35 @@
           <form @submit.prevent="savePayment" class="modal-body">
             <div v-if="modalError" class="alert-error">{{ modalError }}</div>
 
-            <!-- Searchable Student Select -->
+            <!-- Group-first cascade, then Searchable Student Select -->
+            <div class="form-group" v-if="!isEditing">
+              <label class="flabel required">Guruhni Tanlang *</label>
+              <div class="searchable-select-wrap">
+                <input
+                  v-model="groupSearchQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  placeholder="Guruh nomi bo'yicha qidiring..."
+                  @focus="showGroupDropdown = true"
+                  @keydown="onGroupKeydown"
+                />
+                <div v-if="showGroupDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(g, idx) in filteredGroups"
+                    :key="g.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: selectedGroupId === g.id, highlighted: groupKb.highlightedIndex.value === idx }"
+                    @click="selectGroup(g)"
+                  >
+                    <div class="opt-name">{{ g.name }}</div>
+                  </div>
+                  <div v-if="filteredGroups.length === 0" class="dropdown-empty">
+                    Mos guruh topilmadi
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="form-group" v-if="!isEditing">
               <label class="flabel required">O'quvchini Ism bo'yicha Qidirish *</label>
               <div class="searchable-select-wrap">
@@ -171,7 +200,8 @@
                   v-model="studentSearchQuery"
                   type="text"
                   class="finput search-input-field"
-                  placeholder="Ism bo'yicha qidiring..."
+                  :placeholder="selectedGroupId ? 'Ism bo\'yicha qidiring...' : 'Avval guruhni tanlang'"
+                  :disabled="!selectedGroupId"
                   @focus="showStudentDropdown = true"
                   @keydown="onStudentKeydown"
                 />
@@ -257,8 +287,9 @@ import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
-import { formatMoney } from '@/utils/formatters'
+import { formatMoney, formatDate } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+import { useGroupSelect } from '@/composables/useGroupSelect'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -271,8 +302,37 @@ function goStudent(id) {
 const payments = ref([])
 const enrollments = ref([])
 const categories = ref([])
+const groups = ref([])
 const loading = ref(true)
 const totalCount = ref(0)
+
+// Payments only carry the group's name (not its id), so map by name here.
+const groupsByName = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.name] = g })
+  return map
+})
+
+// Group-first cascade: pick a group, then the student list narrows to that group.
+const {
+  query: groupSearchQuery,
+  showDropdown: showGroupDropdown,
+  selectedId: selectedGroupId,
+  filtered: filteredGroups,
+  select: selectGroupRaw,
+  reset: resetGroupSelect,
+} = useGroupSelect(groups)
+
+function selectGroup(g) {
+  selectGroupRaw(g)
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+const groupKb = useSearchSelectKeyboard()
+function onGroupKeydown(e) {
+  groupKb.onKeydown(e, filteredGroups.value, selectGroup, () => { showGroupDropdown.value = false })
+}
 
 const filterStudentName = ref('')
 const filterCategory = ref('')
@@ -296,9 +356,12 @@ const metrics = computed(() => {
 })
 
 const filteredEnrollments = computed(() => {
+  if (!selectedGroupId.value) return []
   const q = studentSearchQuery.value.toLowerCase().trim()
-  if (!q) return enrollments.value
-  return enrollments.value.filter(e => (e.student_name || '').toLowerCase().includes(q))
+  return enrollments.value.filter(e => {
+    if (e.group !== selectedGroupId.value) return false
+    return !q || (e.student_name || '').toLowerCase().includes(q)
+  })
 })
 
 async function fetchPayments() {
@@ -328,6 +391,13 @@ async function fetchCategories() {
   try {
     const res = await api.get('/categories/')
     categories.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
+
+async function fetchGroups() {
+  try {
+    const res = await api.get('/groups/', { params: { page_size: 1000 } })
+    groups.value = res.data.results || res.data
   } catch (err) { console.error(err) }
 }
 
@@ -375,6 +445,7 @@ function openCreateModal() {
   studentSearchQuery.value = ''
   selectedStudentLabel.value = ''
   showStudentDropdown.value = false
+  resetGroupSelect()
   form.value = { enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
   showModal.value = true
 }
@@ -432,7 +503,7 @@ async function performDelete() {
   }
 }
 
-onMounted(() => { fetchPayments(); fetchEnrollments(); fetchCategories() })
+onMounted(() => { fetchPayments(); fetchEnrollments(); fetchCategories(); fetchGroups() })
 </script>
 
 <style scoped>
@@ -464,6 +535,7 @@ onMounted(() => { fetchPayments(); fetchEnrollments(); fetchCategories() })
 .link-value { cursor: pointer; }
 .link-value:hover { text-decoration: underline; }
 .group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #FEE2E2; color: #991B1B; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }

@@ -100,6 +100,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/finances/instructors',
+    name: 'finances-instructors',
+    component: () => import('@/views/finances/FinancesInstructorsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/finances/debts',
     name: 'finances-debts',
     component: () => import('@/views/finances/FinancesDebtsView.vue'),
@@ -139,6 +145,12 @@ const routes = [
     path: '/agents/:id',
     name: 'agent-detail',
     component: () => import('@/views/AgentDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/certificates',
+    name: 'certificates',
+    component: () => import('@/views/CertificatesView.vue'),
     meta: { requiresAuth: true },
   },
   {

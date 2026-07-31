@@ -138,6 +138,12 @@
         </div>
       </div>
 
+      <!-- Section heading + count, above the filters -->
+      <div class="section-title-wrap">
+        <h3 class="section-title">👥 Jalb Qilingan O'quvchilar va Bonus To'lovlari</h3>
+        <span class="section-badge">{{ filteredEnrollmentsWithBonus.length }} ta qabul</span>
+      </div>
+
       <!-- Filters Toolbar -->
       <div class="filters-toolbar">
         <div class="filter-item">
@@ -171,23 +177,17 @@
           </div>
         </div>
 
-        <div class="filter-item">
-          <label class="flabel-inline">Bonus sanasi (dan):</label>
+        <div class="filter-item date-range-group">
+          <label class="flabel-inline">Bonus sanasi:</label>
           <input v-model="filterDateFrom" type="date" class="fselect-field" />
-        </div>
-
-        <div class="filter-item">
-          <label class="flabel-inline">Bonus sanasi (gacha):</label>
+          <span class="date-range-sep">—</span>
           <input v-model="filterDateTo" type="date" class="fselect-field" />
+          <button v-if="filterDateFrom || filterDateTo" type="button" class="btn-clear-date" @click="filterDateFrom = ''; filterDateTo = ''" title="Tozalash">✕</button>
         </div>
       </div>
 
       <!-- ATTRACTED STUDENTS & BONUS PAYMENTS TABLE -->
       <div class="section-container">
-        <div class="section-title-wrap">
-          <h3 class="section-title">👥 Jalb Qilingan O'quvchilar va Bonus To'lovlari</h3>
-          <span class="section-badge">{{ filteredEnrollmentsWithBonus.length }} ta qabul</span>
-        </div>
 
         <div v-if="loadingEnrollments" class="state-container">
           <div class="spinner"></div>
@@ -233,6 +233,9 @@
                     <div class="cat-pill-wrap">
                       <span class="cat-badge">{{ item.category_name || '-' }}</span>
                       <span v-if="item.group_name" class="group-pill">{{ item.group_name }}</span>
+                    </div>
+                    <div v-if="groupsById[item.group]" class="group-dates">
+                      {{ formatDate(groupsById[item.group].started_at) }} — {{ formatDate(groupsById[item.group].ends_at) }}
                     </div>
                   </td>
                   <td class="td-amount">
@@ -504,6 +507,22 @@ const error = ref(null)
 const enrollments = ref([])
 const bonusPayments = ref([])
 const loadingEnrollments = ref(false)
+const groups = ref([])
+
+const groupsById = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.id] = g })
+  return map
+})
+
+async function fetchGroups() {
+  try {
+    const res = await api.get('/groups/', { params: { page_size: 1000 } })
+    groups.value = res.data.results || res.data
+  } catch (err) {
+    console.error("Guruhlarni yuklashda xatolik:", err)
+  }
+}
 
 // Pay Bonus Modal state
 const showPayModal = ref(false)
@@ -762,6 +781,7 @@ onMounted(async () => {
   }
   fetchAll()
   fetchCategories()
+  fetchGroups()
 })
 </script>
 
@@ -998,6 +1018,13 @@ onMounted(async () => {
   padding: 14px 18px;
 }
 .filter-item { display: flex; align-items: center; gap: 8px; }
+.date-range-sep { color: #9CA3AF; font-size: 13px; }
+.btn-clear-date {
+  width: 26px; height: 26px; border-radius: 8px; border: 1px solid #E5E7EB;
+  background: #F9FAFB; color: #6B7280; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-clear-date:hover { background: #F3F4F6; color: #111827; }
 .flabel-inline { font-size: 13px; font-weight: 600; color: #4B5563; }
 .select-wrap-relative { position: relative; display: inline-block; }
 .fselect-field { appearance: none; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 9px 14px; font-size: 13px; font-weight: 600; color: #374151; outline: none; cursor: pointer; }
@@ -1102,6 +1129,14 @@ onMounted(async () => {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
+}
+
+.group-dates {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 4px;
+  white-space: nowrap;
 }
 
 .grant-pill {

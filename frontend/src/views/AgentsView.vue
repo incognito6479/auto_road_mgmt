@@ -57,6 +57,7 @@
             <tr>
               <th style="width: 50px;">#</th>
               <th>Agent F.I.SH.</th>
+              <th>Telefon</th>
               <th v-if="authStore.isAdminOrSuperuser" style="width: 100px; text-align: right;">Amallar</th>
             </tr>
           </thead>
@@ -73,6 +74,10 @@
                     <span v-if="agent.notes" class="agent-notes">{{ agent.notes }}</span>
                   </div>
                 </div>
+              </td>
+              <td class="td-phone">
+                <div>{{ formatPhone(agent.phone) }}</div>
+                <div v-if="agent.phone2" class="td-phone-sub">Qo'shimcha: {{ formatPhone(agent.phone2) }}</div>
               </td>
               <td v-if="authStore.isAdminOrSuperuser" style="text-align: right;" @click.stop>
                 <div class="action-btns">
@@ -193,6 +198,7 @@ import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
+import { formatPhone } from '@/utils/formatters'
 
 const authStore = useAuthStore()
 const branchStore = useBranchStore()
@@ -609,6 +615,13 @@ onMounted(async () => {
 .td-phone {
   font-weight: 500;
   color: #374151;
+}
+
+.td-phone-sub {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #6B7280;
+  margin-top: 2px;
 }
 
 .action-btns {

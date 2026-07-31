@@ -78,6 +78,18 @@
               <div class="select-chevron-icon">▼</div>
             </div>
           </div>
+
+          <div class="filter-item">
+            <label class="flabel">Sertifikat:</label>
+            <div class="select-wrap-relative">
+              <select v-model="filterCertificate" class="fselect-field">
+                <option value="">Barchasi</option>
+                <option value="bor">Bor</option>
+                <option value="yoq">Yo'q</option>
+              </select>
+              <div class="select-chevron-icon">▼</div>
+            </div>
+          </div>
         </div>
 
         <div class="total-count">
@@ -98,29 +110,36 @@
         <table v-else class="data-table">
           <thead>
             <tr>
-              <th style="width: 60px;">ID</th>
               <th>O'quvchi F.I.SH.</th>
               <th>Kategoriya / Guruh</th>
-              <th>Shartnoma Summasi</th>
-              <th>To'langan Summa</th>
-              <th>Qarzdorlik Summasi</th>
+              <th class="th-cert">Sertifikat</th>
+              <th class="th-amount">Shartnoma Summasi</th>
+              <th class="th-amount">To'langan Summa</th>
+              <th class="th-amount">Qarzdorlik Summasi</th>
               <th>Holati</th>
               <th style="text-align: right;">Amallar</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="e in filteredDebtEnrollments" :key="e.id" class="table-row">
-              <td class="td-id">#{{ e.id }}</td>
               <td class="td-name">
                 <div class="student-name-link" @click="goStudent(e.student)">{{ e.student_name || 'Noma\'lum' }}</div>
                 <div class="student-sub">
-                  <span v-if="e.student_phone">📞 {{ formatPhone(e.student_phone) }}</span>
-                  <span v-if="e.student_jshshr" style="margin-left: 8px;">JSHSHR: {{ e.student_jshshr }}</span>
+                  <div v-if="e.student_phone">📞 {{ formatPhone(e.student_phone) }}</div>
+                  <div v-if="e.student_phone2">📞 {{ formatPhone(e.student_phone2) }} (qo'shimcha)</div>
+                  <div v-if="e.student_jshshr">JSHSHR: {{ e.student_jshshr }}</div>
                 </div>
               </td>
               <td>
                 <span class="cat-pill">{{ e.category_name || '-' }}</span>
                 <div v-if="e.group_name" class="group-sub">{{ e.group_name }}</div>
+                <div v-if="groupsById[e.group]" class="group-dates">
+                  {{ formatDate(groupsById[e.group].started_at) }} — {{ formatDate(groupsById[e.group].ends_at) }}
+                </div>
+              </td>
+              <td class="td-cert">
+                <span v-if="e.student_certificate_number">{{ certLabel(e) }}</span>
+                <span v-else>-</span>
               </td>
               <td class="td-amount">{{ formatMoney(e.enrolled_amount) }}</td>
               <td class="td-amount text-green">{{ formatMoney(e.paid_amount || 0) }}</td>
@@ -270,7 +289,7 @@ import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
-import { formatMoney, formatPhone } from '@/utils/formatters'
+import { formatMoney, formatPhone, formatDate } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
 const router = useRouter()
@@ -279,11 +298,19 @@ const branchStore = useBranchStore()
 
 const enrollments = ref([])
 const categories = ref([])
+const groups = ref([])
 const loading = ref(true)
+
+const groupsById = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.id] = g })
+  return map
+})
 
 const filterSearchQuery = ref('')
 const filterCategory = ref('')
 const filterGroup = ref('')
+const filterCertificate = ref('')
 
 const showPayModal = ref(false)
 const isGeneralModal = ref(false)
@@ -324,6 +351,8 @@ const groupOptions = computed(() => {
   return [...new Set(names)].sort()
 })
 
+const certLabel = (e) => `${e.student_certificate_series || ''} ${e.student_certificate_number}`.trim()
+
 const filteredDebtEnrollments = computed(() => {
   return debtEnrollments.value.filter(e => {
     const q = filterSearchQuery.value.toLowerCase().trim()
@@ -345,7 +374,12 @@ const filteredDebtEnrollments = computed(() => {
 
     const matchGroup = !filterGroup.value || e.group_name === filterGroup.value
 
-    return matchSearch && matchCategory && matchGroup
+    const hasCert = !!e.student_certificate_number
+    const matchCertificate = !filterCertificate.value ||
+      (filterCertificate.value === 'bor' && hasCert) ||
+      (filterCertificate.value === 'yoq' && !hasCert)
+
+    return matchSearch && matchCategory && matchGroup && matchCertificate
   })
 })
 
@@ -362,6 +396,13 @@ async function fetchCategories() {
   try {
     const res = await api.get('/categories/')
     categories.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
+
+async function fetchGroups() {
+  try {
+    const res = await api.get('/groups/', { params: { page_size: 1000 } })
+    groups.value = res.data.results || res.data
   } catch (err) { console.error(err) }
 }
 
@@ -467,6 +508,7 @@ async function savePayment() {
 onMounted(() => {
   fetchEnrollments()
   fetchCategories()
+  fetchGroups()
 })
 </script>
 
@@ -509,7 +551,9 @@ onMounted(() => {
 .student-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #E8F5E9; color: #2D6A4F; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .debt-chip { padding: 4px 10px; background: #FEE2E2; color: #991B1B; border-radius: 8px; font-size: 12.5px; display: inline-block; }
+.th-cert, .td-cert, .th-amount, .td-amount { white-space: nowrap; }
 
 .status-chip {
   display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11.5px; font-weight: 600;

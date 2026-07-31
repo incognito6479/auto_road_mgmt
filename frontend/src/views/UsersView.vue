@@ -82,7 +82,10 @@
                   </div>
                 </div>
               </td>
-              <td class="td-phone">{{ formatPhone(u.phone) }}</td>
+              <td class="td-phone">
+                <div>{{ formatPhone(u.phone) }}</div>
+                <div v-if="u.phone2" class="td-phone-sub">Qo'shimcha: {{ formatPhone(u.phone2) }}</div>
+              </td>
               <td class="td-role">
                 <span class="role-badge" :class="roleClass(u.role, u.is_superuser)">
                   {{ roleText(u.role, u.is_superuser) }}
@@ -1095,6 +1098,12 @@ watch(() => route.query.role, () => {
 }
 .td-phone {
   font-weight: 500;
+}
+.td-phone-sub {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #6B7280;
+  margin-top: 2px;
 }
 .td-jshshr, .td-passport {
   font-family: monospace;

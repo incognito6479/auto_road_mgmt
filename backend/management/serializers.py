@@ -175,6 +175,9 @@ class UserSerializer(serializers.ModelSerializer):
     jshshr = serializers.IntegerField(required=False, allow_null=True)
     passport_serie = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     passport_number = serializers.IntegerField(required=False, allow_null=True)
+    certificate_series = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    certificate_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    certificate_added_date = serializers.DateTimeField(required=False, allow_null=True)
 
     class Meta:
         model = User
@@ -194,6 +197,9 @@ class UserSerializer(serializers.ModelSerializer):
             "jshshr",
             "passport_serie",
             "passport_number",
+            "certificate_series",
+            "certificate_number",
+            "certificate_added_date",
             "notes",
             "password",
             "is_active",
@@ -267,6 +273,9 @@ class StudentSerializer(serializers.ModelSerializer):
             "jshshr",
             "passport_serie",
             "passport_number",
+            "certificate_series",
+            "certificate_number",
+            "certificate_added_date",
             "status",
             "category",
             "category_id",
@@ -624,6 +633,9 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     student_phone = serializers.CharField(source="student.phone", read_only=True)
     student_phone2 = serializers.CharField(source="student.phone2", read_only=True)
     student_jshshr = serializers.CharField(source="student.jshshr", read_only=True)
+    student_certificate_series = serializers.CharField(source="student.certificate_series", read_only=True)
+    student_certificate_number = serializers.CharField(source="student.certificate_number", read_only=True)
+    student_certificate_added_date = serializers.DateTimeField(source="student.certificate_added_date", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
     group_name = serializers.CharField(source="group.name", read_only=True)
     instructor_name = serializers.SerializerMethodField()
@@ -638,6 +650,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         model = Enrollment
         fields = [
             "id", "student", "student_name", "student_phone", "student_phone2", "student_jshshr",
+            "student_certificate_series", "student_certificate_number", "student_certificate_added_date",
             "category", "category_name", "group", "group_name", "instructor", "instructor_name", "coordinator", "coordinator_name",
             "agent", "agent_name", "agent_phone",
             "learning_place", "learning_place_name", "learning_time", "learning_days", "status",
@@ -674,17 +687,20 @@ class PaymentSerializer(serializers.ModelSerializer):
     cashier_name = serializers.SerializerMethodField()
     user_full_name = serializers.CharField(source="user.full_name", read_only=True)
     user_phone = serializers.CharField(source="user.phone", read_only=True)
+    user_phone2 = serializers.CharField(source="user.phone2", read_only=True)
+    user_role = serializers.CharField(source="user.role", read_only=True)
     agent_name = serializers.CharField(source="agent.full_name", read_only=True)
     agent_phone = serializers.CharField(source="agent.phone", read_only=True)
+    agent_phone2 = serializers.CharField(source="agent.phone2", read_only=True)
     branch_name = serializers.CharField(source="branch.name", read_only=True)
     student_paid_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
         fields = [
-            "id", "user", "user_full_name", "user_phone", "cashier_name", "enrollment", "student", "student_name", "student_jshshr",
+            "id", "user", "user_full_name", "user_phone", "user_phone2", "user_role", "cashier_name", "enrollment", "student", "student_name", "student_jshshr",
             "category", "category_id", "category_name", "group_name",
-            "agent", "agent_name", "agent_phone", "branch", "branch_name",
+            "agent", "agent_name", "agent_phone", "agent_phone2", "branch", "branch_name",
             "amount", "status", "method", "notes", "is_active", "created_at", "updated_at",
             "student_paid_amount",
         ]
@@ -876,9 +892,35 @@ class DrivingLessonsSerializer(serializers.ModelSerializer):
         model = DrivingLessons
         fields = [
             "id", "student", "student_name", "instructor", "instructor_name",
-            "car", "car_name", "branch", "branch_name", "lesson_date", "notes", "is_active", "created_at", "updated_at"
+            "car", "car_name", "branch", "branch_name", "lesson_type", "hours",
+            "lesson_date", "notes", "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "is_active", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        lesson_type = attrs.get("lesson_type", DrivingLessons.LessonType.DRIVING)
+        if lesson_type == DrivingLessons.LessonType.AUTODROME:
+            hours = attrs.get("hours")
+            if not hours or hours < 1:
+                raise serializers.ValidationError({"hours": "Avtodrom uchun soatlar sonini kiriting (1-6)."})
+            if hours > DrivingLessons.AUTODROME_MAX_HOURS:
+                raise serializers.ValidationError({"hours": f"Avtodrom uchun maksimal {DrivingLessons.AUTODROME_MAX_HOURS} soat ruxsat etilgan."})
+
+            student = attrs.get("student") or getattr(self.instance, "student", None)
+            existing = DrivingLessons.objects.filter(
+                student=student,
+                lesson_type=DrivingLessons.LessonType.AUTODROME,
+                is_active=True,
+            )
+            if self.instance:
+                existing = existing.exclude(pk=self.instance.pk)
+            used = existing.aggregate(total=Sum("hours"))["total"] or 0
+            if used + hours > DrivingLessons.AUTODROME_MAX_HOURS:
+                remaining = max(0, DrivingLessons.AUTODROME_MAX_HOURS - used)
+                raise serializers.ValidationError({
+                    "hours": f"Jami avtodrom vaqti {DrivingLessons.AUTODROME_MAX_HOURS} soatdan oshmasligi kerak. Qolgan: {remaining} soat."
+                })
+        return attrs
 
 
 class NotificationSerializer(serializers.ModelSerializer):

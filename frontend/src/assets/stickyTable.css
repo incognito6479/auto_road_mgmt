@@ -1,0 +1,121 @@
+/* =========================================================================
+   stickyTable.css — sticky table header + first column, app-wide
+   -------------------------------------------------------------------------
+   Every scrollable data table in the app wraps its <table> in one of a
+   handful of conventional wrapper classes (.table-wrap, .table-container,
+   .table-scroll, .pay-table-wrap, .payments-table-wrap,
+   .waiting-students-table-wrap — see dualScrollbar.js for the same
+   convention used by the dual-scrollbar feature). Rather than touching every
+   view's own scoped <style> block, this file hooks into that shared
+   convention once, globally.
+
+   Why the wrapper needs its own bounded height:
+   position:sticky pins an element relative to its NEAREST scrolling
+   ancestor. `overflow-x: auto` alone (already used everywhere for the
+   horizontal table scrollbar) computes `overflow-y` to `auto` too per the
+   CSS Overflow spec, which makes the wrapper itself that scrolling
+   ancestor — but since it has no bounded height, it never actually scrolls
+   vertically, so a naive `position: sticky; top: 0` header would never
+   appear to "stick" while the page scrolls. Giving the wrapper a real
+   `max-height` + `overflow-y: auto` makes it a genuine scroll container on
+   both axes, so header and first-column stickiness work correctly and
+   consistently (short tables are unaffected — the max-height only kicks in
+   once content actually exceeds it).
+
+   Component-level scoped styles compile with an extra attribute selector
+   (e.g. `.table-container[data-v-xxxx]`), which outranks a plain global
+   class selector at equal specificity otherwise — so positioning/z-index
+   here is `!important`, same reasoning as assets/responsive.css.
+   ========================================================================= */
+
+.table-wrap,
+.table-container,
+.table-scroll,
+.pay-table-wrap,
+.payments-table-wrap,
+.waiting-students-table-wrap {
+  max-height: 65vh;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* Sticky header row */
+.table-wrap table thead th,
+.table-container table thead th,
+.table-scroll table thead th,
+.pay-table-wrap table thead th,
+.payments-table-wrap table thead th,
+.waiting-students-table-wrap table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3 !important;
+}
+
+/* Sticky first column (usually the name) */
+.table-wrap table tbody td:first-child,
+.table-container table tbody td:first-child,
+.table-scroll table tbody td:first-child,
+.pay-table-wrap table tbody td:first-child,
+.payments-table-wrap table tbody td:first-child,
+.waiting-students-table-wrap table tbody td:first-child,
+.table-wrap table thead th:first-child,
+.table-container table thead th:first-child,
+.table-scroll table thead th:first-child,
+.pay-table-wrap table thead th:first-child,
+.payments-table-wrap table thead th:first-child,
+.waiting-students-table-wrap table thead th:first-child {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 2 !important;
+}
+
+/* Top-left corner cell sits above both the sticky header and sticky column */
+.table-wrap table thead th:first-child,
+.table-container table thead th:first-child,
+.table-scroll table thead th:first-child,
+.pay-table-wrap table thead th:first-child,
+.payments-table-wrap table thead th:first-child,
+.waiting-students-table-wrap table thead th:first-child {
+  z-index: 4 !important;
+  background-color: #F9FAFB !important;
+}
+
+/* Sticky first column needs an opaque background so scrolled-away content
+   doesn't show through underneath it. */
+.table-wrap table tbody td:first-child,
+.table-container table tbody td:first-child,
+.table-scroll table tbody td:first-child,
+.pay-table-wrap table tbody td:first-child,
+.payments-table-wrap table tbody td:first-child,
+.waiting-students-table-wrap table tbody td:first-child {
+  background-color: #FFFFFF !important;
+}
+
+.table-wrap table tbody tr:hover td:first-child,
+.table-container table tbody tr:hover td:first-child,
+.table-scroll table tbody tr:hover td:first-child,
+.pay-table-wrap table tbody tr:hover td:first-child,
+.payments-table-wrap table tbody tr:hover td:first-child,
+.waiting-students-table-wrap table tbody tr:hover td:first-child {
+  background-color: #FAFAFA !important;
+}
+
+/* Strict width: every column sizes to its own text instead of wrapping —
+   the table already scrolls horizontally (see the wrapper rule above), so
+   wide content just extends the scroll range rather than squeezing itself
+   into multiple lines. */
+.table-wrap table th,
+.table-container table th,
+.table-scroll table th,
+.pay-table-wrap table th,
+.payments-table-wrap table th,
+.waiting-students-table-wrap table th,
+.table-wrap table td,
+.table-container table td,
+.table-scroll table td,
+.pay-table-wrap table td,
+.payments-table-wrap table td,
+.waiting-students-table-wrap table td {
+  white-space: nowrap !important;
+  max-width: none !important;
+}

@@ -101,7 +101,6 @@
         <table v-else class="data-table">
           <thead>
             <tr>
-              <th style="width: 60px;">ID</th>
               <th>Tafsilotlar / Izoh</th>
               <th>To'langan Summa</th>
               <th>Usul</th>
@@ -111,7 +110,6 @@
           </thead>
           <tbody>
             <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
-              <td class="td-id">#{{ p.id }}</td>
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.notes || p.student_name || 'To\'lov Operatsiyasi' }}</div>
                 <div v-else class="student-name">{{ p.notes || p.student_name || 'To\'lov Operatsiyasi' }}</div>

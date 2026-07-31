@@ -1,6 +1,17 @@
 <template>
   <AppLayout>
 
+    <!-- Page actions -->
+    <div class="page-actions-bar">
+      <button v-if="authStore.isAdminOrSuperuser" class="btn-start-new-group" @click="openStartGroupModal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Guruhni boshlash
+      </button>
+    </div>
+
     <!-- Toolbar: Search and Category Filter -->
     <div class="groups-toolbar">
       <div class="search-box">
@@ -40,33 +51,27 @@
         </div>
       </div>
 
-      <div class="filter-group date-range-group">
-        <label class="filter-label">Boshlanish sanasi:</label>
-        <input v-model="startDateFrom" type="date" class="filter-date-input" />
-        <span class="date-range-sep">—</span>
-        <input v-model="startDateTo" type="date" class="filter-date-input" />
-        <button v-if="startDateFrom || startDateTo" type="button" class="btn-clear-date" @click="startDateFrom = ''; startDateTo = ''" title="Tozalash">✕</button>
-      </div>
+      <div class="date-ranges-row">
+        <div class="filter-group date-range-group">
+          <label class="filter-label">Boshlanish sanasi:</label>
+          <input v-model="startDateFrom" type="date" class="filter-date-input" />
+          <span class="date-range-sep">—</span>
+          <input v-model="startDateTo" type="date" class="filter-date-input" />
+          <button v-if="startDateFrom || startDateTo" type="button" class="btn-clear-date" @click="startDateFrom = ''; startDateTo = ''" title="Tozalash">✕</button>
+        </div>
 
-      <div class="filter-group date-range-group">
-        <label class="filter-label">Tugash sanasi:</label>
-        <input v-model="endDateFrom" type="date" class="filter-date-input" />
-        <span class="date-range-sep">—</span>
-        <input v-model="endDateTo" type="date" class="filter-date-input" />
-        <button v-if="endDateFrom || endDateTo" type="button" class="btn-clear-date" @click="endDateFrom = ''; endDateTo = ''" title="Tozalash">✕</button>
+        <div class="filter-group date-range-group">
+          <label class="filter-label">Tugash sanasi:</label>
+          <input v-model="endDateFrom" type="date" class="filter-date-input" />
+          <span class="date-range-sep">—</span>
+          <input v-model="endDateTo" type="date" class="filter-date-input" />
+          <button v-if="endDateFrom || endDateTo" type="button" class="btn-clear-date" @click="endDateFrom = ''; endDateTo = ''" title="Tozalash">✕</button>
+        </div>
       </div>
 
       <div class="total-count">
         Jami: <strong>{{ filteredGroups.length }}</strong> ta guruh
       </div>
-
-      <button v-if="authStore.isAdminOrSuperuser" class="btn-start-new-group" @click="openStartGroupModal">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        Guruhni boshlash
-      </button>
     </div>
 
     <!-- Loading, error, or empty states -->
@@ -295,7 +300,10 @@
                   <tr v-for="s in waitingStudents" :key="s.id">
                     <td><input type="checkbox" :value="s.id" v-model="selectedWaitingIds" /></td>
                     <td class="font-semibold">{{ s.full_name }}</td>
-                    <td>{{ formatPhone(s.phone) }}</td>
+                    <td>
+                      <div>{{ formatPhone(s.phone) }}</div>
+                      <div v-if="s.phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">Qo'shimcha: {{ formatPhone(s.phone2) }}</div>
+                    </td>
                     <td>{{ formatDate(s.date_joined || s.created_at) }}</td>
                     <td>{{ formatMoney(s.payment_amount) }}</td>
                   </tr>
@@ -899,6 +907,7 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-bottom: 1px solid #F3F4F6;
+  background: #FFFFFF;
 }
 
 .groups-table td {
@@ -1147,6 +1156,22 @@ onMounted(() => {
 }
 .weekday-chip:hover { border-color: #9CA3AF; }
 .weekday-chip.active { background: #2D6A4F; border-color: #2D6A4F; color: white; }
+
+/* ── Page actions (moved out of the filter toolbar) ──────── */
+.page-actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+/* Both date ranges stay together as one unit — wraps to a new line as a
+   pair instead of being split apart by unrelated filters in between. */
+.date-ranges-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 
 /* ── Start Group button & modal ────────────────────── */
 .btn-start-new-group {

@@ -3,8 +3,8 @@
 
     <div class="page-top">
       <div>
-        <h2 class="page-main-title">O'qituvchilar To'lovlari (Teachers Payouts)</h2>
-        <p class="page-sub-title">O'qituvchilarga amalga oshirilgan to'lovlar ro'yxati</p>
+        <h2 class="page-main-title">Instruktorlar To'lovlari (Instructors Payouts)</h2>
+        <p class="page-sub-title">Instruktorlarga amalga oshirilgan to'lovlar ro'yxati</p>
       </div>
 
       <button class="btn-primary-action btn-indigo" @click="openCreateModal">
@@ -12,14 +12,14 @@
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-        <span>O'qituvchiga to'lov yozish</span>
+        <span>Instruktorga to'lov yozish</span>
       </button>
     </div>
 
     <!-- Metrics Cards -->
     <div class="metrics-cards-grid">
       <div class="card-metric card-indigo">
-        <div class="card-metric-icon">👨‍🏫</div>
+        <div class="card-metric-icon">🚘</div>
         <div>
           <span class="metric-lbl">To'lovlar Soni</span>
           <h4 class="metric-val text-indigo">{{ payments.length }} ta to'lov</h4>
@@ -29,7 +29,7 @@
       <div class="card-metric card-purple font-hero">
         <div class="card-metric-icon">💵</div>
         <div>
-          <span class="metric-lbl">Jami O'qituvchilar Summasi</span>
+          <span class="metric-lbl">Jami Instruktorlar Summasi</span>
           <h4 class="metric-val text-purple">{{ formatMoney(metrics.total) }}</h4>
         </div>
       </div>
@@ -52,9 +52,9 @@
             <line x1="13" y1="13" x2="18" y2="18"/>
           </svg>
           <input
-            v-model="filterTeacherName"
+            v-model="filterInstructorName"
             type="text"
-            placeholder="O'qituvchi F.I.SH. bo'yicha qidirish..."
+            placeholder="Instruktor F.I.SH. bo'yicha qidirish..."
             class="search-input"
           />
         </div>
@@ -90,17 +90,17 @@
       <div class="table-container">
         <div v-if="loading" class="state-box">
           <div class="spinner"></div>
-          <span>O'qituvchilar to'lovlari yuklanmoqda...</span>
+          <span>Instruktorlar to'lovlari yuklanmoqda...</span>
         </div>
 
         <div v-else-if="payments.length === 0" class="empty-state">
-          <p>O'qituvchilar bo'yicha to'lovlar topilmadi</p>
+          <p>Instruktorlar bo'yicha to'lovlar topilmadi</p>
         </div>
 
         <table v-else class="data-table">
           <thead>
             <tr>
-              <th>O'qituvchi</th>
+              <th>Instruktor</th>
               <th>Turi</th>
               <th>To'langan Summa</th>
               <th>Usul</th>
@@ -111,8 +111,8 @@
           <tbody>
             <tr v-for="p in payments" :key="p.id" class="table-row">
               <td class="td-name">
-                <div v-if="p.user" class="teacher-name link-value" @click="goUser(p.user)">👨‍🏫 {{ p.user_full_name || p.cashier_name || 'O\'qituvchi' }}</div>
-                <div v-else class="teacher-name">👨‍🏫 {{ p.user_full_name || p.cashier_name || 'O\'qituvchi' }}</div>
+                <div v-if="p.user" class="teacher-name link-value" @click="goUser(p.user)">🚘 {{ p.user_full_name || p.cashier_name || 'Instruktor' }}</div>
+                <div v-else class="teacher-name">🚘 {{ p.user_full_name || p.cashier_name || 'Instruktor' }}</div>
                 <div v-if="p.user_phone || p.cashier_name" class="teacher-phone">📞 {{ formatPhone(p.user_phone || p.cashier_name) }}</div>
                 <div v-if="p.user_phone2" class="teacher-phone">📞 {{ formatPhone(p.user_phone2) }} (qo'shimcha)</div>
               </td>
@@ -162,7 +162,7 @@
       </div>
     </div>
 
-    <!-- CREATE / EDIT MODAL WITH SEARCHABLE TEACHER SELECT -->
+    <!-- CREATE / EDIT MODAL WITH SEARCHABLE INSTRUCTOR SELECT -->
     <Transition name="modal">
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
         <div class="modal-card">
@@ -175,8 +175,8 @@
                 </svg>
               </div>
               <div>
-                <h3>{{ isEditing ? "O'qituvchi To'lovini Tahrirlash" : "Yangi O'qituvchi To'lovi" }}</h3>
-                <p>O'qituvchi to'lovi</p>
+                <h3>{{ isEditing ? "Instruktor To'lovini Tahrirlash" : "Yangi Instruktor To'lovi" }}</h3>
+                <p>Instruktor to'lovi</p>
               </div>
             </div>
             <button class="btn-modal-close" @click="closeModal">✕</button>
@@ -185,36 +185,36 @@
           <form @submit.prevent="savePayment" class="modal-body">
             <div v-if="modalError" class="alert-error">{{ modalError }}</div>
 
-            <!-- Searchable Teacher Selector -->
+            <!-- Searchable Instructor Selector -->
             <div class="form-group" v-if="!isEditing">
-              <label class="flabel required">O'qituvchini Ism bo'yicha Qidirish *</label>
+              <label class="flabel required">Instruktorni Ism bo'yicha Qidirish *</label>
               <div class="searchable-select-wrap">
                 <input
-                  v-model="teacherSearchQuery"
+                  v-model="instructorSearchQuery"
                   type="text"
                   class="finput search-input-field"
-                  placeholder="O'qituvchi ismini kiriting..."
-                  @focus="showTeacherDropdown = true"
-                  @keydown="onTeacherKeydown"
+                  placeholder="Instruktor ismini kiriting..."
+                  @focus="showInstructorDropdown = true"
+                  @keydown="onInstructorKeydown"
                 />
-                <div v-if="showTeacherDropdown" class="dropdown-options-list">
+                <div v-if="showInstructorDropdown" class="dropdown-options-list">
                   <div
-                    v-for="(t, idx) in filteredTeachers"
+                    v-for="(t, idx) in filteredInstructors"
                     :key="t.id"
                     class="dropdown-option-item"
-                    :class="{ selected: form.teacher === t.id, highlighted: teacherKb.highlightedIndex.value === idx }"
-                    @click="selectTeacher(t)"
+                    :class="{ selected: form.instructor === t.id, highlighted: instructorKb.highlightedIndex.value === idx }"
+                    @click="selectInstructor(t)"
                   >
-                    <div class="opt-name">👨‍🏫 {{ getUserFullName(t) }}</div>
-                    <div class="opt-sub">{{ roleText(t.role) }} ({{ t.phone }})</div>
+                    <div class="opt-name">🚘 {{ getUserFullName(t) }}</div>
+                    <div class="opt-sub">Instruktor ({{ t.phone }})</div>
                   </div>
-                  <div v-if="filteredTeachers.length === 0" class="dropdown-empty">
-                    Mos o'qituvchi topilmadi
+                  <div v-if="filteredInstructors.length === 0" class="dropdown-empty">
+                    Mos instruktor topilmadi
                   </div>
                 </div>
               </div>
-              <div v-if="selectedTeacherLabel" class="selected-chip">
-                Tanlandi: <strong>{{ selectedTeacherLabel }}</strong>
+              <div v-if="selectedInstructorLabel" class="selected-chip">
+                Tanlandi: <strong>{{ selectedInstructorLabel }}</strong>
               </div>
             </div>
 
@@ -281,7 +281,7 @@
       :error="deleteError"
       @confirm="performDelete"
     >
-      Haqiqatan ham <strong>#{{ deletingPayment?.id }}</strong> raqamli o'qituvchi to'lovini o'chirmoqchimisiz?
+      Haqiqatan ham <strong>#{{ deletingPayment?.id }}</strong> raqamli instruktor to'lovini o'chirmoqchimisiz?
     </ConfirmDeleteModal>
 
     <!-- Pay Bonus Modal (fills in the amount on a placeholder bonus_teacher payment) -->
@@ -365,11 +365,11 @@ function goUser(id) {
 }
 
 const payments = ref([])
-const teachers = ref([])
+const instructors = ref([])
 const loading = ref(true)
 const totalCount = ref(0)
 
-const filterTeacherName = ref('')
+const filterInstructorName = ref('')
 const filterPaymentType = ref('')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
@@ -380,11 +380,11 @@ const editingId = ref(null)
 const saving = ref(false)
 const modalError = ref(null)
 
-const teacherSearchQuery = ref('')
-const showTeacherDropdown = ref(false)
-const selectedTeacherLabel = ref('')
+const instructorSearchQuery = ref('')
+const showInstructorDropdown = ref(false)
+const selectedInstructorLabel = ref('')
 
-const form = ref({ teacher: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' })
+const form = ref({ instructor: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' })
 
 const metrics = computed(() => {
   const total = payments.value.reduce((s, p) => s + (p.amount || 0), 0)
@@ -440,10 +440,10 @@ async function submitPayBonus() {
   }
 }
 
-const filteredTeachers = computed(() => {
-  const q = teacherSearchQuery.value.toLowerCase().trim()
-  if (!q) return teachers.value
-  return teachers.value.filter(t => getUserFullName(t).toLowerCase().includes(q))
+const filteredInstructors = computed(() => {
+  const q = instructorSearchQuery.value.toLowerCase().trim()
+  if (!q) return instructors.value
+  return instructors.value.filter(t => getUserFullName(t).toLowerCase().includes(q))
 })
 
 function getUserFullName(u) {
@@ -451,19 +451,13 @@ function getUserFullName(u) {
   return u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username || 'Xodim'
 }
 
-function roleText(r) {
-  if (r === 'instructor') return 'Instruktor'
-  if (r === 'coordinator') return 'O\'qituvchi'
-  return r || 'Xodim'
-}
-
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: filterPaymentType.value || 'paid,bonus_teacher', user_role: 'coordinator', page_size: 1000 }
+    const params = { status: filterPaymentType.value || 'paid,bonus_teacher', user_role: 'instructor', page_size: 1000 }
     if (filterDateFrom.value) params.date_from = filterDateFrom.value
     if (filterDateTo.value) params.date_to = filterDateTo.value
-    if (filterTeacherName.value) params.student_name = filterTeacherName.value.trim()
+    if (filterInstructorName.value) params.student_name = filterInstructorName.value.trim()
 
     const res = await api.get('/payments/', { params })
     payments.value = res.data.results || res.data
@@ -472,25 +466,25 @@ async function fetchPayments() {
   finally { loading.value = false }
 }
 
-async function fetchTeachers() {
+async function fetchInstructors() {
   try {
     const res = await api.get('/users/', { params: { page_size: 1000 } })
     const allUsers = res.data.results || res.data
-    teachers.value = allUsers.filter(u => u.role === 'coordinator')
+    instructors.value = allUsers.filter(u => u.role === 'instructor')
   } catch (err) { console.error(err) }
 }
 
-watch([filterTeacherName, filterPaymentType, filterDateFrom, filterDateTo], () => { fetchPayments() })
+watch([filterInstructorName, filterPaymentType, filterDateFrom, filterDateTo], () => { fetchPayments() })
 
-function selectTeacher(t) {
-  form.value.teacher = t.id
-  selectedTeacherLabel.value = `${getUserFullName(t)} (${roleText(t.role)})`
-  teacherSearchQuery.value = getUserFullName(t)
-  showTeacherDropdown.value = false
+function selectInstructor(t) {
+  form.value.instructor = t.id
+  selectedInstructorLabel.value = `${getUserFullName(t)} (Instruktor)`
+  instructorSearchQuery.value = getUserFullName(t)
+  showInstructorDropdown.value = false
 }
-const teacherKb = useSearchSelectKeyboard()
-function onTeacherKeydown(e) {
-  teacherKb.onKeydown(e, filteredTeachers.value, selectTeacher, () => { showTeacherDropdown.value = false })
+const instructorKb = useSearchSelectKeyboard()
+function onInstructorKeydown(e) {
+  instructorKb.onKeydown(e, filteredInstructors.value, selectInstructor, () => { showInstructorDropdown.value = false })
 }
 
 function methodText(m) {
@@ -521,10 +515,10 @@ function openCreateModal() {
   isEditing.value = false
   editingId.value = null
   modalError.value = null
-  teacherSearchQuery.value = ''
-  selectedTeacherLabel.value = ''
-  showTeacherDropdown.value = false
-  form.value = { teacher: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' }
+  instructorSearchQuery.value = ''
+  selectedInstructorLabel.value = ''
+  showInstructorDropdown.value = false
+  form.value = { instructor: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' }
   showModal.value = true
 }
 
@@ -532,14 +526,14 @@ function openEditModal(p) {
   isEditing.value = true
   editingId.value = p.id
   modalError.value = null
-  form.value = { teacher: p.user, amountFormatted: formatMoney(p.amount, false), amount: p.amount, status: p.status || 'paid', method: p.method || 'cash', notes: p.notes || '' }
+  form.value = { instructor: p.user, amountFormatted: formatMoney(p.amount, false), amount: p.amount, status: p.status || 'paid', method: p.method || 'cash', notes: p.notes || '' }
   showModal.value = true
 }
 
 function closeModal() { showModal.value = false }
 
 async function savePayment() {
-  if (!isEditing.value && !form.value.teacher) { modalError.value = "O'qituvchini tanlang."; return }
+  if (!isEditing.value && !form.value.instructor) { modalError.value = "Instruktorni tanlang."; return }
   if (!form.value.amount || form.value.amount <= 0) { modalError.value = "To'g'ri to'lov summasini kiriting."; return }
   saving.value = true
   modalError.value = null
@@ -548,7 +542,7 @@ async function savePayment() {
       await api.patch(`/payments/${editingId.value}/`, { amount: form.value.amount, status: form.value.status, method: form.value.method, notes: form.value.notes })
     } else {
       await api.post('/payments/', {
-        user: form.value.teacher || authStore.user?.id,
+        user: form.value.instructor || authStore.user?.id,
         amount: form.value.amount,
         status: form.value.status,
         method: form.value.method,
@@ -587,7 +581,7 @@ async function performDelete() {
   }
 }
 
-onMounted(() => { fetchPayments(); fetchTeachers() })
+onMounted(() => { fetchPayments(); fetchInstructors() })
 </script>
 
 <style scoped>
