@@ -255,6 +255,10 @@ class StudentSerializer(serializers.ModelSerializer):
     agent_name = serializers.SerializerMethodField()
     learning_time = serializers.SerializerMethodField()
     learning_days = serializers.SerializerMethodField()
+    group = serializers.SerializerMethodField()
+    group_name = serializers.SerializerMethodField()
+    group_started_at = serializers.SerializerMethodField()
+    group_ends_at = serializers.SerializerMethodField()
     branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
@@ -287,6 +291,10 @@ class StudentSerializer(serializers.ModelSerializer):
             "agent_name",
             "learning_time",
             "learning_days",
+            "group",
+            "group_name",
+            "group_started_at",
+            "group_ends_at",
             "payment_amount",
             "enrolled_free",
             "notes",
@@ -342,6 +350,22 @@ class StudentSerializer(serializers.ModelSerializer):
     def get_learning_days(self, obj):
         enrollment = obj.enrollments.filter(is_active=True).first()
         return enrollment.learning_days if enrollment else []
+
+    def get_group(self, obj):
+        enrollment = obj.enrollments.filter(is_active=True).first()
+        return enrollment.group_id if enrollment else None
+
+    def get_group_name(self, obj):
+        enrollment = obj.enrollments.filter(is_active=True).first()
+        return enrollment.group.name if (enrollment and enrollment.group) else None
+
+    def get_group_started_at(self, obj):
+        enrollment = obj.enrollments.filter(is_active=True).first()
+        return enrollment.group.started_at if (enrollment and enrollment.group) else None
+
+    def get_group_ends_at(self, obj):
+        enrollment = obj.enrollments.filter(is_active=True).first()
+        return enrollment.group.ends_at if (enrollment and enrollment.group) else None
 
     def get_payment_amount(self, obj):
         enrollment = obj.enrollments.filter(is_active=True).first()
@@ -684,6 +708,8 @@ class PaymentSerializer(serializers.ModelSerializer):
     category_id = serializers.IntegerField(source="enrollment.category.id", read_only=True)
     category_name = serializers.CharField(source="enrollment.category.name", read_only=True)
     group_name = serializers.CharField(source="enrollment.group.name", read_only=True, default=None)
+    group_started_at = serializers.DateField(source="enrollment.group.started_at", read_only=True, default=None)
+    group_ends_at = serializers.DateField(source="enrollment.group.ends_at", read_only=True, default=None)
     cashier_name = serializers.SerializerMethodField()
     user_full_name = serializers.CharField(source="user.full_name", read_only=True)
     user_phone = serializers.CharField(source="user.phone", read_only=True)
@@ -699,7 +725,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = [
             "id", "user", "user_full_name", "user_phone", "user_phone2", "user_role", "cashier_name", "enrollment", "student", "student_name", "student_jshshr",
-            "category", "category_id", "category_name", "group_name",
+            "category", "category_id", "category_name", "group_name", "group_started_at", "group_ends_at",
             "agent", "agent_name", "agent_phone", "agent_phone2", "branch", "branch_name",
             "amount", "status", "method", "notes", "is_active", "created_at", "updated_at",
             "student_paid_amount",

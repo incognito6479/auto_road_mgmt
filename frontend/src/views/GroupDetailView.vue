@@ -81,20 +81,6 @@
       <div class="table-card">
         <div class="table-card-header">
           <h3 class="section-title">A'zo o'quvchilar</h3>
-          <div class="search-wrap-flex">
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Ism yoki telefon..."
-              class="search-input"
-            />
-            <input
-              v-model="searchJshshr"
-              type="text"
-              placeholder="JSHSHR..."
-              class="search-input-jshshr"
-            />
-          </div>
         </div>
 
         <div class="table-container">
@@ -114,9 +100,36 @@
                 <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">Instruktor</th>
                 <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">Agent</th>
                 <th v-if="!authStore.isMechanic">Shartnoma summasi</th>
-                <th v-if="!authStore.isMechanic">To'langan</th>
-                <th v-if="!authStore.isMechanic">Qoldiq</th>
-                <th v-if="!authStore.isMechanic" style="text-align: center;">Amallar</th>
+                <th v-if="!authStore.isMechanic" class="sticky-col sticky-col-1">To'langan</th>
+                <th v-if="!authStore.isMechanic" class="sticky-col sticky-col-2">Qoldiq</th>
+                <th v-if="!authStore.isMechanic" class="sticky-col sticky-col-3" style="text-align: center;">Amallar</th>
+              </tr>
+              <tr class="col-filter-row">
+                <th>
+                  <input
+                    v-model="filterName"
+                    class="col-filter-input"
+                    type="text"
+                    placeholder="Ism bo'yicha qidirish..."
+                  />
+                </th>
+                <th>
+                  <input
+                    v-model="filterPhone"
+                    class="col-filter-input"
+                    type="text"
+                    placeholder="Telefon bo'yicha qidirish..."
+                  />
+                </th>
+                <th>
+                  <input
+                    v-model="filterJshshr"
+                    class="col-filter-input"
+                    type="text"
+                    placeholder="JSHSHR"
+                  />
+                </th>
+                <th :colspan="filterRowTrailingColspan"></th>
               </tr>
             </thead>
             <tbody>
@@ -212,7 +225,19 @@
 
                 <!-- Exam-Pass Certificate Image Column -->
                 <td class="td-assign" @click.stop>
-                  <span v-if="studentHasExamCert(e.student)" class="fully-paid-badge">✓ Yuklangan</span>
+                  <button
+                    v-if="getStudentExamCert(e.student)"
+                    type="button"
+                    class="btn-view-cert"
+                    @click.stop="openExamCertPreview(getStudentExamCert(e.student))"
+                    title="Sertifikatni ko'rish"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    Ko'rish
+                  </button>
                   <button v-else-if="authStore.canUploadCertificates" type="button" class="btn-assign-plus" @click.stop="openExamCertModal(e)" title="Imtihon sertifikatini yuklash">+</button>
                   <span v-else>-</span>
                 </td>
@@ -264,17 +289,17 @@
                   <span v-if="e.enrolled_free" class="free-badge">Tekin</span>
                   <span v-else>{{ formatMoney(e.enrolled_amount) }}</span>
                 </td>
-                <td v-if="!authStore.isMechanic">
+                <td v-if="!authStore.isMechanic" class="sticky-col sticky-col-1">
                   <span v-if="e.enrolled_free">-</span>
                   <span v-else class="paid-val">{{ formatMoney(e.paid_amount) }}</span>
                 </td>
-                <td v-if="!authStore.isMechanic">
+                <td v-if="!authStore.isMechanic" class="sticky-col sticky-col-2">
                   <span v-if="e.enrolled_free">-</span>
                   <span v-else :class="{'balance-warning': (e.enrolled_amount - e.paid_amount) > 0}">
                     {{ formatMoney(e.enrolled_amount - e.paid_amount) }}
                   </span>
                 </td>
-                <td v-if="!authStore.isMechanic" style="text-align: center;" @click.stop>
+                <td v-if="!authStore.isMechanic" class="sticky-col sticky-col-3" style="text-align: center;" @click.stop>
                   <button
                     v-if="authStore.isAdminOrSuperuser && !e.enrolled_free && e.paid_amount < e.enrolled_amount"
                     class="btn-pay"
@@ -330,6 +355,7 @@
               <option value="cash">Naqd</option>
               <option value="card">Karta</option>
               <option value="qr_code">QR code</option>
+              <option value="click">Click</option>
               <option value="transfer">O'tkazma</option>
             </select>
             <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
@@ -595,6 +621,23 @@
       </form>
     </dialog>
 
+    <!-- Exam-Pass Certificate Preview Modal -->
+    <dialog ref="examCertPreviewModal" class="modal-dialog cert-preview-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Imtihon Sertifikati</h3>
+        <button class="btn-close" @click="closeExamCertPreview">✕</button>
+      </div>
+      <div class="cert-preview-body">
+        <img
+          v-if="previewingExamCert?.image"
+          :src="previewingExamCert.image"
+          alt="Imtihon sertifikati"
+          class="cert-preview-img"
+        />
+        <p v-if="previewingExamCert?.notes" class="cert-preview-notes">{{ previewingExamCert.notes }}</p>
+      </div>
+    </dialog>
+
   </AppLayout>
 </template>
 
@@ -653,9 +696,10 @@ const weekdaysText = (g) => {
   return weekendsText(g.working_weekends)
 }
 
-// Search state
-const searchQuery = ref('')
-const searchJshshr = ref('')
+// Column-head filter state
+const filterName = ref('')
+const filterPhone = ref('')
+const filterJshshr = ref('')
 
 // Payment state
 const payModal = ref(null)
@@ -707,6 +751,10 @@ const tableColspan = computed(() => {
   if (!authStore.isMechanic) count += 4 // Shartnoma, Paid, Qoldiq, Amallar
   return count
 })
+
+// Name/Phone/JSHSHR each get their own column-head filter cell — the rest
+// of the header row is spanned by one trailing empty cell.
+const filterRowTrailingColspan = computed(() => tableColspan.value - 3)
 
 const assignUserOptions = computed(() => {
   return allUsers.value.filter(u => u.role === assignType.value)
@@ -823,14 +871,16 @@ const fetchLearningPlaces = async () => {
 const filteredEnrollments = computed(() => {
   if (!group.value?.enrollments) return []
   return group.value.enrollments.filter(e => {
-    const q = searchQuery.value.toLowerCase()
-    const matchSearch = !searchQuery.value || 
-      e.student_name.toLowerCase().includes(q) || 
-      e.student_phone.includes(q) ||
-      (e.student_phone2 && e.student_phone2.includes(q))
-    const matchJshshr = !searchJshshr.value || 
-      (e.student_jshshr && String(e.student_jshshr).includes(searchJshshr.value))
-    return matchSearch && matchJshshr
+    const name = filterName.value.trim().toLowerCase()
+    const matchName = !name || (e.student_name || '').toLowerCase().includes(name)
+    const phone = filterPhone.value.trim()
+    const matchPhone = !phone ||
+      (e.student_phone || '').includes(phone) ||
+      (e.student_phone2 && e.student_phone2.includes(phone))
+    const jshshr = filterJshshr.value.trim()
+    const matchJshshr = !jshshr ||
+      (e.student_jshshr && String(e.student_jshshr).includes(jshshr))
+    return matchName && matchPhone && matchJshshr
   })
 })
 
@@ -1082,8 +1132,8 @@ const submitCertificate = async () => {
 // (across any instructor) already have one uploaded.
 const studentExamCerts = ref([])
 
-function studentHasExamCert(studentId) {
-  return studentExamCerts.value.some(c => c.student === studentId)
+function getStudentExamCert(studentId) {
+  return studentExamCerts.value.find(c => c.student === studentId) || null
 }
 
 async function fetchStudentExamCerts() {
@@ -1117,6 +1167,18 @@ function onExamCertFileChange(e) {
   examCertFile.value = e.target.files?.[0] || null
 }
 
+const examCertPreviewModal = ref(null)
+const previewingExamCert = ref(null)
+
+function openExamCertPreview(cert) {
+  previewingExamCert.value = cert
+  examCertPreviewModal.value?.showModal()
+}
+
+function closeExamCertPreview() {
+  examCertPreviewModal.value?.close()
+}
+
 async function submitExamCertUpload() {
   if (!examCertFile.value || !activeEnrollment.value) return
   examCertUploading.value = true
@@ -1147,7 +1209,7 @@ onMounted(async () => {
   fetchStudentExamCerts()
   document.addEventListener('click', handleAssignOutsideClick)
 
-  const dialogs = [payModal.value, assignModal.value, scheduleModal.value, certModal.value, examCertModal.value]
+  const dialogs = [payModal.value, assignModal.value, scheduleModal.value, certModal.value, examCertModal.value, examCertPreviewModal.value]
   dialogs.forEach(dialog => {
     if (dialog && !('closedBy' in HTMLDialogElement.prototype)) {
       dialog.addEventListener('click', (event) => {
@@ -1324,29 +1386,6 @@ onUnmounted(() => {
   color: #111827;
 }
 
-.search-wrap-flex {
-  display: flex;
-  gap: 10px;
-}
-
-.search-input, .search-input-jshshr {
-  padding: 8px 14px;
-  font-size: 13px;
-  border: 1px solid #D1D5DB;
-  border-radius: 8px;
-  width: 220px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.search-input:focus, .search-input-jshshr:focus {
-  border-color: #2D6A4F;
-}
-
-.search-input-jshshr {
-  width: 150px;
-}
-
 /* Table */
 .table-container {
   overflow-x: auto;
@@ -1370,6 +1409,32 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+/* ── Column-head filters ─────────────────────────────────── */
+/* Higher specificity than ".students-table th" (0,1,1) on purpose — equal
+   specificity would let source order decide and flatten this row's
+   padding/background back to the label row's values. */
+.students-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.col-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
 .students-table td {
   padding: 14px 16px;
   color: #4B5563;
@@ -1379,6 +1444,28 @@ onUnmounted(() => {
 
 .students-table tbody tr { cursor: pointer; }
 .students-table tbody tr:hover td { background: #FAFAFA; }
+
+/* ── Sticky right-hand columns (Paid / Remaining / Actions) ─────────────
+   Fixed widths so the stacked `right` offsets are exact. Each cell needs
+   its own opaque background — sticky cells overlap whatever scrolls
+   underneath, and a transparent one would let that content show through. */
+.sticky-col {
+  position: sticky;
+  background: white;
+}
+.students-table th.sticky-col { background: #F9FAFB; }
+.students-table thead tr.col-filter-row th.sticky-col { background: #FAFAFB; }
+.students-table tbody tr:hover td.sticky-col { background: #FAFAFA; }
+
+.sticky-col-3 { right: 0; width: 130px; min-width: 130px; }
+.sticky-col-2 { right: 130px; width: 110px; min-width: 110px; }
+.sticky-col-1 {
+  right: 240px;
+  width: 110px;
+  min-width: 110px;
+  box-shadow: -6px 0 6px -6px rgba(0, 0, 0, 0.15);
+}
+
 .students-table tr:last-child td {
   border-bottom: none;
 }
@@ -1502,6 +1589,44 @@ onUnmounted(() => {
   padding: 4px 10px;
   border-radius: 12px;
   display: inline-block;
+}
+
+.btn-view-cert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #BFDBFE;
+  border-radius: 20px;
+  background: #EFF6FF;
+  color: #2563EB;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-view-cert:hover { background: #DBEAFE; border-color: #93C5FD; }
+
+.cert-preview-dialog { max-width: 640px; }
+.cert-preview-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.cert-preview-img {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 10px;
+  border: 1px solid #E5E7EB;
+  object-fit: contain;
+}
+.cert-preview-notes {
+  margin: 0;
+  font-size: 13px;
+  color: #6B7280;
+  text-align: center;
 }
 
 .free-badge {

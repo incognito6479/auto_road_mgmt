@@ -498,6 +498,7 @@ class Payment(BaseModel):
         CARD = "card", "Karta"
         QR_CODE = "qr_code", "QR code"
         TRANSFER = "transfer", "O'tkazma"
+        CLICK = "click", "Click"
 
     branch = models.ForeignKey(
         "Branch",

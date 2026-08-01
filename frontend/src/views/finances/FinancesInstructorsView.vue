@@ -251,6 +251,7 @@
                   <option value="cash">Naqd</option>
                   <option value="card">Karta</option>
                   <option value="qr_code">QR code</option>
+                  <option value="click">Click</option>
                   <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
@@ -326,6 +327,7 @@
                   <option value="cash">Naqd</option>
                   <option value="card">Karta</option>
                   <option value="qr_code">QR code</option>
+                  <option value="click">Click</option>
                   <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
@@ -492,6 +494,7 @@ function methodText(m) {
     case 'cash': return 'Naqd'
     case 'card': return 'Karta'
     case 'qr_code': return 'QR code'
+    case 'click': return 'Click'
     case 'transfer': return "O'tkazma"
     default: return m
   }

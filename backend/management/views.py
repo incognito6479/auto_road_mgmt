@@ -5,7 +5,7 @@ All application views for the Driving School Management app live here.
 """
 
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Q
+from django.db.models import Q, OuterRef, Subquery, F
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
@@ -355,12 +355,26 @@ class StudentViewSet(SoftDeleteModelViewSet):
             )
         return super().partial_update(request, *args, **kwargs)
 
+    # Students without a group have a NULL group_started_at/group_ends_at;
+    # nulls_last keeps them at the bottom regardless of sort direction,
+    # instead of Postgres's default of sorting NULLs first on DESC.
+    GROUP_ORDERING_FIELDS = {
+        "group_started_at": F("group_started_at").asc(nulls_last=True),
+        "-group_started_at": F("group_started_at").desc(nulls_last=True),
+        "group_ends_at": F("group_ends_at").asc(nulls_last=True),
+        "-group_ends_at": F("group_ends_at").desc(nulls_last=True),
+    }
+
     def get_queryset(self):
         queryset = super().get_queryset()
         category = self.request.query_params.get("category")
         status_param = self.request.query_params.get("status")
         search = self.request.query_params.get("search")
+        phone = self.request.query_params.get("phone")
         jshshr = self.request.query_params.get("jshshr")
+        group_name = self.request.query_params.get("group_name")
+        has_group = self.request.query_params.get("has_group")
+        ordering = self.request.query_params.get("ordering")
 
         if category:
             if category.isdigit():
@@ -378,17 +392,39 @@ class StudentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(enrollments__status=mapped_status, enrollments__is_active=True)
         if search:
             queryset = queryset.filter(
-                Q(full_name__icontains=search) | 
-                Q(first_name__icontains=search) | 
-                Q(last_name__icontains=search) | 
-                Q(phone__icontains=search) | 
-                Q(phone2__icontains=search)
+                Q(full_name__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        if phone:
+            queryset = queryset.filter(
+                Q(phone__icontains=phone) |
+                Q(phone2__icontains=phone)
             )
         if jshshr:
             queryset = queryset.filter(jshshr__icontains=jshshr)
+        if group_name:
+            queryset = queryset.filter(enrollments__is_active=True, enrollments__group__name__icontains=group_name)
+        if has_group is not None:
+            has_group_active_group = Q(enrollments__is_active=True, enrollments__group__isnull=False)
+            if has_group.lower() in ("1", "true", "yes"):
+                queryset = queryset.filter(has_group_active_group)
+            else:
+                queryset = queryset.exclude(has_group_active_group)
 
         queryset = filter_by_branch(queryset, self.request, "branch")
-        return queryset.distinct()
+        queryset = queryset.distinct()
+
+        if ordering in self.GROUP_ORDERING_FIELDS:
+            active_enrollment = Enrollment.objects.filter(
+                student=OuterRef("pk"), is_active=True
+            ).order_by("pk")
+            queryset = queryset.annotate(
+                group_started_at=Subquery(active_enrollment.values("group__started_at")[:1]),
+                group_ends_at=Subquery(active_enrollment.values("group__ends_at")[:1]),
+            ).order_by(self.GROUP_ORDERING_FIELDS[ordering], "-updated_at", "-date_joined")
+
+        return queryset
 
 
 # ---------------------------------------------------------------------------
@@ -446,12 +482,27 @@ class PaymentViewSet(SoftDeleteModelViewSet):
     serializer_class = PaymentSerializer
     pagination_class = StandardPagination
 
+    # Payment -> Enrollment -> Group is a straight FK chain (no "first of
+    # many" ambiguity like Student -> Enrollment), so ordering can reference
+    # it directly with no annotate/Subquery needed. nulls_last keeps
+    # payments whose enrollment has no group at the bottom either way.
+    ORDERING_FIELDS = {
+        "group_started_at": F("enrollment__group__started_at").asc(nulls_last=True),
+        "-group_started_at": F("enrollment__group__started_at").desc(nulls_last=True),
+        "group_ends_at": F("enrollment__group__ends_at").asc(nulls_last=True),
+        "-group_ends_at": F("enrollment__group__ends_at").desc(nulls_last=True),
+        "created_at": "created_at",
+        "-created_at": "-created_at",
+    }
+
     def get_queryset(self):
         queryset = super().get_queryset()
         status = self.request.query_params.get("status")
         method = self.request.query_params.get("method")
         category = self.request.query_params.get("category")
         student_name = self.request.query_params.get("student_name")
+        agent_name = self.request.query_params.get("agent_name")
+        group_name = self.request.query_params.get("group_name")
         jshshr = self.request.query_params.get("jshshr")
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
@@ -460,6 +511,7 @@ class PaymentViewSet(SoftDeleteModelViewSet):
         agent = self.request.query_params.get("agent")
         user_param = self.request.query_params.get("user")
         user_role = self.request.query_params.get("user_role")
+        ordering = self.request.query_params.get("ordering")
 
         if enrollment:
             queryset = queryset.filter(enrollment_id=enrollment)
@@ -492,6 +544,13 @@ class PaymentViewSet(SoftDeleteModelViewSet):
                 Q(user__last_name__icontains=student_name) |
                 Q(notes__icontains=student_name)
             )
+        if agent_name:
+            queryset = queryset.filter(
+                Q(agent__full_name__icontains=agent_name) |
+                Q(enrollment__agent__full_name__icontains=agent_name)
+            )
+        if group_name:
+            queryset = queryset.filter(enrollment__group__name__icontains=group_name)
         if jshshr:
             queryset = queryset.filter(enrollment__student__jshshr__icontains=jshshr)
         if date_from:
@@ -507,6 +566,9 @@ class PaymentViewSet(SoftDeleteModelViewSet):
                 queryset = queryset.filter(Q(branch_id=branch) | Q(enrollment__branch_id=branch) | Q(branch__isnull=True))
             else:
                 queryset = queryset.filter(Q(branch__name__iexact=branch.strip()) | Q(enrollment__branch__name__iexact=branch.strip()) | Q(branch__isnull=True))
+
+        if ordering in self.ORDERING_FIELDS:
+            queryset = queryset.order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-created_at")
 
         return queryset
 
@@ -599,9 +661,50 @@ class GroupViewSet(SoftDeleteModelViewSet):
     serializer_class = GroupSerializer
     pagination_class = StandardPagination
 
+    # Groups without a start/end date sort to the bottom regardless of
+    # direction, instead of Postgres's default of NULLs first on DESC.
+    ORDERING_FIELDS = {
+        "started_at": F("started_at").asc(nulls_last=True),
+        "-started_at": F("started_at").desc(nulls_last=True),
+        "ends_at": F("ends_at").asc(nulls_last=True),
+        "-ends_at": F("ends_at").desc(nulls_last=True),
+    }
+
     def get_queryset(self):
         qs = super().get_queryset()
-        return filter_by_branch(qs, self.request, "branch")
+        status_param = self.request.query_params.get("status")
+        category = self.request.query_params.get("category")
+        name = self.request.query_params.get("name")
+        started_at_from = self.request.query_params.get("started_at_from")
+        started_at_to = self.request.query_params.get("started_at_to")
+        ends_at_from = self.request.query_params.get("ends_at_from")
+        ends_at_to = self.request.query_params.get("ends_at_to")
+        ordering = self.request.query_params.get("ordering")
+
+        if status_param:
+            qs = qs.filter(status=status_param)
+        if category:
+            if category.isdigit():
+                qs = qs.filter(category_id=category)
+            else:
+                qs = qs.filter(category__name=category)
+        if name:
+            qs = qs.filter(name__icontains=name)
+        if started_at_from:
+            qs = qs.filter(started_at__gte=started_at_from)
+        if started_at_to:
+            qs = qs.filter(started_at__lte=started_at_to)
+        if ends_at_from:
+            qs = qs.filter(ends_at__gte=ends_at_from)
+        if ends_at_to:
+            qs = qs.filter(ends_at__lte=ends_at_to)
+
+        qs = filter_by_branch(qs, self.request, "branch")
+
+        if ordering in self.ORDERING_FIELDS:
+            qs = qs.order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-created_at")
+
+        return qs
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):

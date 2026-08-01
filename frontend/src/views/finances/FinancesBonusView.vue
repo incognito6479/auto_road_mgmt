@@ -31,7 +31,7 @@
         <div class="card-metric-icon">🎁</div>
         <div>
           <span class="metric-lbl">Jami Bonus Operatsiyalari</span>
-          <h4 class="metric-val text-gold">{{ payments.length }} ta bonus to'lov</h4>
+          <h4 class="metric-val text-gold">{{ metrics.count }} ta bonus to'lov</h4>
         </div>
       </div>
 
@@ -46,80 +46,125 @@
 
     <!-- Table Section -->
     <div class="table-section-card margin-top">
-      <div class="toolbar-bar">
-        <div class="search-box">
-          <svg viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
-            <circle cx="8.5" cy="8.5" r="5.5"/>
-            <line x1="13" y1="13" x2="18" y2="18"/>
-          </svg>
-          <input
-            v-model="filterAgentName"
-            type="text"
-            placeholder="Agent yoki O'quvchi F.I.SH..."
-            class="search-input"
-          />
-        </div>
-
-        <div class="filter-controls">
-          <div class="filter-item">
-            <label class="flabel">Agent:</label>
-            <div class="select-wrap-relative">
-              <select v-model="filterAgent" class="fselect-field">
-                <option value="">Barchasi</option>
-                <option v-for="ag in agents" :key="ag.id" :value="ag.id">{{ ag.full_name }}</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Kategoriya:</label>
-            <div class="select-wrap-relative">
-              <select v-model="filterCategory" class="fselect-field">
-                <option value="">Barchasi</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Dan:</label>
-            <input v-model="filterDateFrom" type="date" class="finput-date" />
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Gacha:</label>
-            <input v-model="filterDateTo" type="date" class="finput-date" />
-          </div>
-        </div>
-
-        <div class="total-count">
-          Jami: <strong>{{ totalCount }}</strong> ta bonus to'lov
-        </div>
-      </div>
-
       <div class="table-container">
         <div v-if="loading" class="state-box">
           <div class="spinner"></div>
           <span>Bonuslar yuklanmoqda...</span>
         </div>
 
-        <div v-else-if="payments.length === 0" class="empty-state">
-          <p>Bonus statusidagi to'lovlar topilmadi</p>
-        </div>
-
-        <table v-else class="data-table">
+        <div v-else class="table-scroll-area">
+        <table class="data-table">
           <thead>
             <tr>
               <th>Agent F.I.SH.</th>
               <th>O'quvchi F.I.SH.</th>
               <th>Kategoriya</th>
+              <th>Guruh</th>
+              <th>Guruh boshlanishi</th>
+              <th>Guruh tugashi</th>
               <th>Bonus Summasi</th>
               <th>Usul</th>
-              <th>Sana & Vaqt</th>
+              <th>Sana &amp; Vaqt</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
+            </tr>
+            <tr class="col-filter-row">
+              <th>
+                <input v-model="filterAgentName" class="col-filter-input" type="text" placeholder="Agent nomi..." />
+              </th>
+              <th>
+                <input v-model="filterStudentName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCategory" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <input v-model="filterGroupName" class="col-filter-input" type="text" placeholder="Guruh nomi..." />
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupStart', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupStart', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupEnd', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupEnd', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th></th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterMethod" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option value="cash">Naqd</option>
+                    <option value="card">Karta</option>
+                    <option value="qr_code">QR code</option>
+                    <option value="click">Click</option>
+                    <option value="transfer">O'tkazma</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paymentDateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('paymentDate', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paymentDateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('paymentDate', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
+            <tr v-if="payments.length === 0">
+              <td colspan="10" class="no-data">Bonus statusidagi to'lovlar topilmadi</td>
+            </tr>
             <tr v-for="p in payments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.agent" class="agent-name link-value" @click="goAgent(p.agent)">👤 {{ p.agent_name || 'Noma\'lum Agent' }}</div>
@@ -132,13 +177,10 @@
                 <div v-else class="student-name">{{ p.student_name || '-' }}</div>
                 <div v-if="p.student_jshshr" class="student-jshshr">JSHSHR: {{ p.student_jshshr }}</div>
               </td>
-              <td>
-                <span class="cat-pill">{{ p.category_name || '-' }}</span>
-                <div v-if="p.group_name" class="group-sub">{{ p.group_name }}</div>
-                <div v-if="groupsByName[p.group_name]" class="group-dates">
-                  {{ formatDate(groupsByName[p.group_name].started_at) }} — {{ formatDate(groupsByName[p.group_name].ends_at) }}
-                </div>
-              </td>
+              <td><span class="cat-pill">{{ p.category_name || '-' }}</span></td>
+              <td>{{ p.group_name || '-' }}</td>
+              <td>{{ p.group_started_at ? formatDate(p.group_started_at) : '-' }}</td>
+              <td>{{ p.group_ends_at ? formatDate(p.group_ends_at) : '-' }}</td>
               <td class="td-amount">
                 <span class="amount-val text-amber">{{ formatMoney(p.amount) }}</span>
               </td>
@@ -165,6 +207,19 @@
             </tr>
           </tbody>
         </table>
+        </div>
+      </div>
+
+      <!-- Pagination controls -->
+      <div class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions">
+          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span class="page-num">Sahifa {{ currentPage }} / {{ totalPages }}</span>
+          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+        </div>
       </div>
     </div>
 
@@ -278,6 +333,7 @@
                   <option value="cash">Naqd</option>
                   <option value="card">Karta</option>
                   <option value="qr_code">QR code</option>
+                  <option value="click">Click</option>
                   <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
@@ -377,6 +433,7 @@
                   <option value="cash">Naqd</option>
                   <option value="card">Karta</option>
                   <option value="qr_code">QR code</option>
+                  <option value="click">Click</option>
                   <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
@@ -414,7 +471,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
@@ -440,29 +497,56 @@ const payments = ref([])
 const enrollments = ref([])
 const agents = ref([])
 const categories = ref([])
-const groups = ref([])
 const loading = ref(true)
 const totalCount = ref(0)
 
-// Payments only carry the group's name (not its id), so map by name here.
-const groupsByName = computed(() => {
-  const map = {}
-  groups.value.forEach(g => { map[g.name] = g })
-  return map
-})
+// ── Pagination state ─────────────────────────────────────────────────────
+const currentPage = ref(1)
+const pageSize = 50
+const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
 
-async function fetchGroups() {
-  try {
-    const res = await api.get('/groups/', { params: { page_size: 1000 } })
-    groups.value = res.data.results || res.data
-  } catch (err) { console.error(err) }
+const changePage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  fetchPayments()
 }
 
 const filterAgentName = ref('')
-const filterAgent = ref('')
+const filterStudentName = ref('')
 const filterCategory = ref('')
-const filterDateFrom = ref('')
-const filterDateTo = ref('')
+const filterGroupName = ref('')
+const filterMethod = ref('')
+
+// ── Group start/end and payment-date sorting ────────────────────────────
+const groupStartSort = ref('') // '', 'asc', 'desc'
+const groupEndSort = ref('')
+const paymentDateSort = ref('')
+
+// Clicking the already-active direction clears the sort; clicking the other
+// direction (or another column) switches to it. Only one column sorts at a time.
+function setSort(column, direction) {
+  if (column === 'groupStart') {
+    groupEndSort.value = ''
+    paymentDateSort.value = ''
+    groupStartSort.value = groupStartSort.value === direction ? '' : direction
+  } else if (column === 'groupEnd') {
+    groupStartSort.value = ''
+    paymentDateSort.value = ''
+    groupEndSort.value = groupEndSort.value === direction ? '' : direction
+  } else if (column === 'paymentDate') {
+    groupStartSort.value = ''
+    groupEndSort.value = ''
+    paymentDateSort.value = paymentDateSort.value === direction ? '' : direction
+  }
+}
+
+const orderingParam = computed(() => {
+  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
+  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
+  if (paymentDateSort.value) return (paymentDateSort.value === 'desc' ? '-' : '') + 'created_at'
+  return ''
+})
+
 const showModal = ref(false)
 const isEditing = ref(false)
 const editingId = ref(null)
@@ -488,10 +572,28 @@ const showReturnAgentDropdown = ref(false)
 const selectedReturnAgentLabel = ref('')
 const returnForm = ref({ agent: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
+// Unpaginated but filtered the same way as the table (minus pagination/
+// ordering) — feeds the metrics cards, so they reflect the currently
+// applied filters instead of always summing everything.
+const allPayments = ref([])
 const metrics = computed(() => {
-  const total = payments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  return { total }
+  const total = allPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
+  return { total, count: allPayments.value.length }
 })
+
+async function fetchAllPaymentsMetrics() {
+  try {
+    const params = { status: 'bonus', page_size: 1000 }
+    if (filterAgentName.value) params.agent_name = filterAgentName.value.trim()
+    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
+    if (filterCategory.value) params.category = filterCategory.value
+    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
+    if (filterMethod.value) params.method = filterMethod.value
+
+    const res = await api.get('/payments/', { params })
+    allPayments.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
 
 const filteredAgents = computed(() => {
   const q = agentSearchQuery.value.toLowerCase().trim()
@@ -514,16 +616,18 @@ const filteredEnrollments = computed(() => {
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'bonus', page_size: 1000 }
-    if (filterAgentName.value) params.student_name = filterAgentName.value.trim()
-    if (filterAgent.value) params.agent = filterAgent.value
+    const params = { status: 'bonus', page: currentPage.value, page_size: pageSize }
+    if (filterAgentName.value) params.agent_name = filterAgentName.value.trim()
+    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
     if (filterCategory.value) params.category = filterCategory.value
-    if (filterDateFrom.value) params.date_from = filterDateFrom.value
-    if (filterDateTo.value) params.date_to = filterDateTo.value
+    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
+    if (filterMethod.value) params.method = filterMethod.value
+    if (orderingParam.value) params.ordering = orderingParam.value
 
     const res = await api.get('/payments/', { params })
-    payments.value = res.data.results || res.data
-    totalCount.value = res.data.count || payments.value.length
+    const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
+    payments.value = rawList
+    totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
   finally { loading.value = false }
 }
@@ -549,7 +653,31 @@ async function fetchCategories() {
   } catch (err) { console.error(err) }
 }
 
-watch([filterAgentName, filterAgent, filterCategory, filterDateFrom, filterDateTo], () => { fetchPayments() })
+// Text-input filters wait for the user to pause typing (1.2s) before
+// re-fetching, so each keystroke doesn't trigger its own request.
+let searchDebounceTimer = null
+watch([filterAgentName, filterStudentName, filterGroupName], () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    fetchPayments()
+    fetchAllPaymentsMetrics()
+  }, 1200)
+})
+
+// Category/method selects apply immediately and also refresh the cards.
+watch([filterCategory, filterMethod], () => {
+  clearTimeout(searchDebounceTimer)
+  currentPage.value = 1
+  fetchPayments()
+  fetchAllPaymentsMetrics()
+})
+
+// Sorting doesn't change which rows match, so it only re-fetches the table.
+watch([groupStartSort, groupEndSort, paymentDateSort], () => {
+  currentPage.value = 1
+  fetchPayments()
+})
 
 function selectAgent(ag) {
   form.value.agent = ag.id
@@ -589,6 +717,7 @@ function methodText(m) {
     case 'cash': return 'Naqd'
     case 'card': return 'Karta'
     case 'qr_code': return 'QR code'
+    case 'click': return 'Click'
     case 'transfer': return "O'tkazma"
     default: return m
   }
@@ -672,6 +801,7 @@ async function savePayment() {
     }
     closeModal()
     fetchPayments()
+    fetchAllPaymentsMetrics()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
 }
@@ -692,6 +822,7 @@ async function saveReturnBonus() {
     })
     closeReturnModal()
     fetchPayments()
+    fetchAllPaymentsMetrics()
   } catch (err) { returnModalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { returnSaving.value = false }
 }
@@ -715,6 +846,7 @@ async function performDelete() {
     await api.delete(`/payments/${deletingPayment.value.id}/`)
     deleteModal.value?.close()
     fetchPayments()
+    fetchAllPaymentsMetrics()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -722,7 +854,14 @@ async function performDelete() {
   }
 }
 
-onMounted(() => { fetchPayments(); fetchEnrollments(); fetchAgents(); fetchCategories(); fetchGroups() })
+onMounted(() => {
+  fetchPayments()
+  fetchAllPaymentsMetrics()
+  fetchEnrollments()
+  fetchAgents()
+  fetchCategories()
+})
+onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 </script>
 
 <style scoped>
@@ -744,23 +883,92 @@ onMounted(() => { fetchPayments(); fetchEnrollments(); fetchAgents(); fetchCateg
 .margin-top { margin-top: 24px; }
 
 .table-section-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
-.toolbar-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; gap: 16px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 10px; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 9px 14px; width: 300px; }
-.search-input { border: none; background: transparent; outline: none; font-size: 13.5px; width: 100%; }
-.filter-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.filter-item { display: flex; align-items: center; gap: 6px; }
-.filter-item .select-wrap-relative { width: 170px; }
-.finput-date { padding: 8px 12px; border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 13px; background: #FAFAFA; outline: none; }
-.total-count { font-size: 13px; color: #6B7280; white-space: nowrap; }
-.table-container { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
+
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) can stick to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
+.table-scroll-area { overflow: auto; max-height: 600px; }
+
+.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; white-space: nowrap; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
+
+/* Sticky is applied to <thead> itself, not to individual <th> cells —
+   that keeps both header rows (labels + filters) moving as a single
+   pinned unit with no per-row offset math needed. */
+.data-table thead { position: sticky; top: 0; z-index: 3; }
+
+/* ── Column-head filters ─────────────────────────────────── */
+/* Higher specificity than ".data-table th" (0,1,1) on purpose — equal
+   specificity would let source order decide and flatten this row's
+   padding/background back to the label row's values. */
+.data-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.col-filter-input, .col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus, .col-filter-select:focus { border-color: #D97706; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #D97706; color: #D97706; background: #FFFBEB; }
+
+.no-data { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
+
+/* ── Pagination ───────────────────────────────────────────── */
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-num { display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .agent-name { font-weight: 700; color: #D97706; }
 .link-value { cursor: pointer; }
 .link-value:hover { text-decoration: underline; }
 .agent-phone { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .student-name { font-weight: 600; color: #111827; }
-.group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
-.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #FEF3C7; color: #92400E; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }

@@ -524,6 +524,7 @@
                 <option value="cash">Naqd</option>
                 <option value="card">Karta</option>
                 <option value="qr_code">QR code</option>
+                <option value="click">Click</option>
                 <option value="transfer">O'tkazma</option>
               </select>
               <svg class="select-arrow-modal" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">

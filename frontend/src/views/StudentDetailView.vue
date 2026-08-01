@@ -552,7 +552,7 @@
             <div class="form-group">
               <label class="form-label">To'lov usuli</label>
               <div class="select-wrap">
-                <select v-model="payForm.method" class="form-input form-select"><option value="cash">Naqd</option><option value="card">Karta</option><option value="qr_code">QR code</option><option value="transfer">O'tkazma</option></select>
+                <select v-model="payForm.method" class="form-input form-select"><option value="cash">Naqd</option><option value="card">Karta</option><option value="qr_code">QR code</option><option value="click">Click</option><option value="transfer">O'tkazma</option></select>
                 <svg class="sel-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
               </div>
             </div>
@@ -835,6 +835,7 @@
               <option value="cash">Naqd</option>
               <option value="card">Karta</option>
               <option value="qr_code">QR code</option>
+              <option value="click">Click</option>
               <option value="transfer">O'tkazma</option>
             </select>
           </div>
@@ -1713,7 +1714,7 @@ const groupStatusText  = (s) => ({ started: 'Boshlangan', finished: 'Tugatgan', 
 const groupStatusClass = (s) => ({ started: 'badge-enrolled', finished: 'badge-done', canceled: 'badge-canceled' }[s] || '')
 const payStatusText  = (s) => ({ accepted: 'Qabul qilingan', paid: "To'langan", returned: 'Qaytarilgan', bonus: 'Bonus', bank: 'Bank' }[s] || s || '-')
 const payStatusClass = (s) => ({ accepted: 'pstatus-accepted', paid: 'pstatus-paid', returned: 'pstatus-returned', bonus: 'pstatus-bonus', bank: 'pstatus-bank' }[s] || '')
-const methodText = (m) => ({ cash: 'Naqd', card: 'Karta', qr_code: 'QR code', transfer: "O'tkazma" }[m] || m || '-')
+const methodText = (m) => ({ cash: 'Naqd', card: 'Karta', qr_code: 'QR code', click: 'Click', transfer: "O'tkazma" }[m] || m || '-')
 
 onMounted(async () => {
   if (!authStore.user) await authStore.fetchCurrentUser()

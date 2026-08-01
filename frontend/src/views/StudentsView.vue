@@ -1,63 +1,24 @@
 <template>
   <AppLayout>
 
+    <div class="page-flex-col" ref="pageFlexColRef">
     <!-- Top action -->
     <div class="page-top">
       <button v-if="authStore.isAdminOrSuperuser" class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
     </div>
 
-    <!-- Filter card -->
-    <div class="filter-card">
-      <div class="filter-field">
-        <label class="filter-label">Holat bo'yicha saralash</label>
-        <div class="select-wrap">
-          <select v-model="filterStatus" class="filter-select">
-            <option value="">Barchasi</option>
-            <option value="Yangi">Yangi</option>
-            <option value="Faol">Faol</option>
-            <option value="Tugatgan">Tugatgan</option>
-            <option value="Bekor qilingan">Bekor qilingan</option>
-          </select>
-          <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-          </svg>
-        </div>
-      </div>
-
-      <div class="filter-field">
-        <label class="filter-label">Kategoriya bo'yicha saralash</label>
-        <div class="select-wrap">
-          <select v-model="filterCategory" class="filter-select">
-            <option value="">Barchasi</option>
-            <option v-for="c in categories" :key="c.id" :value="c.name">
-              {{ c.name }}
-            </option>
-          </select>
-          <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
-          </svg>
-        </div>
-      </div>
-
-      <div class="filter-field">
-        <label class="filter-label">Ism yoki Telefon raqami bo'yicha qidirish</label>
-        <input
-          v-model="filterSearch"
-          class="filter-input"
-          type="text"
-          placeholder="Ism yoki Telefon raqami bo'yicha qidirish"
-        />
-      </div>
-
-      <div class="filter-field">
-        <label class="filter-label">JSHSHR bo'yicha qidirish (faqat raqam)</label>
-        <input
-          v-model="filterJshshr"
-          class="filter-input"
-          type="text"
-          placeholder="JSHSHR"
-        />
-      </div>
+    <!-- Enrollment status tabs -->
+    <div class="status-tabs-bar">
+      <button
+        v-for="tab in statusTabs"
+        :key="tab.key"
+        type="button"
+        class="status-tab-btn"
+        :class="{ active: activeTab === tab.key }"
+        @click="selectTab(tab.key)"
+      >
+        {{ tab.label }}
+      </button>
     </div>
 
     <!-- Loading / error states -->
@@ -73,66 +34,183 @@
 
     <!-- Table -->
     <div v-else class="table-wrap">
-      <table class="stbl">
-        <thead>
-          <tr>
-            <th>To'liq Ismi</th>
-            <th>Kategoriya</th>
-            <th class="th-phone">Telefon Raqami</th>
-            <th>JSHSHR</th>
-            <th>Passport Ma'lumotlari</th>
-            <th>Ro'yxatdan o'tgan sana</th>
-            <th>To'langan</th>
-            <th>Holat</th>
-            <th>Eslatma</th>
-            <th>Amallar</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="displayedStudents.length === 0">
-            <td colspan="10" class="no-data">Ma'lumot topilmadi</td>
-          </tr>
-          <tr v-for="s in displayedStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
-            <td class="td-name">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <img :src="s.image || '/default_photo.png'" alt="Student" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-                <span>{{ s.name }}</span>
-              </div>
-            </td>
-            <td class="td-cat">{{ s.category }}</td>
-            <td class="td-muted td-phone">
-              <div class="td-phone-main">{{ s.phone }}</div>
-              <div v-if="s.phone2" class="td-phone-sub">
-                Qo'shimcha: {{ s.phone2 }}
-              </div>
-            </td>
-            <td class="td-muted">{{ s.jshshr }}</td>
-            <td class="td-muted">{{ s.passport }}</td>
-            <td class="td-muted">{{ s.date_joined }}</td>
-            <td class="td-muted">
-              <span v-if="s.enrolledFree" class="status-badge badge-free">Tekin</span>
-              <span v-else>{{ s.paymentAmount }}</span>
-            </td>
-            <td>
-              <span class="status-badge" :class="statusClass(s.status)">{{ s.status }}</span>
-            </td>
-            <td>
-              <div class="td-notes" :title="s.notes">{{ s.notes || '-' }}</div>
-            </td>
-            <td>
-              <button v-if="authStore.isAdminOrSuperuser" class="btn-edit" @click.stop="openEditModal(s)" title="Tahrirlash">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align: middle;">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll-area">
+        <table class="stbl">
+          <thead>
+            <tr>
+              <th>To'liq Ismi</th>
+              <th>Kategoriya</th>
+              <th class="th-phone">Telefon Raqami</th>
+              <th>JSHSHR</th>
+              <th>Guruh</th>
+              <th>Guruh boshlanishi</th>
+              <th>Guruh tugashi</th>
+              <th>Passport Ma'lumotlari</th>
+              <th>Ro'yxatdan o'tgan sana</th>
+              <th>To'langan</th>
+              <th>Holat</th>
+              <th>Eslatma</th>
+              <th>Amallar</th>
+            </tr>
+            <tr class="col-filter-row">
+              <th>
+                <input
+                  v-model="filterName"
+                  class="col-filter-input"
+                  type="text"
+                  placeholder="Ism bo'yicha qidirish..."
+                />
+              </th>
+              <th>
+                <div class="select-wrap">
+                  <select v-model="filterCategory" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="c in categories" :key="c.id" :value="c.name">
+                      {{ c.name }}
+                    </option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <input
+                  v-model="filterPhone"
+                  class="col-filter-input"
+                  type="text"
+                  placeholder="Telefon bo'yicha qidirish..."
+                />
+              </th>
+              <th>
+                <input
+                  v-model="filterJshshr"
+                  class="col-filter-input"
+                  type="text"
+                  placeholder="JSHSHR"
+                />
+              </th>
+              <th>
+                <input
+                  v-model="filterGroupName"
+                  class="col-filter-input"
+                  type="text"
+                  placeholder="Guruh nomi..."
+                />
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: groupStartSort === 'asc' }"
+                    title="O'sish tartibida (eskidan yangiga)"
+                    @click="setGroupSort('start', 'asc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: groupStartSort === 'desc' }"
+                    title="Kamayish tartibida (yangidan eskiga)"
+                    @click="setGroupSort('start', 'desc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: groupEndSort === 'asc' }"
+                    title="O'sish tartibida (eskidan yangiga)"
+                    @click="setGroupSort('end', 'asc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: groupEndSort === 'desc' }"
+                    title="Kamayish tartibida (yangidan eskiga)"
+                    @click="setGroupSort('end', 'desc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th colspan="6"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="displayedStudents.length === 0">
+              <td colspan="13" class="no-data">Ma'lumot topilmadi</td>
+            </tr>
+            <tr v-for="s in displayedStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
+              <td class="td-name">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <img :src="s.image || '/default_photo.png'" alt="Student" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
+                  <span>{{ s.name }}</span>
+                </div>
+              </td>
+              <td class="td-cat">{{ s.category }}</td>
+              <td class="td-muted td-phone">
+                <div class="td-phone-main">{{ s.phone }}</div>
+                <div v-if="s.phone2" class="td-phone-sub">
+                  Qo'shimcha: {{ s.phone2 }}
+                </div>
+              </td>
+              <td class="td-muted">{{ s.jshshr }}</td>
+              <td class="td-muted">{{ s.groupName || '-' }}</td>
+              <td class="td-muted">{{ s.groupStartedAt || '-' }}</td>
+              <td class="td-muted">{{ s.groupEndsAt || '-' }}</td>
+              <td class="td-muted">{{ s.passport }}</td>
+              <td class="td-muted">{{ s.date_joined }}</td>
+              <td class="td-muted">
+                <span v-if="s.enrolledFree" class="status-badge badge-free">Tekin</span>
+                <span v-else>{{ s.paymentAmount }}</span>
+              </td>
+              <td>
+                <span class="status-badge" :class="statusClass(s.status)">{{ s.status }}</span>
+              </td>
+              <td>
+                <div class="td-notes" :title="s.notes">{{ s.notes || '-' }}</div>
+              </td>
+              <td>
+                <button v-if="authStore.isAdminOrSuperuser" class="btn-edit" @click.stop="openEditModal(s)" title="Tahrirlash">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align: middle;">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Pagination controls -->
-      <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+      <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
         <span class="pagination-info" style="font-size: 13.5px; color: #6B7280; font-weight: 500;">
           Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
         </span>
@@ -148,6 +226,7 @@
           </button>
         </div>
       </div>
+    </div>
     </div>
 
     <!-- New Student Modal Dialog -->
@@ -566,6 +645,7 @@
                 <option value="cash">Naqd</option>
                 <option value="card">Karta</option>
                 <option value="qr_code">QR code</option>
+                <option value="click">Click</option>
                 <option value="transfer">O'tkazma</option>
               </select>
               <svg class="select-arrow-modal" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
@@ -1000,6 +1080,10 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+import { useFillViewportHeight } from '@/composables/useFillViewportHeight'
+
+const pageFlexColRef = ref(null)
+useFillViewportHeight(pageFlexColRef)
 
 const weekdayOptions = [
   { value: 0, label: 'Dush' },
@@ -1022,8 +1106,61 @@ const goToStudentDetail = (id) => {
 // ── Filter state ─────────────────────────────────────────────
 const filterStatus = ref('')
 const filterCategory = ref('')
-const filterSearch = ref('')
+const filterName = ref('')
+const filterPhone = ref('')
 const filterJshshr = ref('')
+const filterGroupName = ref('')
+const groupFilter = ref('') // '', 'true' (guruhga olingan), 'false' (guruhga olinmagan)
+
+// ── Group start/end sorting ─────────────────────────────────────
+const groupStartSort = ref('') // '', 'asc', 'desc'
+const groupEndSort = ref('')
+
+// Clicking the already-active direction clears the sort; clicking the other
+// direction (or the other column) switches to it. Only one column sorts at a time.
+function setGroupSort(column, direction) {
+  if (column === 'start') {
+    groupEndSort.value = ''
+    groupStartSort.value = groupStartSort.value === direction ? '' : direction
+  } else {
+    groupStartSort.value = ''
+    groupEndSort.value = groupEndSort.value === direction ? '' : direction
+  }
+}
+const orderingParam = computed(() => {
+  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
+  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
+  return ''
+})
+
+// ── Enrollment status tabs ─────────────────────────────────────
+const activeTab = ref('all')
+const statusTabs = [
+  { key: 'all', label: 'Barchasi' },
+  { key: 'Yangi', label: 'Yangi' },
+  { key: 'Faol', label: 'Faol' },
+  { key: 'Tugatgan', label: 'Tugatgan' },
+  { key: 'Bekor qilingan', label: 'Bekor qilingan' },
+  { key: 'has_group', label: 'Guruhga olingan' },
+  { key: 'no_group', label: 'Guruhga olinmagan' },
+]
+
+function selectTab(key) {
+  activeTab.value = key
+  if (key === 'all') {
+    filterStatus.value = ''
+    groupFilter.value = ''
+  } else if (key === 'has_group') {
+    filterStatus.value = ''
+    groupFilter.value = 'true'
+  } else if (key === 'no_group') {
+    filterStatus.value = ''
+    groupFilter.value = 'false'
+  } else {
+    filterStatus.value = key
+    groupFilter.value = ''
+  }
+}
 
 // Pagination state
 const currentPage = ref(1)
@@ -1343,8 +1480,12 @@ const fetchStudents = async () => {
     }
     if (filterStatus.value) params.status = filterStatus.value
     if (filterCategory.value) params.category = filterCategory.value
-    if (filterSearch.value) params.search = filterSearch.value.trim()
+    if (filterName.value) params.search = filterName.value.trim()
+    if (filterPhone.value) params.phone = filterPhone.value.trim()
     if (filterJshshr.value) params.jshshr = filterJshshr.value.trim()
+    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
+    if (groupFilter.value) params.has_group = groupFilter.value
+    if (orderingParam.value) params.ordering = orderingParam.value
 
     const response = await api.get('/students/', { params })
     const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
@@ -1358,9 +1499,22 @@ const fetchStudents = async () => {
   }
 }
 
+// Text-input filters wait for the user to pause typing (1.2s) before
+// re-fetching, so each keystroke doesn't trigger its own request.
+let searchDebounceTimer = null
+watch([filterName, filterPhone, filterJshshr, filterGroupName], () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    fetchStudents()
+  }, 1200)
+})
+
+// Tabs, category select, and sort toggles apply immediately.
 watch(
-  [filterStatus, filterCategory, filterSearch, filterJshshr],
+  [filterStatus, filterCategory, groupFilter, groupStartSort, groupEndSort],
   () => {
+    clearTimeout(searchDebounceTimer)
     currentPage.value = 1
     fetchStudents()
   }
@@ -1416,6 +1570,9 @@ const mapStudent = (s) => {
     coordinatorName: s.coordinator_name || '',
     agent: s.agent || null,
     agentName: s.agent_name || '',
+    groupName: s.group_name || '',
+    groupStartedAt: formatDateDisplay(s.group_started_at),
+    groupEndsAt: formatDateDisplay(s.group_ends_at),
     phone: formatPhoneDisplay(s.phone),
     phone2: s.phone2 ? formatPhoneDisplay(s.phone2) : '',
     jshshr: s.jshshr ? String(s.jshshr) : '-',
@@ -1489,6 +1646,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleSearchSelectOutsideClick)
+  clearTimeout(searchDebounceTimer)
 })
 
 // Any click landing outside all instructor/coordinator/agent searchable
@@ -1844,11 +2002,23 @@ const saveStudent = async () => {
 </script>
 
 <style scoped>
+/* Height is set at runtime by useFillViewportHeight (measured via
+   getBoundingClientRect, not assumed from hardcoded topbar/padding
+   constants — those drifted out of sync with the real rendered chrome).
+   That makes the table body the only thing that scrolls: the header
+   stays sticky within it, and the pagination bar (a fixed-size flex item
+   below it) never has to be reached by scrolling the outer page. */
+.page-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── Top action ─────────────────────────────────────────── */
 .page-top {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .btn-add {
@@ -1865,29 +2035,75 @@ const saveStudent = async () => {
 }
 .btn-add:hover { background: #245C43; transform: translateY(-1px); }
 
-/* ── Filter card ─────────────────────────────────────────── */
-.filter-card {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-}
-
-.filter-field {
+/* ── Enrollment status tabs ─────────────────────────────────── */
+.status-tabs-bar {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 2px solid #E5E7EB;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  flex-shrink: 0;
 }
 
-.filter-label {
-  font-size: 12px;
+.status-tab-btn {
+  padding: 11px 16px;
+  border: none;
+  background: transparent;
+  border-bottom: 3px solid transparent;
+  font-size: 13.5px;
   font-weight: 600;
-  color: #374151;
+  color: #6B7280;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.15s, border-color 0.15s;
 }
+.status-tab-btn:hover { color: #111827; }
+.status-tab-btn.active { color: #2D6A4F; border-bottom-color: #2D6A4F; }
+
+/* ── Column-head filters ─────────────────────────────────────── */
+.col-filter-input,
+.col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus,
+.col-filter-select:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group {
+  display: flex;
+  gap: 4px;
+}
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
 /* Select wrapper */
 .select-wrap {
@@ -1921,20 +2137,6 @@ const saveStudent = async () => {
   flex-shrink: 0;
 }
 
-/* Text inputs */
-.filter-input {
-  padding: 9px 12px;
-  border: 1px solid #D1D5DB;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #374151;
-  outline: none;
-  font-family: 'Inter', sans-serif;
-  transition: border-color 0.15s;
-}
-.filter-input:focus { border-color: #2D6A4F; }
-.filter-input::placeholder { color: #9CA3AF; }
-
 .btn-edit {
   display: inline-flex;
   align-items: center;
@@ -1960,6 +2162,8 @@ const saveStudent = async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  flex: 1;
+  min-height: 0;
   padding: 60px 20px;
   background: white;
   border-radius: 14px;
@@ -2003,17 +2207,51 @@ const saveStudent = async () => {
 }
 
 /* ── Table ─────────────────────────────────────────────────── */
+/* flex column + flex:1 (rather than a guessed max-height) so this card
+   fills exactly whatever vertical space is left below the tabs/filters —
+   auto-sized to the screen, not a fixed pixel value. The pagination bar
+   below the scroll area is a fixed-size flex item, so it never has to be
+   reached by scrolling — it's always visible right under the table. */
 .table-wrap {
   background: white;
   border-radius: 12px;
   border: 1px solid #E5E7EB;
-  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Independently-scrolling table body so the header (and the column-filter
+   row beneath it) can stick to the top of this container as rows scroll
+   underneath, instead of scrolling away with the page. */
+.table-scroll-area {
+  overflow: auto;
+  flex: 1;
+  min-height: 240px;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
 }
 
 .stbl {
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
+}
+
+/* Sticky is applied to <thead> itself, not to individual <th> cells with
+   per-row top offsets — that approach requires guessing each row's pixel
+   height and breaks the moment row heights change (label row vs. the
+   shorter filter-input row), which is why only one row was sticking.
+   Modern browsers support making a <thead> itself the sticky element, so
+   both header rows move as a single unit with no offset math needed. */
+.stbl thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 .stbl thead th {
@@ -2025,6 +2263,12 @@ const saveStudent = async () => {
   border-bottom: 2px solid #F3F4F6;
   white-space: nowrap;
   background: white;
+}
+
+.stbl thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 2px solid #F3F4F6;
 }
 
 .stbl tbody .stbl-row td {
@@ -2625,9 +2869,4 @@ const saveStudent = async () => {
   word-break: break-word;
 }
 
-/* ── Responsive ─────────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .filter-card { grid-template-columns: 1fr; }
-  .table-wrap  { overflow-x: auto; }
-}
 </style>

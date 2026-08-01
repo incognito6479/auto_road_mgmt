@@ -256,6 +256,7 @@
                   <option value="cash">Naqd</option>
                   <option value="card">Karta</option>
                   <option value="qr_code">QR code</option>
+                  <option value="click">Click</option>
                   <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>

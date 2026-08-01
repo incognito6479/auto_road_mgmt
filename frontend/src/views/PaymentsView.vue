@@ -99,6 +99,7 @@
               <option value="cash">Naqd</option>
               <option value="card">Plastik karta</option>
               <option value="qr_code">QR kod</option>
+              <option value="click">Click</option>
               <option value="transfer">Bank o'tkazmasi</option>
             </select>
             <svg class="select-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
@@ -223,6 +224,7 @@
               <option value="cash">Naqd</option>
               <option value="card">Plastik karta</option>
               <option value="qr_code">QR kod</option>
+              <option value="click">Click</option>
               <option value="transfer">Bank o'tkazmasi</option>
             </select>
             <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280;">
@@ -421,6 +423,7 @@ const formatMethodText = (method) => {
   if (method === 'cash') return 'Naqd'
   if (method === 'card') return 'Plastik karta'
   if (method === 'qr_code') return 'QR kod'
+  if (method === 'click') return 'Click'
   if (method === 'transfer') return "O'tkazma"
   return method
 }

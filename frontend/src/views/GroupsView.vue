@@ -1,6 +1,7 @@
 <template>
   <AppLayout>
 
+    <div class="page-flex-col" ref="pageFlexColRef">
     <!-- Page actions -->
     <div class="page-actions-bar">
       <button v-if="authStore.isAdminOrSuperuser" class="btn-start-new-group" @click="openStartGroupModal">
@@ -12,45 +13,22 @@
       </button>
     </div>
 
-    <!-- Toolbar: Search and Category Filter -->
+    <!-- Status tabs -->
+    <div class="status-tabs-bar">
+      <button
+        v-for="tab in statusTabs"
+        :key="tab.key"
+        type="button"
+        class="status-tab-btn"
+        :class="{ active: activeTab === tab.key }"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <!-- Toolbar: date range filters -->
     <div class="groups-toolbar">
-      <div class="search-box">
-        <svg viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
-          <circle cx="8.5" cy="8.5" r="5.5"/>
-          <line x1="13" y1="13" x2="18" y2="18"/>
-        </svg>
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Guruh nomi yoki kategoriya bo'yicha qidirish..."
-          class="search-input"
-        />
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label">Kategoriya:</label>
-        <div class="select-wrap">
-          <select v-model="selectedCategory" class="filter-select">
-            <option value="">Barcha kategoriyalar</option>
-            <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-              {{ cat.name }} kategoriyasi
-            </option>
-          </select>
-        </div>
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label">Holati:</label>
-        <div class="select-wrap">
-          <select v-model="selectedStatus" class="filter-select">
-            <option value="">Barcha holatlar</option>
-            <option value="started">Boshlangan</option>
-            <option value="finished">Tugatgan</option>
-            <option value="canceled">Bekor qilingan</option>
-          </select>
-        </div>
-      </div>
-
       <div class="date-ranges-row">
         <div class="filter-group date-range-group">
           <label class="filter-label">Boshlanish sanasi:</label>
@@ -70,7 +48,7 @@
       </div>
 
       <div class="total-count">
-        Jami: <strong>{{ filteredGroups.length }}</strong> ta guruh
+        Jami: <strong>{{ totalCount }}</strong> ta guruh
       </div>
     </div>
 
@@ -85,12 +63,9 @@
       <button class="btn-retry" @click="fetchGroups">Qayta urinish</button>
     </div>
 
-    <div v-else-if="filteredGroups.length === 0" class="state-container">
-      <p class="state-text">Mos guruhlar topilmadi.</p>
-    </div>
-
     <!-- Groups table -->
     <div v-else class="table-wrap">
+      <div class="table-scroll-area">
       <table class="groups-table">
         <thead>
           <tr>
@@ -105,9 +80,97 @@
             <th>Holati</th>
             <th></th>
           </tr>
+          <tr class="col-filter-row">
+            <th>
+              <input
+                v-model="filterGroupName"
+                class="col-filter-input"
+                type="text"
+                placeholder="Guruh nomi..."
+              />
+            </th>
+            <th>
+              <div class="select-wrap">
+                <select v-model="selectedCategory" class="col-filter-select">
+                  <option value="">Barchasi</option>
+                  <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                    {{ cat.name }}
+                  </option>
+                </select>
+              </div>
+            </th>
+            <th>
+              <div class="col-sort-group">
+                <button
+                  type="button"
+                  class="col-sort-icon-btn"
+                  :class="{ active: groupStartSort === 'asc' }"
+                  title="O'sish tartibida (eskidan yangiga)"
+                  @click="setGroupSort('start', 'asc')"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 20V4"></path>
+                    <path d="M3 8l3-4 3 4"></path>
+                    <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                    <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="col-sort-icon-btn"
+                  :class="{ active: groupStartSort === 'desc' }"
+                  title="Kamayish tartibida (yangidan eskiga)"
+                  @click="setGroupSort('start', 'desc')"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 4v16"></path>
+                    <path d="M3 16l3 4 3-4"></path>
+                    <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                    <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                  </svg>
+                </button>
+              </div>
+            </th>
+            <th>
+              <div class="col-sort-group">
+                <button
+                  type="button"
+                  class="col-sort-icon-btn"
+                  :class="{ active: groupEndSort === 'asc' }"
+                  title="O'sish tartibida (eskidan yangiga)"
+                  @click="setGroupSort('end', 'asc')"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 20V4"></path>
+                    <path d="M3 8l3-4 3 4"></path>
+                    <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                    <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="col-sort-icon-btn"
+                  :class="{ active: groupEndSort === 'desc' }"
+                  title="Kamayish tartibida (yangidan eskiga)"
+                  @click="setGroupSort('end', 'desc')"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 4v16"></path>
+                    <path d="M3 16l3 4 3-4"></path>
+                    <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                    <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                  </svg>
+                </button>
+              </div>
+            </th>
+            <th colspan="6"></th>
+          </tr>
         </thead>
         <tbody>
-          <tr v-for="g in filteredGroups" :key="g.id" class="clickable-row" @click="router.push({ name: 'group-detail', params: { id: g.id } })">
+          <tr v-if="displayedGroups.length === 0">
+            <td colspan="10" class="no-data">Mos guruhlar topilmadi.</td>
+          </tr>
+          <tr v-for="g in displayedGroups" :key="g.id" class="clickable-row" @click="router.push({ name: 'group-detail', params: { id: g.id } })">
             <td class="font-semibold">
               <div class="group-name-cell">
                 <div class="group-icon-wrap group-icon-wrap-sm">
@@ -149,6 +212,26 @@
           </tr>
         </tbody>
       </table>
+      </div>
+
+      <!-- Pagination controls -->
+      <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; border-bottom-left-radius: 14px; border-bottom-right-radius: 14px;">
+        <span class="pagination-info" style="font-size: 13.5px; color: #6B7280; font-weight: 500;">
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions" style="display: flex; gap: 8px;">
+          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
+            Oldingi
+          </button>
+          <span class="page-num" style="display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px;">
+            Sahifa {{ currentPage }} / {{ totalPages }}
+          </span>
+          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
+            Keyingi
+          </button>
+        </div>
+      </div>
+    </div>
     </div>
 
     <!-- Edit Group Dialog -->
@@ -372,7 +455,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
@@ -380,17 +463,20 @@ import { formatPhone } from '@/utils/formatters'
 
 import { useBranchStore } from '@/stores/branch'
 import { useAuthStore } from '@/stores/auth'
+import { useFillViewportHeight } from '@/composables/useFillViewportHeight'
 
 const router = useRouter()
 const route = useRoute()
 const branchStore = useBranchStore()
 const authStore = useAuthStore()
 
+const pageFlexColRef = ref(null)
+useFillViewportHeight(pageFlexColRef)
+
 const groups = ref([])
 const categories = ref([])
-const searchQuery = ref('')
+const filterGroupName = ref('')
 const selectedCategory = ref('')
-const selectedStatus = ref('')
 const startDateFrom = ref('')
 const startDateTo = ref('')
 const endDateFrom = ref('')
@@ -398,6 +484,37 @@ const endDateTo = ref('')
 
 const loading = ref(false)
 const error = ref('')
+
+// ── Pagination state ──────────────────────────────────────────
+const currentPage = ref(1)
+const totalCount = ref(0)
+const pageSize = 50
+const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
+
+// ── Status tabs ─────────────────────────────────────────────
+const activeTab = ref('all')
+const statusTabs = [
+  { key: 'all', label: 'Barchasi' },
+  { key: 'started', label: 'Boshlangan' },
+  { key: 'finished', label: 'Tugatgan' },
+  { key: 'canceled', label: 'Bekor qilingan' },
+]
+
+// ── Boshlanish/Tugash sanasi sorting ─────────────────────────
+const groupStartSort = ref('') // '', 'asc', 'desc'
+const groupEndSort = ref('')
+
+// Clicking the already-active direction clears the sort; clicking the other
+// direction (or the other column) switches to it. Only one column sorts at a time.
+function setGroupSort(column, direction) {
+  if (column === 'start') {
+    groupEndSort.value = ''
+    groupStartSort.value = groupStartSort.value === direction ? '' : direction
+  } else {
+    groupStartSort.value = ''
+    groupEndSort.value = groupEndSort.value === direction ? '' : direction
+  }
+}
 
 // ── Edit Group state ──────────────────────────────────
 const editGroupModal = ref(null)
@@ -440,24 +557,14 @@ const weekdayOptions = [
   { value: 5, label: 'Shan' },
 ]
 
-const filteredGroups = computed(() => {
-  return groups.value.filter(g => {
-    const q = searchQuery.value.toLowerCase().trim()
-    const matchCat = !selectedCategory.value || String(g.category) === String(selectedCategory.value) || (g.category_name && g.category_name.toLowerCase() === String(selectedCategory.value).toLowerCase())
-    const matchStatus = !selectedStatus.value || g.status === selectedStatus.value
-    const nameMatch = !q || (g.name || '').toLowerCase().includes(q) || (g.category_name || '').toLowerCase().includes(q)
-    const matchBranch = branchStore.isBranchMatch(g)
+// Belt-and-suspenders branch filter on top of the server-side one, same
+// pattern as StudentsView.
+const displayedGroups = computed(() => groups.value.filter(g => branchStore.isBranchMatch(g)))
 
-    const startedDate = g.started_at ? g.started_at.slice(0, 10) : null
-    const matchStartFrom = !startDateFrom.value || (startedDate && startedDate >= startDateFrom.value)
-    const matchStartTo = !startDateTo.value || (startedDate && startedDate <= startDateTo.value)
-
-    const endsDate = g.ends_at ? g.ends_at.slice(0, 10) : null
-    const matchEndFrom = !endDateFrom.value || (endsDate && endsDate >= endDateFrom.value)
-    const matchEndTo = !endDateTo.value || (endsDate && endsDate <= endDateTo.value)
-
-    return matchCat && matchStatus && nameMatch && matchBranch && matchStartFrom && matchStartTo && matchEndFrom && matchEndTo
-  })
+const orderingParam = computed(() => {
+  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'started_at'
+  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'ends_at'
+  return ''
 })
 
 const fetchCategories = async () => {
@@ -473,8 +580,20 @@ const fetchGroups = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/groups/?page_size=1000')
-    groups.value = response.data.results ? response.data.results : response.data
+    const params = { page: currentPage.value, page_size: pageSize }
+    if (activeTab.value !== 'all') params.status = activeTab.value
+    if (selectedCategory.value) params.category = selectedCategory.value
+    if (filterGroupName.value) params.name = filterGroupName.value.trim()
+    if (startDateFrom.value) params.started_at_from = startDateFrom.value
+    if (startDateTo.value) params.started_at_to = startDateTo.value
+    if (endDateFrom.value) params.ends_at_from = endDateFrom.value
+    if (endDateTo.value) params.ends_at_to = endDateTo.value
+    if (orderingParam.value) params.ordering = orderingParam.value
+
+    const response = await api.get('/groups/', { params })
+    const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
+    groups.value = rawList
+    totalCount.value = response.data.count ?? rawList.length
   } catch (err) {
     console.error(err)
     error.value = "Guruhlarni yuklashda xatolik yuz berdi."
@@ -482,6 +601,33 @@ const fetchGroups = async () => {
     loading.value = false
   }
 }
+
+const changePage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  fetchGroups()
+}
+
+// Text-input filter waits for the user to pause typing (1.2s) before
+// re-fetching, so each keystroke doesn't trigger its own request.
+let searchDebounceTimer = null
+watch(filterGroupName, () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    fetchGroups()
+  }, 1200)
+})
+
+// Tabs, category select, date filters, and sort toggles apply immediately.
+watch(
+  [activeTab, selectedCategory, startDateFrom, startDateTo, endDateFrom, endDateTo, groupStartSort, groupEndSort],
+  () => {
+    clearTimeout(searchDebounceTimer)
+    currentPage.value = 1
+    fetchGroups()
+  }
+)
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
@@ -725,9 +871,24 @@ onMounted(() => {
     })
   }
 })
+
+onUnmounted(() => {
+  clearTimeout(searchDebounceTimer)
+})
 </script>
 
 <style scoped>
+/* Height is set at runtime by useFillViewportHeight (measured via
+   getBoundingClientRect, not assumed from hardcoded topbar/padding
+   constants — those drifted out of sync with the real rendered chrome).
+   That makes the table body the only thing that scrolls: the header
+   stays sticky within it, and the pagination bar (a fixed-size flex item
+   below it) never has to be reached by scrolling the outer page. */
+.page-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
 .groups-toolbar {
   display: flex;
   align-items: center;
@@ -740,35 +901,88 @@ onMounted(() => {
   margin-bottom: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
-.search-box {
+/* ── Status tabs ─────────────────────────────────────────── */
+.status-tabs-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: #F9FAFB;
-  border: 1.5px solid #E5E7EB;
-  border-radius: 10px;
-  padding: 8px 14px;
-  flex: 1;
-  min-width: 260px;
-  transition: all 0.2s;
+  gap: 4px;
+  flex-shrink: 0;
+  border-bottom: 2px solid #E5E7EB;
+  margin-bottom: 20px;
+  overflow-x: auto;
 }
 
-.search-box:focus-within {
-  border-color: #2D6A4F;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
-}
-
-.search-input {
+.status-tab-btn {
+  padding: 11px 16px;
   border: none;
   background: transparent;
-  outline: none;
+  border-bottom: 3px solid transparent;
   font-size: 13.5px;
-  width: 100%;
-  color: #111827;
+  font-weight: 600;
+  color: #6B7280;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.15s, border-color 0.15s;
 }
+.status-tab-btn:hover { color: #111827; }
+.status-tab-btn.active { color: #2D6A4F; border-bottom-color: #2D6A4F; }
+
+/* ── Column-head filters ─────────────────────────────────── */
+/* Higher specificity than ".groups-table th" (0,1,1) on purpose: with
+   equal specificity, source order decides, and ".groups-table th" (defined
+   later) would otherwise win and flatten this row's padding/background
+   back to the label row's values. */
+.groups-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 2px solid #F3F4F6;
+}
+
+.col-filter-input,
+.col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus,
+.col-filter-select:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group {
+  display: flex;
+  gap: 4px;
+}
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
 .filter-group {
   display: flex;
@@ -784,25 +998,6 @@ onMounted(() => {
 
 .select-wrap {
   position: relative;
-}
-
-.filter-select {
-  padding: 8px 14px;
-  border: 1.5px solid #E5E7EB;
-  border-radius: 10px;
-  background: #F9FAFB;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: #111827;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.2s;
-
-  &:focus {
-    border-color: #2D6A4F;
-    background: white;
-    box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
-  }
 }
 
 .date-range-group { gap: 6px; }
@@ -836,12 +1031,34 @@ onMounted(() => {
   color: #6B7280;
 }
 
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+}
+.btn-page:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── States ─────────────────────────────────────────── */
 .state-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  flex: 1;
+  min-height: 0;
   padding: 60px 20px;
   background: white;
   border-radius: 14px;
@@ -885,17 +1102,48 @@ onMounted(() => {
 }
 
 /* ── Groups table ───────────────────────────────────── */
+/* flex column + flex:1 (rather than a guessed max-height) so this card
+   fills exactly whatever vertical space is left below the tabs/toolbar —
+   auto-sized to the screen, not a fixed pixel value. The pagination bar
+   below the scroll area is a fixed-size flex item, so it never has to be
+   reached by scrolling — it's always visible right under the table. */
 .table-wrap {
   background: white;
   border-radius: 14px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
-  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Independently-scrolling table body so the header (both the label row
+   and the column-filter row) can stick to the top of this container as
+   rows scroll underneath, instead of scrolling away with the page. */
+.table-scroll-area {
+  overflow: auto;
+  flex: 1;
+  min-height: 240px;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
 }
 
 .groups-table {
   width: 100%;
   border-collapse: collapse;
   white-space: nowrap;
+}
+
+/* Sticky is applied to <thead> itself, not to individual <th> cells —
+   that keeps both header rows (labels + filters) moving as a single
+   pinned unit with no per-row offset math needed. */
+.groups-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 .groups-table th {
@@ -920,6 +1168,13 @@ onMounted(() => {
 
 .groups-table tbody tr:last-child td { border-bottom: none; }
 .groups-table tbody tr:hover td { background: #FAFAFA; }
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #9CA3AF;
+  font-size: 14px;
+}
 .clickable-row { cursor: pointer; }
 
 .group-name-cell {
@@ -1162,6 +1417,7 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 /* Both date ranges stay together as one unit — wraps to a new line as a

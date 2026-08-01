@@ -193,104 +193,142 @@
 
     <!-- 3. PAYMENTS TABLE -->
     <div class="table-section-card">
-      <div class="toolbar-bar">
-        <div class="search-box">
-          <svg viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
-            <circle cx="8.5" cy="8.5" r="5.5"/>
-            <line x1="13" y1="13" x2="18" y2="18"/>
-          </svg>
-          <input
-            v-model="filterStudentName"
-            type="text"
-            placeholder="O'quvchi F.I.SH. yoki JSHSHR..."
-            class="search-input"
-          />
-        </div>
-
-        <div class="filter-controls">
-          <div class="filter-item">
-            <label class="flabel">Kategoriya:</label>
-            <div class="select-wrap-relative">
-              <select v-model="filterCategory" class="fselect-field">
-                <option value="">Barcha kategoriyalar</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                  {{ cat.name }}
-                </option>
-              </select>
-              <div class="select-chevron-icon">▼</div>
-            </div>
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">To'lov Usuli:</label>
-            <div class="select-wrap-relative">
-              <select v-model="filterMethod" class="fselect-field">
-                <option value="">Barcha usullar</option>
-                <option value="cash">Naqd</option>
-                <option value="card">Karta</option>
-                <option value="qr_code">QR code</option>
-                <option value="transfer">O'tkazma</option>
-              </select>
-              <div class="select-chevron-icon">▼</div>
-            </div>
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Dan:</label>
-            <input v-model="filterDateFrom" type="date" class="finput-date" />
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Gacha:</label>
-            <input v-model="filterDateTo" type="date" class="finput-date" />
-          </div>
-        </div>
-
-        <div class="total-count">
-          Jami: <strong>{{ filteredPayments.length }}</strong> ta tushum
-        </div>
-      </div>
-
       <div class="table-container">
         <div v-if="loading" class="state-box">
           <div class="spinner"></div>
           <span>Tushumlar yuklanmoqda...</span>
         </div>
 
-        <div v-else-if="filteredPayments.length === 0" class="empty-state">
-          <p>Tushumlar topilmadi</p>
-        </div>
-
-        <table v-else class="data-table">
+        <div v-else class="table-scroll-area">
+        <table class="data-table">
           <thead>
             <tr>
               <th>O'quvchi F.I.SH.</th>
               <th>Kategoriya</th>
+              <th>Guruh</th>
+              <th>Guruh boshlanishi</th>
+              <th>Guruh tugashi</th>
               <th>Tushum Summasi</th>
               <th>To'lov Usuli</th>
-              <th>Sana & Vaqt</th>
+              <th>Sana &amp; Vaqt</th>
+              <th>To'lov qabul qiluvchi</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
+            </tr>
+            <tr class="col-filter-row">
+              <th>
+                <input v-model="filterStudentName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCategory" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <input v-model="filterGroupName" class="col-filter-input" type="text" placeholder="Guruh nomi..." />
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupStart', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupStart', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupEnd', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupEnd', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th></th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterMethod" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option value="cash">Naqd</option>
+                    <option value="card">Karta</option>
+                    <option value="qr_code">QR code</option>
+                    <option value="click">Click</option>
+                    <option value="transfer">O'tkazma</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paymentDateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('paymentDate', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paymentDateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('paymentDate', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in filteredPayments" :key="p.id" class="table-row">
+            <tr v-if="displayedPayments.length === 0">
+              <td colspan="10" class="no-data">Tushumlar topilmadi</td>
+            </tr>
+            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-if="p.student_jshshr" class="student-jshshr">JSHSHR: {{ p.student_jshshr }}</div>
               </td>
-              <td>
-                <span class="cat-pill">{{ p.category_name || '-' }}</span>
-                <div v-if="p.group_name" class="group-sub">{{ p.group_name }}</div>
-                <div v-if="groupsByName[p.group_name]" class="group-dates">
-                  {{ formatDate(groupsByName[p.group_name].started_at) }} — {{ formatDate(groupsByName[p.group_name].ends_at) }}
-                </div>
-              </td>
+              <td><span class="cat-pill">{{ p.category_name || '-' }}</span></td>
+              <td>{{ p.group_name || '-' }}</td>
+              <td>{{ p.group_started_at ? formatDate(p.group_started_at) : '-' }}</td>
+              <td>{{ p.group_ends_at ? formatDate(p.group_ends_at) : '-' }}</td>
               <td class="td-amount">
                 <span class="amount-val text-green">{{ formatMoney(p.amount) }}</span>
               </td>
               <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
+              <td>
+                <span v-if="p.user" class="link-value" @click="goUser(p.user)">{{ p.cashier_name || '-' }}</span>
+                <span v-else>{{ p.cashier_name || '-' }}</span>
+              </td>
               <td style="text-align: right;">
                 <div class="row-actions">
                   <template v-if="authStore.isSuperuser">
@@ -312,6 +350,19 @@
             </tr>
           </tbody>
         </table>
+        </div>
+      </div>
+
+      <!-- Pagination controls -->
+      <div class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions">
+          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span class="page-num">Sahifa {{ currentPage }} / {{ totalPages }}</span>
+          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+        </div>
       </div>
     </div>
 
@@ -423,6 +474,7 @@
                   <option value="cash">Naqd</option>
                   <option value="card">Karta</option>
                   <option value="qr_code">QR code</option>
+                  <option value="click">Click</option>
                   <option value="transfer">O'tkazma</option>
                 </select>
                 <div class="select-chevron-icon">▼</div>
@@ -478,6 +530,10 @@ function goStudent(id) {
   if (!id) return
   router.push(`/students/${id}`)
 }
+function goUser(id) {
+  if (!id) return
+  router.push(`/users/${id}`)
+}
 const branchStore = useBranchStore()
 
 const payments = ref([])
@@ -485,13 +541,6 @@ const enrollments = ref([])
 const categories = ref([])
 const groups = ref([])
 const loading = ref(true)
-
-// Payments only carry the group's name (not its id), so map by name here.
-const groupsByName = computed(() => {
-  const map = {}
-  groups.value.forEach(g => { map[g.name] = g })
-  return map
-})
 
 // Group-first cascade: pick a group, then the student list narrows to that group.
 const {
@@ -543,8 +592,45 @@ function onGroupKeydown(e) {
 const filterStudentName = ref('')
 const filterCategory = ref('')
 const filterMethod = ref('')
-const filterDateFrom = ref('')
-const filterDateTo = ref('')
+const filterGroupName = ref('')
+
+// ── Group start/end and payment-date sorting ────────────────────────────
+const groupStartSort = ref('') // '', 'asc', 'desc'
+const groupEndSort = ref('')
+const paymentDateSort = ref('')
+
+// Clicking the already-active direction clears the sort; clicking the other
+// direction (or another column) switches to it. Only one column sorts at a time.
+function setSort(column, direction) {
+  if (column === 'groupStart') {
+    groupEndSort.value = ''
+    paymentDateSort.value = ''
+    groupStartSort.value = groupStartSort.value === direction ? '' : direction
+  } else if (column === 'groupEnd') {
+    groupStartSort.value = ''
+    paymentDateSort.value = ''
+    groupEndSort.value = groupEndSort.value === direction ? '' : direction
+  } else if (column === 'paymentDate') {
+    groupStartSort.value = ''
+    groupEndSort.value = ''
+    paymentDateSort.value = paymentDateSort.value === direction ? '' : direction
+  }
+}
+
+const orderingParam = computed(() => {
+  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
+  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
+  if (paymentDateSort.value) return (paymentDateSort.value === 'desc' ? '-' : '') + 'created_at'
+  return ''
+})
+
+// ── Pagination state ─────────────────────────────────────────────────────
+const currentPage = ref(1)
+const totalCount = ref(0)
+const pageSize = 50
+const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
+
+const displayedPayments = computed(() => payments.value.filter(p => branchStore.isBranchMatch(p)))
 
 const showModal = ref(false)
 const isEditing = ref(false)
@@ -645,21 +731,6 @@ const filteredEnrollments = computed(() => {
   })
 })
 
-const filteredPayments = computed(() => {
-  return payments.value.filter(p => {
-    if (!branchStore.isBranchMatch(p)) return false
-    const catVal = filterCategory.value
-    if (!catVal) return true
-    const catObj = categories.value.find(c => String(c.id) === String(catVal))
-    const catName = catObj ? catObj.name.toLowerCase() : ''
-
-    return String(p.category) === String(catVal) ||
-      String(p.category_id) === String(catVal) ||
-      (p.category_name && p.category_name.toLowerCase() === catVal.toString().toLowerCase()) ||
-      (catName && p.category_name && p.category_name.toLowerCase() === catName)
-  })
-})
-
 async function fetchCategories() {
   try {
     const res = await api.get('/categories/')
@@ -677,17 +748,25 @@ async function fetchAllAcceptedMetrics() {
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'accepted', page_size: 1000 }
+    const params = { status: 'accepted', page: currentPage.value, page_size: pageSize }
     if (filterMethod.value) params.method = filterMethod.value
-    if (filterDateFrom.value) params.date_from = filterDateFrom.value
-    if (filterDateTo.value) params.date_to = filterDateTo.value
     if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
     if (filterCategory.value) params.category = filterCategory.value
+    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
+    if (orderingParam.value) params.ordering = orderingParam.value
 
     const res = await api.get('/payments/', { params })
-    payments.value = res.data.results || res.data
+    const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
+    payments.value = rawList
+    totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
   finally { loading.value = false }
+}
+
+const changePage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  fetchPayments()
 }
 
 async function fetchEnrollments() {
@@ -704,7 +783,23 @@ async function fetchGroups() {
   } catch (err) { console.error(err) }
 }
 
-watch([filterStudentName, filterCategory, filterMethod, filterDateFrom, filterDateTo], () => { fetchPayments() })
+// Text-input filters wait for the user to pause typing (1.2s) before
+// re-fetching, so each keystroke doesn't trigger its own request.
+let searchDebounceTimer = null
+watch([filterStudentName, filterGroupName], () => {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1
+    fetchPayments()
+  }, 1200)
+})
+
+// Category/method selects and sort toggles apply immediately.
+watch([filterCategory, filterMethod, groupStartSort, groupEndSort, paymentDateSort], () => {
+  clearTimeout(searchDebounceTimer)
+  currentPage.value = 1
+  fetchPayments()
+})
 
 function selectEnrollment(e) {
   form.value.enrollment = e.id
@@ -722,6 +817,7 @@ function methodText(m) {
     case 'cash': return 'Naqd'
     case 'card': return 'Karta'
     case 'qr_code': return 'QR code'
+    case 'click': return 'Click'
     case 'transfer': return "O'tkazma"
     default: return m
   }
@@ -819,6 +915,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleSelectOutsideClick)
+  clearTimeout(searchDebounceTimer)
 })
 </script>
 
@@ -869,12 +966,6 @@ onUnmounted(() => {
 .text-red-strong { color: #B91C1C; }
 
 .table-section-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03); }
-.toolbar-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; gap: 16px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 10px; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 9px 14px; width: 280px; &:focus-within { border-color: #2D6A4F; background: white; box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12); } }
-.search-input { border: none; background: transparent; outline: none; font-size: 13.5px; width: 100%; }
-
-.filter-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.filter-item { display: flex; align-items: center; gap: 6px; }
 .flabel { font-size: 12.5px; font-weight: 600; color: #374151; }
 
 .finput-date { padding: 8px 12px; border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 13px; background: #FAFAFA; outline: none; }
@@ -892,16 +983,88 @@ onUnmounted(() => {
 .select-wrap-relative { position: relative; width: 100%; }
 .select-chevron-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9CA3AF; font-size: 10px; }
 
-.total-count { font-size: 13px; color: #6B7280; }
-.table-container { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) can stick to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
+.table-scroll-area { overflow: auto; max-height: 600px; }
+
+.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; white-space: nowrap; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
+
+/* Sticky is applied to <thead> itself, not to individual <th> cells —
+   that keeps both header rows (labels + filters) moving as a single
+   pinned unit with no per-row offset math needed. */
+.data-table thead { position: sticky; top: 0; z-index: 3; }
+
+/* ── Column-head filters ─────────────────────────────────── */
+/* Higher specificity than ".data-table th" (0,1,1) on purpose — equal
+   specificity would let source order decide and flatten this row's
+   padding/background back to the label row's values. */
+.data-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.col-filter-input, .col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus, .col-filter-select:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
+
+/* ── Pagination ───────────────────────────────────────────── */
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-num { display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
 .student-name { font-weight: 700; color: #111827; }
 .link-value { cursor: pointer; }
 .link-value:hover { text-decoration: underline; }
 .student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #E8F5E9; color: #2D6A4F; border-radius: 8px; font-size: 12px; font-weight: 700; }
-.group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
-.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
 
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
@@ -910,6 +1073,7 @@ onUnmounted(() => {
 .btn-action-delete { color: #EF4444; &:hover { background: #FEE2E2; border-color: #FCA5A5; transform: translateY(-1px); } }
 
 .state-box, .empty-state { text-align: center; padding: 40px 0; color: #6B7280; }
+.no-data { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
 .spinner { width: 28px; height: 28px; border: 3px solid #E5E7EB; border-top-color: #2D6A4F; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
