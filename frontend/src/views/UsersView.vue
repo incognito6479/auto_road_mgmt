@@ -7,37 +7,18 @@
         <h2 class="page-main-title">{{ rolePageTitle }}</h2>
         <p class="page-sub-title">{{ rolePageSub }}</p>
       </div>
-      <button v-if="authStore.isSuperuser" class="btn-add" @click="openCreateModal">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" style="margin-right: 6px;">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        Yangi Foydalanuvchi
-      </button>
-    </div>
-
-    <!-- Filter Card -->
-    <div class="filter-card">
-      <div class="filter-field">
-        <label class="filter-label">F.I.SH. yoki Telefon raqami bo'yicha qidirish</label>
-        <div class="search-input-wrap">
-          <input
-            v-model="filterSearch"
-            type="text"
-            placeholder="Qidiruv..."
-            class="filter-input"
-          />
-          <svg class="search-ico" viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="14" height="14">
-            <circle cx="8.5" cy="8.5" r="5.5"/>
-            <line x1="12.5" y1="12.5" x2="16" y2="16"/>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <label v-if="authStore.isSuperuser" class="show-inactive-toggle">
+          <input type="checkbox" v-model="showInactive" />
+          O'chirilganlarni ko'rsatish
+        </label>
+        <button v-if="authStore.isSuperuser" class="btn-add" @click="openCreateModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" style="margin-right: 6px;">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-        </div>
-      </div>
-
-      <!-- Active role badge indicator -->
-      <div v-if="filterRole" class="filter-role-badge">
-        <span class="role-badge" :class="roleClass(filterRole, false)">{{ roleMeta[filterRole]?.title }}</span>
-        <span class="filter-role-hint">bo'yicha ko'rsatilmoqda</span>
+          {{ createButtonLabel }}
+        </button>
       </div>
     </div>
 
@@ -64,14 +45,52 @@
               <th>JSHSHR</th>
               <th>Pasport</th>
               <th>Qo'shilgan sana</th>
+              <th v-if="showInactive">Holati</th>
               <th v-if="authStore.isSuperuser" style="text-align: center; width: 100px;">Amallar</th>
+            </tr>
+            <tr class="col-filter-row">
+              <th></th>
+              <th>
+                <input v-model="filterFullName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+              </th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: dateJoinedSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setDateJoinedSort('asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: dateJoinedSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setDateJoinedSort('desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button v-if="dateJoinedFrom || dateJoinedTo" type="button" class="btn-clear-date" @click="dateJoinedFrom = ''; dateJoinedTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="dateJoinedFrom" type="date" class="col-date-input" title="Qo'shilgan sana (dan)" />
+                  <input v-model="dateJoinedTo" type="date" class="col-date-input" title="Qo'shilgan sana (gacha)" />
+                </div>
+              </th>
+              <th v-if="showInactive"></th>
+              <th v-if="authStore.isSuperuser"></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="filteredUsers.length === 0">
-              <td :colspan="authStore.isSuperuser ? 8 : 7" class="td-empty">Foydalanuvchilar topilmadi.</td>
+            <tr v-if="displayedUsers.length === 0">
+              <td :colspan="tableColspan" class="td-empty">Foydalanuvchilar topilmadi.</td>
             </tr>
-            <tr v-for="u in filteredUsers" :key="u.id" class="table-row clickable" @click="goToUserDetail(u.id)">
+            <tr v-for="u in displayedUsers" :key="u.id" class="table-row clickable" :class="{ 'row-inactive': u.is_active === false }" @click="goToUserDetail(u.id)">
               <td class="td-id">#{{ u.id }}</td>
               <td class="td-name">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -94,6 +113,11 @@
               <td class="td-jshshr">{{ u.jshshr || '-' }}</td>
               <td class="td-passport">{{ formatPassport(u.passport_serie, u.passport_number) }}</td>
               <td class="td-date">{{ formatDate(u.date_joined) }}</td>
+              <td v-if="showInactive">
+                <span class="status-chip" :class="u.is_active === false ? 'status-inactive' : 'status-active'">
+                  {{ u.is_active === false ? 'Nofaol' : 'Faol' }}
+                </span>
+              </td>
               <td v-if="authStore.isSuperuser" style="text-align: center;" @click.stop>
                 <div class="action-btn-group">
                   <button class="btn-action btn-edit" @click.stop="openEditModal(u)" title="Tahrirlash">
@@ -102,7 +126,7 @@
                       <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button class="btn-action btn-delete" @click.stop="openDeleteModal(u)" title="O'chirish (is_active=false)">
+                  <button v-if="u.is_active !== false" class="btn-action btn-delete" @click.stop="openDeleteModal(u)" title="O'chirish (is_active=false)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -113,6 +137,27 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination controls -->
+      <div v-if="!loading && !error" class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ filteredUsers.length }}</strong> tadan <strong>{{ displayedUsers.length }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions">
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="users-page-size">Ko'rsatish:</label>
+          <div class="select-wrap">
+            <select id="users-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -252,26 +297,24 @@
               <label class="form-label">Foydalanuvchi Rasmi (Foto)</label>
               <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                 <img v-if="userForm.existingImage" :src="userForm.existingImage" alt="User Photo" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  class="form-input"
-                  style="width: 100%;"
-                  @change="onUserFileChange"
-                />
+                <FileSelectInput ref="userFileInputRef" accept="image/*" @change="onUserFileChange" />
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Section 2: Visual Role Cards Selector -->
+        <!-- Section 2: Role Selector — visual cards when creating, plain select when editing -->
         <div class="form-section">
           <div class="section-tag">
             Foydalanuvchi Roli <span class="req">*</span>
             <span v-if="isRoleLocked" class="role-locked-note">— navlink orqali belgilangan</span>
           </div>
 
-          <div class="role-cards-grid">
+          <select v-if="isEditing" v-model="userForm.role" class="form-input">
+            <option v-for="r in roleOptions" :key="r.key" :value="r.key">{{ r.title }}</option>
+          </select>
+
+          <div v-else class="role-cards-grid">
             <div
               v-for="r in modalRoleOptions"
               :key="r.key"
@@ -341,6 +384,30 @@
                   placeholder="1234567"
                   class="form-input passport-num font-mono"
                   @input="userForm.passport_number = userForm.passport_number.replace(/\D/g, '')"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row" v-if="userForm.role === 'instructor'">
+            <div class="form-group">
+              <label class="form-label">Guvohnoma seriyasi va raqami</label>
+              <div class="passport-flex">
+                <input
+                  v-model="userForm.license_series"
+                  type="text"
+                  maxlength="2"
+                  placeholder="AA"
+                  class="form-input passport-serie"
+                  @input="userForm.license_series = userForm.license_series.toUpperCase()"
+                />
+                <input
+                  v-model="userForm.license_number"
+                  type="text"
+                  maxlength="6"
+                  placeholder="123456"
+                  class="form-input passport-num font-mono"
+                  @input="userForm.license_number = userForm.license_number.replace(/\D/g, '')"
                 />
               </div>
             </div>
@@ -437,6 +504,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
@@ -454,8 +522,29 @@ function goToUserDetail(id) {
 }
 
 // Filters — filterRole is driven by route query
-const filterSearch = ref('')
+const filterFullName = ref('')
+const dateJoinedSort = ref('') // '', 'asc', 'desc'
+const dateJoinedFrom = ref('')
+const dateJoinedTo = ref('')
+function setDateJoinedSort(direction) {
+  dateJoinedSort.value = dateJoinedSort.value === direction ? '' : direction
+}
 const filterRole = computed(() => route.query.role || '')
+const showInactive = ref(false)
+const tableColspan = computed(() => 7 + (showInactive.value ? 1 : 0) + (authStore.isSuperuser ? 1 : 0))
+
+// ── Row-fetch-count selector ──────────────────────────────────
+// fetchUsers always pulls the entire scope (see page_size: 100000 below) so
+// every filter below sees every row, not just whatever page happened to be
+// loaded. pageSizeOption instead controls how many of the *filtered* rows
+// show per page (see displayedUsers/changePage below).
+const pageSizeOption = ref('50')
+const currentPage = ref(1)
+
+// Only the showInactive toggle needs a backend round trip (it changes the
+// dataset scope); role and name filters below are purely client-side.
+watch(showInactive, () => { fetchUsers() })
+watch(pageSizeOption, () => { currentPage.value = 1 })
 
 // Role page title/subtitle mapping
 const roleMeta = {
@@ -485,6 +574,8 @@ const defaultUserForm = () => ({
   jshshr: '',
   passport_serie: '',
   passport_number: '',
+  license_series: '',
+  license_number: '',
   password: '',
 })
 const userForm = ref(defaultUserForm())
@@ -535,6 +626,13 @@ const roleOptions = [
   },
 ]
 
+// "+ Yangi Admin" / "+ Yangi O'qituvchi" etc. when a role nav-filter is
+// active; generic label when browsing the unfiltered user list.
+const createButtonLabel = computed(() => {
+  const opt = roleOptions.find(r => r.key === filterRole.value)
+  return opt ? `Yangi ${opt.title}` : 'Yangi Foydalanuvchi'
+})
+
 // When creating via a navlink (filterRole is set), show only that role card.
 // When editing or no role filter is active, show all options.
 const modalRoleOptions = computed(() => {
@@ -556,12 +654,16 @@ const fetchUsers = async () => {
   loading.value = true
   error.value = ''
   try {
-    // Role/branch filtering below is done client-side over the full user list,
-    // so we need every record in one page — the default page_size (50) was
-    // silently truncating the list on `phone` order, making role tabs (e.g.
-    // Adminlar) appear empty once the school had more than 50 users total.
-    const response = await api.get('/users/', { params: { page_size: 1000 } })
-    users.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
+    // Role filtering is done client-side over the fetched user list (see
+    // filteredUsers below) — only the showInactive scope is sent to the
+    // backend; the fetch always pulls the entire scope regardless of the
+    // row-fetch-count selector.
+    const response = await api.get('/users/', { params: { page: 1, page_size: 100000, status: showInactive.value ? 'all' : undefined } })
+    if (Array.isArray(response.data)) {
+      users.value = response.data
+    } else {
+      users.value = response.data.results || []
+    }
   } catch (err) {
     console.error(err)
     error.value = "Foydalanuvchilar ro'yxatini yuklashda xatolik yuz berdi."
@@ -571,24 +673,51 @@ const fetchUsers = async () => {
 }
 
 const filteredUsers = computed(() => {
-  return users.value.filter(u => {
+  let list = users.value.filter(u => {
     const role = filterRole.value
     // admin filter also includes superusers
     const matchRole = !role ||
       u.role === role ||
       (role === 'superuser' && u.is_superuser) ||
       (role === 'admin' && (u.role === 'admin' || u.is_superuser))
-    const q = filterSearch.value.toLowerCase().trim()
+    const q = filterFullName.value.toLowerCase().trim()
     const fullName = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
-    const phoneClean = (u.phone || '').replace(/\D/g, '')
-    const phone2Clean = (u.phone2 || '').replace(/\D/g, '')
-    const qClean = q.replace(/\D/g, '')
-    
-    const matchSearch = !q || fullName.includes(q) || (u.phone && u.phone.toLowerCase().includes(q)) || (qClean && (phoneClean.includes(qClean) || phone2Clean.includes(qClean)))
+    const matchSearch = !q || fullName.includes(q)
     const matchBranch = branchStore.isBranchMatch(u)
     return matchRole && matchSearch && matchBranch
   })
+
+  if (dateJoinedFrom.value) list = list.filter(u => u.date_joined && u.date_joined.slice(0, 10) >= dateJoinedFrom.value)
+  if (dateJoinedTo.value) list = list.filter(u => u.date_joined && u.date_joined.slice(0, 10) <= dateJoinedTo.value)
+
+  if (dateJoinedSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.date_joined || '').localeCompare(b.date_joined || '')
+      return dateJoinedSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
 })
+
+// pageSizeOption purely controls how many of the *filtered* rows show per
+// page — currentPage is clamped here so it self-corrects the moment a
+// filter shrinks the result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredUsers.value.length / displayPageSize.value))
+})
+const displayedUsers = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredUsers.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredUsers.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
 const getUserFullName = (u) => {
   if (!u) return '-'
@@ -687,6 +816,7 @@ const onJshshrInput = (e) => {
 }
 
 const selectedUserFile = ref(null)
+const userFileInputRef = ref(null)
 
 function onUserFileChange(e) {
   selectedUserFile.value = e.target.files?.[0] || null
@@ -703,6 +833,7 @@ const openCreateModal = () => {
   modalError.value = ''
   showPassword.value = false
   selectedUserFile.value = null
+  userFileInputRef.value?.reset()
   // Pre-select the role matching the active nav filter (default: coordinator)
   const defaultRole = filterRole.value && filterRole.value !== '' ? filterRole.value : 'coordinator'
   userForm.value = {
@@ -715,6 +846,8 @@ const openCreateModal = () => {
     jshshr: '',
     passport_serie: '',
     passport_number: '',
+    license_series: '',
+    license_number: '',
     password: '',
     existingImage: null,
   }
@@ -733,6 +866,7 @@ const openEditModal = (u) => {
   modalError.value = ''
   showPassword.value = false
   selectedUserFile.value = null
+  userFileInputRef.value?.reset()
 
   let fatherName = ''
   if (u.full_name) {
@@ -752,6 +886,8 @@ const openEditModal = (u) => {
     jshshr: u.jshshr ? String(u.jshshr) : '',
     passport_serie: u.passport_serie || '',
     passport_number: u.passport_number ? String(u.passport_number) : '',
+    license_series: u.license_series || '',
+    license_number: u.license_number || '',
     password: '',
     existingImage: u.image || null,
   }
@@ -815,6 +951,11 @@ const saveUser = async () => {
     }
     if (userForm.value.passport_number) {
       payload.passport_number = parseInt(userForm.value.passport_number, 10)
+    }
+
+    if (userForm.value.role === 'instructor') {
+      payload.license_series = userForm.value.license_series ? userForm.value.license_series.trim().toUpperCase() : null
+      payload.license_number = userForm.value.license_number ? userForm.value.license_number.trim() : null
     }
 
     if (userForm.value.password) {
@@ -923,9 +1064,10 @@ onMounted(async () => {
   })
 })
 
-// Re-fetch when route query role changes
+// Role filter is client-side (see filteredUsers); just clear the name
+// search when the nav-link role filter changes.
 watch(() => route.query.role, () => {
-  filterSearch.value = ''
+  filterFullName.value = ''
 })
 </script>
 
@@ -966,77 +1108,6 @@ watch(() => route.query.role, () => {
   background: #1B4332;
 }
 
-/* Filter Card */
-.filter-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: white;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  border: 1px solid #E5E7EB;
-}
-.filter-role-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-.filter-role-hint {
-  font-size: 12.5px;
-  color: #6B7280;
-  white-space: nowrap;
-}
-.filter-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-}
-.filter-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-}
-.search-input-wrap, .select-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.filter-input, .filter-select {
-  width: 100%;
-  padding: 9px 12px;
-  font-size: 13.5px;
-  border: 1px solid #D1D5DB;
-  border-radius: 8px;
-  outline: none;
-  background: #F9FAFB;
-  color: #111827;
-  transition: border-color 0.2s, background 0.2s;
-}
-.filter-input:focus, .filter-select:focus {
-  border-color: #2D6A4F;
-  background: white;
-}
-.search-ico {
-  position: absolute;
-  right: 12px;
-  pointer-events: none;
-}
-.select-arrow {
-  position: absolute;
-  right: 12px;
-  pointer-events: none;
-  color: #6B7280;
-}
-.filter-select {
-  appearance: none;
-  -webkit-appearance: none;
-}
-
 /* Table Card */
 .table-card {
   background: white;
@@ -1045,8 +1116,13 @@ watch(() => route.query.role, () => {
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   overflow: hidden;
 }
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) can stick to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
 .table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 600px;
 }
 .data-table {
   width: 100%;
@@ -1054,6 +1130,131 @@ watch(() => route.query.role, () => {
   text-align: left;
   font-size: 13.5px;
 }
+/* Sticky is applied to <thead> itself, not to individual <th> cells —
+   that keeps both header rows (labels + filters) moving as a single
+   pinned unit with no per-row offset math needed. */
+.data-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+.data-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+.col-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
+
+.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+/* ── Pagination ───────────────────────────────────────────── */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #F9FAFB;
+  border-top: 1px solid #E5E7EB;
+}
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.select-wrap { position: relative; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .data-table th {
   background: #F9FAFB;
   color: #4B5563;
@@ -1117,6 +1318,31 @@ watch(() => route.query.role, () => {
 }
 
 /* Role Badges */
+.show-inactive-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+}
+.show-inactive-toggle input { cursor: pointer; accent-color: #2D6A4F; }
+
+.row-inactive { opacity: 0.6; }
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status-chip.status-active { background: #D1FAE5; color: #065F46; }
+.status-chip.status-inactive { background: #FEE2E2; color: #B91C1C; }
+
 .role-badge {
   display: inline-flex;
   align-items: center;

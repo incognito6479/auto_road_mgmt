@@ -13,7 +13,7 @@
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-        <span>Yangi tushum qo'shish</span>
+        <span>Tushum qo'shish</span>
       </button>
     </div>
 
@@ -32,7 +32,10 @@
         <span class="section-total-badge green-badge font-bold">{{ formatMoney(todayMetrics.total) }}</span>
       </div>
 
-      <div class="metrics-cards-grid big-cards">
+      <div v-if="todayMetricsLoading" class="state-box metrics-loading-box">
+        <div class="spinner"></div>
+      </div>
+      <div v-else class="metrics-cards-grid big-cards">
         <div class="card-metric card-red card-hero">
           <div class="card-metric-icon">💰</div>
           <div class="metric-info">
@@ -101,8 +104,11 @@
         </span>
       </div>
 
+      <div v-if="monthlyMetricsLoading" class="state-box metrics-loading-box">
+        <div class="spinner"></div>
+      </div>
       <!-- No filters applied: show the current calendar month only -->
-      <div v-if="!monthlyHasActiveFilters" class="metrics-cards-grid big-cards">
+      <div v-else-if="!monthlyHasActiveFilters" class="metrics-cards-grid big-cards">
         <div class="card-metric card-red card-hero">
           <div class="card-metric-icon">📊</div>
           <div class="metric-info">
@@ -150,6 +156,7 @@
           <p>Filtrga mos tushumlar topilmadi</p>
         </div>
         <div v-for="m in monthlyBreakdown" :key="m.key" class="month-card-group">
+          <h4 class="month-card-group-label">{{ m.label }}</h4>
           <div class="metrics-cards-grid big-cards">
             <div class="card-metric card-red card-hero">
               <div class="card-metric-icon">📊</div>
@@ -208,10 +215,11 @@
               <th>Guruh</th>
               <th>Guruh boshlanishi</th>
               <th>Guruh tugashi</th>
-              <th>Tushum Summasi</th>
+              <th>O'quvchi to'lagan summa</th>
               <th>To'lov Usuli</th>
               <th>Sana &amp; Vaqt</th>
-              <th>To'lov qabul qiluvchi</th>
+              <th>To'lovni kiritgan</th>
+              <th>Izoh</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
             </tr>
             <tr class="col-filter-row">
@@ -247,6 +255,11 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="startDateFrom || startDateTo" type="button" class="btn-clear-date" @click="startDateFrom = ''; startDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="startDateFrom" type="date" class="col-date-input" title="Guruh boshlanishi (dan)" />
+                  <input v-model="startDateTo" type="date" class="col-date-input" title="Guruh boshlanishi (gacha)" />
                 </div>
               </th>
               <th>
@@ -267,9 +280,33 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="endDateFrom || endDateTo" type="button" class="btn-clear-date" @click="endDateFrom = ''; endDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="endDateFrom" type="date" class="col-date-input" title="Guruh tugashi (dan)" />
+                  <input v-model="endDateTo" type="date" class="col-date-input" title="Guruh tugashi (gacha)" />
                 </div>
               </th>
-              <th></th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'asc' }" title="O'sish tartibida" @click="setSort('amount', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'desc' }" title="Kamayish tartibida" @click="setSort('amount', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
               <th>
                 <div class="select-wrap-relative">
                   <select v-model="filterMethod" class="col-filter-select">
@@ -300,6 +337,19 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="paymentDateFrom || paymentDateTo" type="button" class="btn-clear-date" @click="paymentDateFrom = ''; paymentDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="paymentDateFrom" type="date" class="col-date-input" title="To'lov sanasi (dan)" />
+                  <input v-model="paymentDateTo" type="date" class="col-date-input" title="To'lov sanasi (gacha)" />
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCashierId" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="c in distinctCashiers" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
                 </div>
               </th>
               <th></th>
@@ -308,27 +358,33 @@
           </thead>
           <tbody>
             <tr v-if="displayedPayments.length === 0">
-              <td colspan="10" class="no-data">Tushumlar topilmadi</td>
+              <td colspan="11" class="no-data">Tushumlar topilmadi</td>
             </tr>
             <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
-                <div v-if="p.student_jshshr" class="student-jshshr">JSHSHR: {{ p.student_jshshr }}</div>
               </td>
               <td><span class="cat-pill">{{ p.category_name || '-' }}</span></td>
-              <td>{{ p.group_name || '-' }}</td>
+              <td>
+                <span v-if="p.group" class="link-value" @click="goGroup(p.group)">{{ p.group_name || '-' }}</span>
+                <span v-else>{{ p.group_name || '-' }}</span>
+              </td>
               <td>{{ p.group_started_at ? formatDate(p.group_started_at) : '-' }}</td>
               <td>{{ p.group_ends_at ? formatDate(p.group_ends_at) : '-' }}</td>
               <td class="td-amount">
                 <span class="amount-val text-green">{{ formatMoney(p.amount) }}</span>
               </td>
-              <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
+              <td>
+                <span class="method-chip">{{ methodText(p.method) }}</span>
+                <button v-if="p.method === 'click' && p.click_check_image" type="button" class="btn-check-preview" title="Chek rasmini ko'rish" @click="openCheckImage(p.click_check_image)">🧾</button>
+              </td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
               <td>
-                <span v-if="p.user" class="link-value" @click="goUser(p.user)">{{ p.cashier_name || '-' }}</span>
-                <span v-else>{{ p.cashier_name || '-' }}</span>
+                <span v-if="p.created_by" class="link-value" @click="goUser(p.created_by)">{{ p.created_by_name || '-' }}</span>
+                <span v-else>{{ p.created_by_name || '-' }}</span>
               </td>
+              <td>{{ p.notes || '-' }}</td>
               <td style="text-align: right;">
                 <div class="row-actions">
                   <template v-if="authStore.isSuperuser">
@@ -356,12 +412,21 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
-          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
-          <span class="page-num">Sahifa {{ currentPage }} / {{ totalPages }}</span>
-          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="accepted-page-size">Ko'rsatish:</label>
+          <div class="select-wrap-relative">
+            <select id="accepted-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -481,6 +546,12 @@
               </div>
             </div>
 
+            <!-- Click check photo -->
+            <div class="form-group" v-if="form.method === 'click'">
+              <label class="flabel">Click cheki rasmi (ixtiyoriy)</label>
+              <FileSelectInput ref="checkFileInputRef" accept="image/*" @change="onCheckFileChange" />
+            </div>
+
             <!-- Notes -->
             <div class="form-group">
               <label class="flabel">Izoh / Eslatma</label>
@@ -515,6 +586,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -533,6 +605,10 @@ function goStudent(id) {
 function goUser(id) {
   if (!id) return
   router.push(`/users/${id}`)
+}
+function goGroup(id) {
+  if (!id) return
+  router.push(`/groups/${id}`)
 }
 const branchStore = useBranchStore()
 
@@ -593,44 +669,125 @@ const filterStudentName = ref('')
 const filterCategory = ref('')
 const filterMethod = ref('')
 const filterGroupName = ref('')
+const filterCashierId = ref('')
+const startDateFrom = ref('')
+const startDateTo = ref('')
+const endDateFrom = ref('')
+const endDateTo = ref('')
 
-// ── Group start/end and payment-date sorting ────────────────────────────
+// ── Row-fetch-count selector ──────────────────────────────────
+// Controls how many of the *filtered* rows show per page (see
+// displayedPayments below). The fetch itself always pulls the full
+// backend-scoped dataset (status=accepted + monthly date-range, if any) —
+// filtering has to see every row in scope, not just whatever page happened
+// to be fetched.
+const pageSizeOption = ref('50')
+const totalCount = ref(0)
+const currentPage = ref(1)
+
+// ── Group start/end, payment-date and amount sorting ────────────────────
 const groupStartSort = ref('') // '', 'asc', 'desc'
 const groupEndSort = ref('')
 const paymentDateSort = ref('')
+const amountSort = ref('')
+const paymentDateFrom = ref('')
+const paymentDateTo = ref('')
 
+const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, paymentDate: paymentDateSort, amount: amountSort }
 // Clicking the already-active direction clears the sort; clicking the other
 // direction (or another column) switches to it. Only one column sorts at a time.
 function setSort(column, direction) {
-  if (column === 'groupStart') {
-    groupEndSort.value = ''
-    paymentDateSort.value = ''
-    groupStartSort.value = groupStartSort.value === direction ? '' : direction
-  } else if (column === 'groupEnd') {
-    groupStartSort.value = ''
-    paymentDateSort.value = ''
-    groupEndSort.value = groupEndSort.value === direction ? '' : direction
-  } else if (column === 'paymentDate') {
-    groupStartSort.value = ''
-    groupEndSort.value = ''
-    paymentDateSort.value = paymentDateSort.value === direction ? '' : direction
-  }
+  const target = sortRefs[column]
+  Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
+  target.value = target.value === direction ? '' : direction
 }
 
-const orderingParam = computed(() => {
-  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
-  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
-  if (paymentDateSort.value) return (paymentDateSort.value === 'desc' ? '-' : '') + 'created_at'
-  return ''
+// Distinct admins/superusers who recorded this status's payments, for the
+// "To'lovni kiritgan" filter select.
+const distinctCashiers = computed(() => {
+  const map = {}
+  allAcceptedPayments.value.forEach(p => {
+    if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
+  })
+  return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-// ── Pagination state ─────────────────────────────────────────────────────
-const currentPage = ref(1)
-const totalCount = ref(0)
-const pageSize = 50
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
+// All header filters (name, category, group, method, cashier, date ranges,
+// sort) run entirely on the client against the already-fetched `payments`
+// list — no per-keystroke or per-filter network round trip, AND they see
+// every row in the current backend scope (fetchPayments always pulls all
+// of them), not just whatever page happened to be loaded.
+const filteredPayments = computed(() => {
+  let list = payments.value.filter(p => branchStore.isBranchMatch(p))
 
-const displayedPayments = computed(() => payments.value.filter(p => branchStore.isBranchMatch(p)))
+  if (filterStudentName.value.trim()) {
+    const q = filterStudentName.value.trim().toLowerCase()
+    list = list.filter(p => (p.student_name || '').toLowerCase().includes(q))
+  }
+  if (filterCategory.value) {
+    list = list.filter(p => String(p.category) === String(filterCategory.value))
+  }
+  if (filterGroupName.value.trim()) {
+    const q = filterGroupName.value.trim().toLowerCase()
+    list = list.filter(p => (p.group_name || '').toLowerCase().includes(q))
+  }
+  if (filterMethod.value) {
+    list = list.filter(p => p.method === filterMethod.value)
+  }
+  if (filterCashierId.value) {
+    list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
+  }
+  if (startDateFrom.value) list = list.filter(p => p.group_started_at && p.group_started_at >= startDateFrom.value)
+  if (startDateTo.value) list = list.filter(p => p.group_started_at && p.group_started_at <= startDateTo.value)
+  if (endDateFrom.value) list = list.filter(p => p.group_ends_at && p.group_ends_at >= endDateFrom.value)
+  if (endDateTo.value) list = list.filter(p => p.group_ends_at && p.group_ends_at <= endDateTo.value)
+  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
+  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
+
+  if (groupStartSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.group_started_at || '').localeCompare(b.group_started_at || '')
+      return groupStartSort.value === 'desc' ? -d : d
+    })
+  } else if (groupEndSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.group_ends_at || '').localeCompare(b.group_ends_at || '')
+      return groupEndSort.value === 'desc' ? -d : d
+    })
+  } else if (paymentDateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.created_at || '').localeCompare(b.created_at || '')
+      return paymentDateSort.value === 'desc' ? -d : d
+    })
+  } else if (amountSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (Number(a.amount) || 0) - (Number(b.amount) || 0)
+      return amountSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
+})
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
+})
+const displayedPayments = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredPayments.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredPayments.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
 const showModal = ref(false)
 const isEditing = ref(false)
@@ -648,26 +805,38 @@ const allAcceptedPayments = ref([])
 const todayDateStr = computed(() => new Date().toLocaleDateString('uz-UZ'))
 const monthNameStr = computed(() => new Date().toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' }))
 
-const todayMetrics = computed(() => {
-  const today = new Date().toISOString().split('T')[0]
-  const todayPayments = allAcceptedPayments.value.filter(p => p.created_at && p.created_at.startsWith(today) && branchStore.isBranchMatch(p))
-  const cash = todayPayments.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
-  const card = todayPayments.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
-  const transfer = todayPayments.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
-  const qr_code = todayPayments.filter(p => p.method === 'qr_code').reduce((s, p) => s + (p.amount || 0), 0)
-  return { cash, card, transfer, qr_code, total: cash + card + transfer + qr_code }
-})
+// `Date#toISOString()` renders in UTC, not the browser's local time — for
+// Asia/Tashkent (UTC+5) that turns "today" into *yesterday* for the first
+// five hours of every local day (00:00-04:59), so the "Bugungi tushum" card
+// and the default "this month" range both silently pointed at the wrong
+// date/missed that day's earliest payments until mid-morning. Build the
+// YYYY-MM-DD string from local getFullYear/getMonth/getDate instead.
+function toLocalDateStr(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
-const monthMetrics = computed(() => {
-  const now = new Date()
-  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const monthPayments = allAcceptedPayments.value.filter(p => p.created_at && p.created_at.startsWith(yearMonth) && branchStore.isBranchMatch(p))
-  const cash = monthPayments.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
-  const card = monthPayments.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
-  const transfer = monthPayments.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
-  const qr_code = monthPayments.filter(p => p.method === 'qr_code').reduce((s, p) => s + (p.amount || 0), 0)
-  return { cash, card, transfer, qr_code, total: cash + card + transfer + qr_code }
-})
+// Today's and this-month's cards are server-aggregated (see PaymentViewSet.
+// monthly_summary) rather than summed client-side from a capped page of
+// payments — with the legacy Excel import routinely putting a branch past
+// 1000 accepted payments, a client-side sum over one fetched page silently
+// missed most of the data (wrong totals, and date ranges with real data
+// showing as empty).
+const emptyMetrics = () => ({ cash: 0, card: 0, transfer: 0, qr_code: 0, total: 0 })
+const todayMetrics = ref(emptyMetrics())
+const monthMetrics = ref(emptyMetrics())
+const todayMetricsLoading = ref(true)
+
+async function fetchTodayMetrics() {
+  todayMetricsLoading.value = true
+  const todayStr = toLocalDateStr(new Date())
+  try {
+    const res = await api.get('/payments/monthly-summary/', {
+      params: { status: 'accepted', date_from: todayStr, date_to: todayStr }
+    })
+    todayMetrics.value = res.data[0] || emptyMetrics()
+  } catch (err) { console.error(err) }
+  finally { todayMetricsLoading.value = false }
+}
 
 // Date range filter for the monthly cards section, independent of the
 // payments table's own toolbar filters below.
@@ -681,44 +850,36 @@ function clearMonthlyDateFilter() {
 
 const monthlyHasActiveFilters = computed(() => !!(monthlyDateFrom.value || monthlyDateTo.value))
 
-// Payments within the monthly cards' own date range, independent of the
-// table's toolbar filters.
-const monthlyFilteredPayments = computed(() => {
-  return allAcceptedPayments.value.filter(p => {
-    if (!branchStore.isBranchMatch(p)) return false
-    if (!p.created_at) return false
-    const dateStr = p.created_at.slice(0, 10)
-    if (monthlyDateFrom.value && dateStr < monthlyDateFrom.value) return false
-    if (monthlyDateTo.value && dateStr > monthlyDateTo.value) return false
-    return true
-  })
-})
+// Newest-first, one bucket per calendar month, populated from the backend.
+const monthlyBreakdown = ref([])
 
-// Breaks the monthly-filtered payment list down into one bucket per
-// calendar month, newest first.
-const monthlyBreakdown = computed(() => {
-  const buckets = {}
-  for (const p of monthlyFilteredPayments.value) {
-    if (!p.created_at) continue
-    const key = p.created_at.slice(0, 7) // "YYYY-MM"
-    if (!buckets[key]) {
-      buckets[key] = { key, cash: 0, card: 0, transfer: 0, qr_code: 0, total: 0 }
+const monthlyMetricsLoading = ref(true)
+async function fetchMonthlySummary() {
+  monthlyMetricsLoading.value = true
+  try {
+    const params = { status: 'accepted' }
+    if (monthlyHasActiveFilters.value) {
+      if (monthlyDateFrom.value) params.date_from = monthlyDateFrom.value
+      if (monthlyDateTo.value) params.date_to = monthlyDateTo.value
+    } else {
+      const now = new Date()
+      params.date_from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+      params.date_to = toLocalDateStr(now)
     }
-    const bucket = buckets[key]
-    const amt = p.amount || 0
-    if (p.method === 'cash') bucket.cash += amt
-    else if (p.method === 'card') bucket.card += amt
-    else if (p.method === 'transfer') bucket.transfer += amt
-    else if (p.method === 'qr_code') bucket.qr_code += amt
-    bucket.total += amt
-  }
-  return Object.values(buckets)
-    .sort((a, b) => b.key.localeCompare(a.key))
-    .map(bucket => ({
-      ...bucket,
-      label: new Date(`${bucket.key}-01T00:00:00`).toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' }),
-    }))
-})
+    const res = await api.get('/payments/monthly-summary/', { params })
+    const buckets = res.data || []
+    if (monthlyHasActiveFilters.value) {
+      monthlyBreakdown.value = buckets.map(b => ({
+        ...b,
+        label: new Date(`${b.key}-01T00:00:00`).toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' }),
+      }))
+    } else {
+      monthlyBreakdown.value = []
+      monthMetrics.value = buckets[0] || emptyMetrics()
+    }
+  } catch (err) { console.error(err) }
+  finally { monthlyMetricsLoading.value = false }
+}
 
 const filteredGrandTotal = computed(() => monthlyBreakdown.value.reduce((s, m) => s + m.total, 0))
 
@@ -748,12 +909,12 @@ async function fetchAllAcceptedMetrics() {
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'accepted', page: currentPage.value, page_size: pageSize }
-    if (filterMethod.value) params.method = filterMethod.value
-    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
-    if (orderingParam.value) params.ordering = orderingParam.value
+    // Always the full backend-scoped dataset (status=accepted + monthly
+    // date-range, if any) — filtering/sorting/pagination above all need to
+    // see every row, not just one page of them.
+    const params = { status: 'accepted', page: 1, page_size: 100000 }
+    if (monthlyDateFrom.value) params.date_from = monthlyDateFrom.value
+    if (monthlyDateTo.value) params.date_to = monthlyDateTo.value
 
     const res = await api.get('/payments/', { params })
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
@@ -761,12 +922,6 @@ async function fetchPayments() {
     totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
   finally { loading.value = false }
-}
-
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
-  fetchPayments()
 }
 
 async function fetchEnrollments() {
@@ -783,22 +938,22 @@ async function fetchGroups() {
   } catch (err) { console.error(err) }
 }
 
-// Text-input filters wait for the user to pause typing (1.2s) before
-// re-fetching, so each keystroke doesn't trigger its own request.
-let searchDebounceTimer = null
-watch([filterStudentName, filterGroupName], () => {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    currentPage.value = 1
-    fetchPayments()
-  }, 1200)
+// Only the monthly cards' date-range filter needs a backend round trip —
+// every column filter/sort above (name, category, group, method, cashier,
+// group start/end date ranges) runs purely client-side in filteredPayments,
+// with zero debounce and no re-render that could steal focus/cursor
+// position from a text input. The row-fetch-count selector no longer
+// refetches — it only resets to page 1 of the filtered result set.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
 })
 
-// Category/method selects and sort toggles apply immediately.
-watch([filterCategory, filterMethod, groupStartSort, groupEndSort, paymentDateSort], () => {
-  clearTimeout(searchDebounceTimer)
-  currentPage.value = 1
+// The monthly cards' date-range filter also narrows the payments table
+// below (one-directional — the table's own toolbar filters never affect
+// the monthly cards).
+watch([monthlyDateFrom, monthlyDateTo], () => {
   fetchPayments()
+  fetchMonthlySummary()
 })
 
 function selectEnrollment(e) {
@@ -823,6 +978,10 @@ function methodText(m) {
   }
 }
 
+function openCheckImage(url) {
+  if (url) window.open(url, '_blank')
+}
+
 function formatDateTime(dtStr) {
   if (!dtStr) return '-'
   const d = new Date(dtStr)
@@ -837,6 +996,12 @@ function onAmountInput(e) {
   form.value.amountFormatted = formatMoney(num, false)
 }
 
+const checkFile = ref(null)
+const checkFileInputRef = ref(null)
+function onCheckFileChange(e) {
+  checkFile.value = e.target.files?.[0] || null
+}
+
 function openCreateModal() {
   isEditing.value = false
   editingId.value = null
@@ -846,6 +1011,8 @@ function openCreateModal() {
   showStudentDropdown.value = false
   resetGroupSelect()
   form.value = { enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
+  checkFile.value = null
+  checkFileInputRef.value?.reset()
   showModal.value = true
 }
 
@@ -854,6 +1021,8 @@ function openEditModal(p) {
   editingId.value = p.id
   modalError.value = null
   form.value = { enrollment: p.enrollment, amountFormatted: formatMoney(p.amount, false), amount: p.amount, method: p.method || 'cash', notes: p.notes || '' }
+  checkFile.value = null
+  checkFileInputRef.value?.reset()
   showModal.value = true
 }
 
@@ -867,12 +1036,24 @@ async function savePayment() {
   try {
     if (isEditing.value) {
       await api.patch(`/payments/${editingId.value}/`, { amount: form.value.amount, method: form.value.method, notes: form.value.notes })
+    } else if (checkFile.value) {
+      const formData = new FormData()
+      formData.append('user', authStore.user?.id)
+      formData.append('enrollment', form.value.enrollment)
+      formData.append('amount', form.value.amount)
+      formData.append('status', 'accepted')
+      formData.append('method', form.value.method)
+      if (form.value.notes) formData.append('notes', form.value.notes)
+      formData.append('click_check_image', checkFile.value)
+      await api.post('/payments/', formData)
     } else {
       await api.post('/payments/', { user: authStore.user?.id, enrollment: form.value.enrollment, amount: form.value.amount, status: 'accepted', method: form.value.method, notes: form.value.notes })
     }
     closeModal()
     fetchPayments()
     fetchAllAcceptedMetrics()
+    fetchTodayMetrics()
+    fetchMonthlySummary()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
 }
@@ -897,6 +1078,8 @@ async function performDelete() {
     deleteModal.value?.close()
     fetchPayments()
     fetchAllAcceptedMetrics()
+    fetchTodayMetrics()
+    fetchMonthlySummary()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -907,6 +1090,8 @@ async function performDelete() {
 onMounted(() => {
   fetchPayments()
   fetchAllAcceptedMetrics()
+  fetchTodayMetrics()
+  fetchMonthlySummary()
   fetchEnrollments()
   fetchCategories()
   fetchGroups()
@@ -915,7 +1100,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleSelectOutsideClick)
-  clearTimeout(searchDebounceTimer)
 })
 </script>
 
@@ -954,6 +1138,7 @@ onUnmounted(() => {
 .monthly-breakdown-list { display: flex; flex-direction: column; gap: 20px; min-height: 140px; max-height: 380px; overflow-y: auto; padding-right: 4px; }
 .monthly-breakdown-list .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; }
 .month-card-group { padding: 4px 0; }
+.month-card-group-label { margin: 0 0 10px; font-size: 14.5px; font-weight: 700; color: #111827; text-transform: capitalize; }
 .card-metric { background: white; border: 1.5px solid #E5E7EB; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03); transition: all 0.2s ease; &:hover { transform: translateY(-2px); border-color: #CBD5E1; box-shadow: 0 6px 16px rgba(0,0,0,0.06); } }
 .card-hero { border-width: 2px; background: linear-gradient(180deg, #FFFFFF 0%, #F9FAFB 100%); grid-column: span 2; }
 .card-red { border-color: #FCA5A5; background: linear-gradient(180deg, #FEF2F2 0%, #FEE2E2 100%); }
@@ -1042,11 +1227,44 @@ onUnmounted(() => {
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
-/* ── Pagination ───────────────────────────────────────────── */
+/* ── Per-column date-range filters (under sort buttons) ────── */
+.col-date-range {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+  font-family: 'Inter', sans-serif;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
 .pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
 .pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
 .pagination-actions { display: flex; align-items: center; gap: 8px; }
-.page-num { display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
 .btn-page {
   padding: 6px 14px;
   background: white;
@@ -1060,12 +1278,35 @@ onUnmounted(() => {
 }
 .btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
 .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 .student-name { font-weight: 700; color: #111827; }
-.link-value { cursor: pointer; }
-.link-value:hover { text-decoration: underline; }
-.student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.link-value { cursor: pointer; color: #2563EB !important; font-weight: 700 !important; text-decoration: underline; }
+.link-value:hover { color: #1D4ED8 !important; }
 .cat-pill { padding: 4px 10px; background: #E8F5E9; color: #2D6A4F; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.btn-check-preview { display: inline-flex; align-items: center; justify-content: center; margin-left: 4px; padding: 2px 6px; border-radius: 4px; font-size: 12px; background: #EFF6FF; border: 1px solid #BFDBFE; cursor: pointer; }
+.btn-check-preview:hover { background: #DBEAFE; }
 
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .btn-action-edit, .btn-action-delete { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 1px solid #E5E7EB; background: #F9FAFB; cursor: pointer; transition: all 0.15s ease; }
@@ -1073,6 +1314,7 @@ onUnmounted(() => {
 .btn-action-delete { color: #EF4444; &:hover { background: #FEE2E2; border-color: #FCA5A5; transform: translateY(-1px); } }
 
 .state-box, .empty-state { text-align: center; padding: 40px 0; color: #6B7280; }
+.metrics-loading-box { padding: 24px 0; }
 .no-data { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
 .spinner { width: 28px; height: 28px; border: 3px solid #E5E7EB; border-top-color: #2D6A4F; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
 @keyframes spin { to { transform: rotate(360deg); } }

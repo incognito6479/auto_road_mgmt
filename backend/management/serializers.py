@@ -7,10 +7,24 @@ DRF serializers for all management models.
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 from django.db.models import Sum
 
 from datetime import timedelta
-from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, CarAssignmentHistory, CarWash, DrivingLessons, Notification, TeacherReview, StudentCertificate
+from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, CarAssignmentHistory, CarWash, DrivingLessons, AutodromeAccessGrant, Notification, TeacherReview, StudentCertificate, Attendance
+
+
+def get_current_student_enrollment(student):
+    """
+    The enrollment that represents a student's *current* state — always the
+    most recently created active enrollment, never an arbitrary one. A
+    student can accumulate multiple enrollments over time (e.g. re-enrolling
+    after being canceled, or switching category), so picking anything but
+    the latest risks showing a stale status/category/group/instructor that
+    no longer reflects reality — and, worse, disagreeing with whichever
+    enrollment a status-tab filter elsewhere matched on for the same student.
+    """
+    return student.enrollments.filter(is_active=True).order_by("-created_at", "-id").first()
 
 
 def ensure_phone_is_unique(value, instance=None):
@@ -175,9 +189,10 @@ class UserSerializer(serializers.ModelSerializer):
     jshshr = serializers.IntegerField(required=False, allow_null=True)
     passport_serie = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     passport_number = serializers.IntegerField(required=False, allow_null=True)
+    license_series = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    license_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     certificate_series = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     certificate_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    certificate_added_date = serializers.DateTimeField(required=False, allow_null=True)
 
     class Meta:
         model = User
@@ -197,6 +212,8 @@ class UserSerializer(serializers.ModelSerializer):
             "jshshr",
             "passport_serie",
             "passport_number",
+            "license_series",
+            "license_number",
             "certificate_series",
             "certificate_number",
             "certificate_added_date",
@@ -207,7 +224,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_superuser",
             "date_joined",
         ]
-        read_only_fields = ["id", "is_active", "date_joined"]
+        read_only_fields = ["id", "is_active", "date_joined", "certificate_added_date"]
         extra_kwargs = {
             "password": {"write_only": True, "required": False},
             "jshshr": {"required": False, "allow_null": True},
@@ -223,15 +240,26 @@ class UserSerializer(serializers.ModelSerializer):
         user = User(**validated_data)
         if password:
             user.set_password(password)
+        # certificate_added_date is server-controlled: stamp it the moment
+        # certificate info is first entered, never accept a client value.
+        if user.certificate_series or user.certificate_number:
+            user.certificate_added_date = timezone.now()
         user.save()
         return user
 
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
+        cert_series_before = instance.certificate_series
+        cert_number_before = instance.certificate_number
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if password:
             instance.set_password(password)
+        # certificate_added_date is server-controlled — recompute it whenever
+        # certificate_series/certificate_number actually changed, so no client
+        # can backdate/forward-date it via the request payload.
+        if instance.certificate_series != cert_series_before or instance.certificate_number != cert_number_before:
+            instance.certificate_added_date = timezone.now() if (instance.certificate_series or instance.certificate_number) else None
         instance.save()
         return instance
 
@@ -277,6 +305,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "jshshr",
             "passport_serie",
             "passport_number",
+            "birth_date",
             "certificate_series",
             "certificate_number",
             "certificate_added_date",
@@ -301,74 +330,74 @@ class StudentSerializer(serializers.ModelSerializer):
             "is_active",
             "date_joined",
         ]
-        read_only_fields = ["id", "is_active", "date_joined"]
+        read_only_fields = ["id", "is_active", "date_joined", "certificate_added_date"]
 
     def get_category(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.category.name if enrollment else None
 
     def get_category_id(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.category.id if enrollment else None
 
     def get_status(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.status if enrollment else None
 
     def get_enrolled_free(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.enrolled_free if enrollment else False
 
     def get_instructor(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.instructor_id if enrollment else None
 
     def get_instructor_name(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.instructor.full_name if (enrollment and enrollment.instructor) else None
 
     def get_coordinator(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.coordinator_id if enrollment else None
 
     def get_coordinator_name(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.coordinator.full_name if (enrollment and enrollment.coordinator) else None
 
     def get_agent(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.agent_id if enrollment else None
 
     def get_agent_name(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.agent.full_name if (enrollment and enrollment.agent) else None
 
     def get_learning_time(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.learning_time if enrollment else None
 
     def get_learning_days(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.learning_days if enrollment else []
 
     def get_group(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.group_id if enrollment else None
 
     def get_group_name(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.group.name if (enrollment and enrollment.group) else None
 
     def get_group_started_at(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.group.started_at if (enrollment and enrollment.group) else None
 
     def get_group_ends_at(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         return enrollment.group.ends_at if (enrollment and enrollment.group) else None
 
     def get_payment_amount(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         if not enrollment:
             return 0
         result = enrollment.payments.filter(is_active=True).aggregate(total=Sum("amount"))
@@ -397,15 +426,24 @@ class StudentSerializer(serializers.ModelSerializer):
         # JSHSHR whenever it is edited. Without this the account silently keeps
         # the old JSHSHR as its password and the student can no longer log in.
         old_jshshr = instance.jshshr
+        cert_series_before = instance.certificate_series
+        cert_number_before = instance.certificate_number
 
         with transaction.atomic():
             student = super().update(instance, validated_data)
+
+            # certificate_added_date is server-controlled — recompute it
+            # whenever certificate_series/certificate_number actually changed,
+            # so no client can backdate/forward-date it via the request payload.
+            if student.certificate_series != cert_series_before or student.certificate_number != cert_number_before:
+                student.certificate_added_date = timezone.now() if (student.certificate_series or student.certificate_number) else None
+                student.save(update_fields=["certificate_added_date"])
 
             if student.jshshr and student.jshshr != old_jshshr:
                 student.set_password(str(student.jshshr))
                 student.save(update_fields=["password"])
 
-            enrollment = student.enrollments.filter(is_active=True).first()
+            enrollment = get_current_student_enrollment(student)
             if enrollment:
                 if category_id is not None:
                     if category_id:
@@ -489,6 +527,10 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    can_view_payments = serializers.BooleanField(
+        write_only=True,
+        default=True,
+    )
     learning_place = serializers.PrimaryKeyRelatedField(
         queryset=LearningPlace.objects.filter(is_active=True),
         write_only=True,
@@ -527,6 +569,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
             "jshshr",
             "passport_serie",
             "passport_number",
+            "birth_date",
             "status",
             "category",
             "instructor",
@@ -539,6 +582,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
             "payment_method",
             "enrolled_free",
             "enrolled_amount",
+            "can_view_payments",
             "payment_amount",
         ]
         read_only_fields = ["id", "payment_amount"]
@@ -547,7 +591,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         return ensure_phone_is_unique(value, self.instance)
 
     def get_payment_amount(self, obj):
-        enrollment = obj.enrollments.filter(is_active=True).first()
+        enrollment = get_current_student_enrollment(obj)
         if not enrollment:
             return 0
         result = enrollment.payments.filter(is_active=True).aggregate(total=Sum("amount"))
@@ -571,6 +615,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         enrollment_status = validated_data.pop("status", Enrollment.Status.NEW)
         enrolled_free = validated_data.pop("enrolled_free", False)
         enrolled_amount = validated_data.pop("enrolled_amount", None)
+        can_view_payments = validated_data.pop("can_view_payments", True)
 
         if enrolled_free:
             enrolled_amount = 0
@@ -607,6 +652,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                 status=enrollment_status,
                 enrolled_free=enrolled_free,
                 enrolled_amount=enrolled_amount,
+                can_view_payments=can_view_payments,
             )
 
             # Create Payment (inherits the student's branch)
@@ -625,6 +671,22 @@ class StudentCreateSerializer(serializers.ModelSerializer):
 
 class AgentSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source="branch.name", read_only=True)
+    # A "teacher agent" — an instructor/coordinator who brought in a student
+    # themselves and earns the referral bonus like any other agent. When
+    # `user` is set, full_name/phone are no longer typed in by hand; they're
+    # snapshotted from the linked user instead (see validate() below).
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(role__in=[User.Role.INSTRUCTOR, User.Role.COORDINATOR], is_active=True),
+        required=False,
+        allow_null=True,
+    )
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    user_role = serializers.CharField(source="user.role", read_only=True)
+    full_name = serializers.CharField(required=False, allow_blank=True)
+    phone = serializers.CharField(
+        required=False, allow_blank=True,
+        validators=[UniqueValidator(queryset=Agent.objects.all(), message="Ushbu telefon raqamli agent allaqachon mavjud.")],
+    )
 
     class Meta:
         model = Agent
@@ -633,6 +695,9 @@ class AgentSerializer(serializers.ModelSerializer):
             "full_name",
             "phone",
             "phone2",
+            "user",
+            "user_name",
+            "user_role",
             "branch",
             "branch_name",
             "notes",
@@ -641,6 +706,20 @@ class AgentSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "is_active", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        user = attrs.get("user", getattr(self.instance, "user", None))
+        if user:
+            attrs["full_name"] = user.full_name or ""
+            attrs["phone"] = user.phone
+        else:
+            full_name = attrs.get("full_name", getattr(self.instance, "full_name", None))
+            phone = attrs.get("phone", getattr(self.instance, "phone", None))
+            if not full_name:
+                raise serializers.ValidationError({"full_name": "Agent F.I.SH. kiritilishi shart."})
+            if not phone:
+                raise serializers.ValidationError({"phone": "Telefon raqami kiritilishi shart."})
+        return attrs
 
 
 class LearningPlaceSerializer(serializers.ModelSerializer):
@@ -678,7 +757,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             "category", "category_name", "group", "group_name", "instructor", "instructor_name", "coordinator", "coordinator_name",
             "agent", "agent_name", "agent_phone",
             "learning_place", "learning_place_name", "learning_time", "learning_days", "status",
-            "enrolled_free", "enrolled_amount", "paid_amount", "branch", "branch_name", "notes",
+            "enrolled_free", "enrolled_amount", "can_view_payments", "excel_imported", "paid_amount", "branch", "branch_name", "notes",
             "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "is_active", "created_at", "updated_at"]
@@ -696,6 +775,16 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         return None
 
     def get_paid_amount(self, obj):
+        # `paid_amount_agg` is a queryset-level annotation (see
+        # Enrollment.objects_with_paid_amount / callers in views.py) that
+        # computes this via a correlated subquery in the same SQL query as
+        # the enrollment list, instead of one extra query per row — use it
+        # whenever the queryset was built that way, and only fall back to
+        # the per-row aggregate for the rare unannotated path (e.g. a
+        # single freshly created/updated instance handed back by DRF's
+        # default create/update, which never re-queries via get_queryset).
+        if hasattr(obj, "paid_amount_agg"):
+            return obj.paid_amount_agg or 0
         result = obj.payments.filter(status="accepted", is_active=True).aggregate(total=Sum("amount"))
         return result["total"] or 0
 
@@ -707,6 +796,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     category = serializers.IntegerField(source="enrollment.category.id", read_only=True)
     category_id = serializers.IntegerField(source="enrollment.category.id", read_only=True)
     category_name = serializers.CharField(source="enrollment.category.name", read_only=True)
+    group = serializers.IntegerField(source="enrollment.group.id", read_only=True, default=None)
     group_name = serializers.CharField(source="enrollment.group.name", read_only=True, default=None)
     group_started_at = serializers.DateField(source="enrollment.group.started_at", read_only=True, default=None)
     group_ends_at = serializers.DateField(source="enrollment.group.ends_at", read_only=True, default=None)
@@ -715,6 +805,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     user_phone = serializers.CharField(source="user.phone", read_only=True)
     user_phone2 = serializers.CharField(source="user.phone2", read_only=True)
     user_role = serializers.CharField(source="user.role", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
     agent_name = serializers.CharField(source="agent.full_name", read_only=True)
     agent_phone = serializers.CharField(source="agent.phone", read_only=True)
     agent_phone2 = serializers.CharField(source="agent.phone2", read_only=True)
@@ -724,13 +815,14 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = [
-            "id", "user", "user_full_name", "user_phone", "user_phone2", "user_role", "cashier_name", "enrollment", "student", "student_name", "student_jshshr",
-            "category", "category_id", "category_name", "group_name", "group_started_at", "group_ends_at",
+            "id", "user", "user_full_name", "user_phone", "user_phone2", "user_role", "cashier_name",
+            "created_by", "created_by_name", "enrollment", "student", "student_name", "student_jshshr",
+            "category", "category_id", "category_name", "group", "group_name", "group_started_at", "group_ends_at",
             "agent", "agent_name", "agent_phone", "agent_phone2", "branch", "branch_name",
-            "amount", "status", "method", "notes", "is_active", "created_at", "updated_at",
+            "amount", "status", "method", "click_check_image", "notes", "is_active", "created_at", "updated_at",
             "student_paid_amount",
         ]
-        read_only_fields = ["id", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_by", "is_active", "created_at", "updated_at"]
 
     def get_cashier_name(self, obj):
         user = obj.user
@@ -738,9 +830,20 @@ class PaymentSerializer(serializers.ModelSerializer):
             return None
         return user.full_name or f"{user.first_name or ''} {user.last_name or ''}".strip() or user.phone
 
+    def get_created_by_name(self, obj):
+        user = obj.created_by
+        if not user:
+            return None
+        return user.full_name or f"{user.first_name or ''} {user.last_name or ''}".strip() or user.phone
+
     def get_student_paid_amount(self, obj):
         if not obj.enrollment_id:
             return None
+        # See PaymentViewSet.get_queryset — annotated in the same query as
+        # the payment list itself; only falls back to the per-row aggregate
+        # for an unannotated instance (e.g. straight off create/update).
+        if hasattr(obj, "student_paid_amount_agg"):
+            return obj.student_paid_amount_agg or 0
         result = obj.enrollment.payments.filter(status="accepted", is_active=True).aggregate(total=Sum("amount"))
         return result["total"] or 0
 
@@ -754,7 +857,7 @@ class GroupSerializer(serializers.ModelSerializer):
     student_count = serializers.SerializerMethodField()
     category_name = serializers.CharField(source="category.name", read_only=True)
     branch_name = serializers.CharField(source="branch.name", read_only=True)
-    enrollments = EnrollmentSerializer(many=True, read_only=True)
+    enrollments = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
@@ -767,7 +870,26 @@ class GroupSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "is_active", "ends_at", "created_at", "updated_at", "student_count"]
 
     def get_student_count(self, obj):
+        # len() reuses Group.enrollments' prefetch cache (set up in
+        # GroupViewSet.get_queryset, retrieve only) when it's there;
+        # otherwise .count() is a cheap SQL COUNT instead of pulling every
+        # column of every row just to measure the list.
+        if "enrollments" in getattr(obj, "_prefetched_objects_cache", {}):
+            return len(obj.enrollments.all())
         return obj.enrollments.count()
+
+    def get_enrollments(self, obj):
+        # Every group's full member roster (each with its own several-FK
+        # EnrollmentSerializer) is only actually used by GroupDetailView's
+        # single-group fetch. A *list* of groups — used all over this app
+        # purely to look up one group's started_at/ends_at by id — has no
+        # use for it, so skip serializing it there entirely rather than
+        # silently dragging along, in the worst case, page_size (up to
+        # 1000) groups' worth of full enrollment data on every such call.
+        view = self.context.get("view")
+        if view is not None and getattr(view, "action", None) == "list":
+            return []
+        return EnrollmentSerializer(obj.enrollments.all(), many=True, context=self.context).data
 
     def create(self, validated_data):
         student_ids = validated_data.pop("student_ids", [])
@@ -921,7 +1043,11 @@ class DrivingLessonsSerializer(serializers.ModelSerializer):
             "car", "car_name", "branch", "branch_name", "lesson_type", "hours",
             "lesson_date", "notes", "is_active", "created_at", "updated_at"
         ]
-        read_only_fields = ["id", "is_active", "created_at", "updated_at"]
+        # lesson_date is server-controlled (BaseModel.created_at-style auto
+        # timestamp) — always the server's current time at creation, never a
+        # client-supplied value, so a lesson/autodrome session can't be
+        # backdated or postdated.
+        read_only_fields = ["id", "lesson_date", "is_active", "created_at", "updated_at"]
 
     def validate(self, attrs):
         lesson_type = attrs.get("lesson_type", DrivingLessons.LessonType.DRIVING)
@@ -941,11 +1067,44 @@ class DrivingLessonsSerializer(serializers.ModelSerializer):
             if self.instance:
                 existing = existing.exclude(pk=self.instance.pk)
             used = existing.aggregate(total=Sum("hours"))["total"] or 0
-            if used + hours > DrivingLessons.AUTODROME_MAX_HOURS:
-                remaining = max(0, DrivingLessons.AUTODROME_MAX_HOURS - used)
+
+            # An admin/superuser may have granted this student extra visits
+            # for a specific date range (once the base cap was hit or their
+            # group finished) — that extra allowance is only in effect while
+            # today falls within the grant's start/end date.
+            today = timezone.localdate()
+            extra = AutodromeAccessGrant.objects.filter(
+                student=student, is_active=True, start_date__lte=today, end_date__gte=today,
+            ).aggregate(total=Sum("visits"))["total"] or 0
+            max_hours = DrivingLessons.AUTODROME_MAX_HOURS + extra
+
+            if used + hours > max_hours:
+                remaining = max(0, max_hours - used)
                 raise serializers.ValidationError({
-                    "hours": f"Jami avtodrom vaqti {DrivingLessons.AUTODROME_MAX_HOURS} soatdan oshmasligi kerak. Qolgan: {remaining} soat."
+                    "hours": f"Jami avtodrom vaqti {max_hours} soatdan oshmasligi kerak. Qolgan: {remaining} soat."
                 })
+        return attrs
+
+
+class AutodromeAccessGrantSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    granted_by_name = serializers.CharField(source="granted_by.full_name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+
+    class Meta:
+        model = AutodromeAccessGrant
+        fields = [
+            "id", "student", "student_name", "granted_by", "granted_by_name",
+            "branch", "branch_name", "visits", "start_date", "end_date",
+            "notes", "is_active", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "granted_by", "is_active", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        if start_date and end_date and end_date < start_date:
+            raise serializers.ValidationError({"end_date": "Tugash sanasi boshlanish sanasidan oldin bo'lishi mumkin emas."})
         return attrs
 
 
@@ -959,7 +1118,9 @@ class NotificationSerializer(serializers.ModelSerializer):
             "id", "user", "user_name", "title", "date", "note", "is_read",
             "status", "target_id", "branch", "branch_name", "is_active", "created_at", "updated_at"
         ]
-        read_only_fields = ["id", "is_active", "created_at", "updated_at"]
+        # date is server-controlled — always the server's current time at
+        # creation, never a client-supplied value.
+        read_only_fields = ["id", "date", "is_active", "created_at", "updated_at"]
 
 
 class TeacherReviewSerializer(serializers.ModelSerializer):
@@ -990,24 +1151,83 @@ class TeacherReviewSerializer(serializers.ModelSerializer):
 
 class StudentCertificateSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.full_name", read_only=True)
-    instructor_name = serializers.CharField(source="instructor.full_name", read_only=True)
+    coordinator_name = serializers.CharField(source="coordinator.full_name", read_only=True)
     branch_name = serializers.CharField(source="branch.name", read_only=True)
     bonus_paid = serializers.SerializerMethodField()
     bonus_amount = serializers.SerializerMethodField()
+    bonus_payment_user_name = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentCertificate
         fields = [
-            "id", "student", "student_name", "instructor", "instructor_name",
+            "id", "student", "student_name", "coordinator", "coordinator_name",
             "branch", "branch_name", "image", "notes", "bonus_payment",
-            "bonus_paid", "bonus_amount", "is_active", "created_at", "updated_at"
+            "bonus_paid", "bonus_amount", "bonus_payment_user_name", "is_active", "created_at", "updated_at"
         ]
-        read_only_fields = ["id", "instructor", "branch", "bonus_payment", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "coordinator", "branch", "bonus_payment", "is_active", "created_at", "updated_at"]
 
     def get_bonus_paid(self, obj):
         return bool(obj.bonus_payment_id and obj.bonus_payment.amount > 0)
 
     def get_bonus_amount(self, obj):
         return obj.bonus_payment.amount if obj.bonus_payment_id else None
+
+    def get_bonus_payment_user_name(self, obj):
+        # The teacher (coordinator) the bonus payment is attributed to —
+        # shown in the pay-bonus modal alongside the student's name.
+        if obj.bonus_payment_id and obj.bonus_payment.user_id:
+            return obj.bonus_payment.user.full_name or obj.bonus_payment.user.phone
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Attendance
+# ---------------------------------------------------------------------------
+
+class AttendanceSerializer(serializers.ModelSerializer):
+    student = serializers.IntegerField(source="enrollment.student_id", read_only=True)
+    student_name = serializers.CharField(source="enrollment.student.full_name", read_only=True)
+    marked_by_name = serializers.CharField(source="marked_by.full_name", read_only=True)
+    category_name = serializers.CharField(source="enrollment.category.name", read_only=True, default=None)
+    group = serializers.IntegerField(source="enrollment.group_id", read_only=True, default=None)
+    group_name = serializers.CharField(source="enrollment.group.name", read_only=True, default=None)
+    group_started_at = serializers.DateField(source="enrollment.group.started_at", read_only=True, default=None)
+    group_ends_at = serializers.DateField(source="enrollment.group.ends_at", read_only=True, default=None)
+    learning_place_name = serializers.CharField(source="enrollment.learning_place.place_name", read_only=True, default=None)
+    learning_days = serializers.ListField(source="enrollment.learning_days", read_only=True, default=list)
+    learning_time = serializers.CharField(source="enrollment.learning_time", read_only=True, default=None)
+    agent = serializers.IntegerField(source="enrollment.agent_id", read_only=True, default=None)
+    agent_name = serializers.CharField(source="enrollment.agent.full_name", read_only=True, default=None)
+    instructor = serializers.IntegerField(source="enrollment.instructor_id", read_only=True, default=None)
+    coordinator = serializers.IntegerField(source="enrollment.coordinator_id", read_only=True, default=None)
+    instructor_name = serializers.SerializerMethodField()
+    coordinator_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Attendance
+        fields = [
+            "id", "enrollment", "student", "student_name", "category_name",
+            "group", "group_name", "group_started_at", "group_ends_at",
+            "learning_place_name", "learning_days", "learning_time",
+            "instructor", "instructor_name", "coordinator", "coordinator_name",
+            "agent", "agent_name",
+            "date", "is_absent", "marked_by", "marked_by_name",
+            "notes", "is_active", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "marked_by", "is_active", "created_at", "updated_at"]
+
+    def get_instructor_name(self, obj):
+        instructor = obj.enrollment.instructor if obj.enrollment_id else None
+        if not instructor:
+            return None
+        name = f"{instructor.first_name} {instructor.last_name}".strip()
+        return name or instructor.phone
+
+    def get_coordinator_name(self, obj):
+        coordinator = obj.enrollment.coordinator if obj.enrollment_id else None
+        if not coordinator:
+            return None
+        name = f"{coordinator.first_name} {coordinator.last_name}".strip()
+        return name or coordinator.phone
 
 

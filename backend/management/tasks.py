@@ -2,10 +2,12 @@
 Celery tasks for the management app.
 """
 
+import os
+
 from celery import shared_task
 from django.utils import timezone
 
-from management.models import Enrollment, Group
+from management.models import Enrollment, Group, User
 
 
 @shared_task
@@ -39,3 +41,24 @@ def finish_expired_groups():
         student_count += updated
 
     return f"Finished {finished_count} expired group(s), {student_count} student(s) moved to finished."
+
+
+@shared_task
+def import_excel_task(file_path, actor_id):
+    """
+    Runs the legacy-data Excel import (management/import_excel.py) in the
+    background — the file has thousands of rows, comfortably past what an
+    HTTP request should sit open for. Removes the temporary upload from
+    disk once done, success or failure, either way.
+    """
+    from management.import_excel import import_excel_data
+
+    actor = User.objects.filter(pk=actor_id).first()
+    try:
+        summary = import_excel_data(file_path, actor)
+        return summary
+    finally:
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass

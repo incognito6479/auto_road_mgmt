@@ -11,13 +11,15 @@
       <button
         v-if="unreadCount > 0"
         class="btn-primary-action"
+        :disabled="markingAllRead"
         @click="markAllAsRead"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+        <span v-if="markingAllRead" class="btn-spinner"></span>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
-        <span>Barchasini O'qilgan deb belgilash</span>
+        <span>{{ markingAllRead ? 'Belgilanmoqda...' : "Barchasini O'qilgan deb belgilash" }}</span>
       </button>
     </div>
 
@@ -102,7 +104,7 @@
 
         <div v-else class="notif-cards-list">
           <div
-            v-for="item in filteredNotifications"
+            v-for="item in displayedNotifications"
             :key="item.id"
             class="notif-card-item clickable"
             :class="{ 'unread-card': !item.is_read }"
@@ -131,10 +133,32 @@
               <button
                 v-else
                 class="btn-mark-read"
+                :disabled="markingReadIds.has(item.id)"
                 @click.stop="markSingleAsRead(item.id)"
               >
-                O'qilgan deb belgilash
+                <span v-if="markingReadIds.has(item.id)" class="btn-spinner btn-spinner-sm"></span>
+                <span>{{ markingReadIds.has(item.id) ? 'Belgilanmoqda...' : "O'qilgan deb belgilash" }}</span>
               </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="filteredNotifications.length > 0" class="pagination-bar">
+          <span class="pagination-info">
+            Jami: <strong>{{ filteredNotifications.length }}</strong> tadan <strong>{{ displayedNotifications.length }}</strong> ko'rsatilmoqda
+          </span>
+          <div class="pagination-actions">
+            <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+            <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+            <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+            <label class="page-size-label" for="notif-page-size">Ko'rsatish:</label>
+            <div class="select-wrap">
+              <select id="notif-page-size" v-model="pageSizeOption" class="page-size-select">
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="all">Barchasi</option>
+              </select>
             </div>
           </div>
         </div>
@@ -155,6 +179,8 @@ const router = useRouter()
 const branchStore = useBranchStore()
 const notifications = ref([])
 const loading = ref(true)
+const markingAllRead = ref(false)
+const markingReadIds = ref(new Set())
 const activeStatusFilter = ref('')
 
 const unreadCount = computed(() => notifications.value.filter(n => !n.is_read && branchStore.isBranchMatch(n)).length)
@@ -167,11 +193,27 @@ const filteredNotifications = computed(() => {
   })
 })
 
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: fetch always pulls every
+// notification (see fetchNotifications below) — activeStatusFilter is a
+// purely client-side type tab, not a backend query param, so there's no
+// scope to narrow. Filtering runs client-side against the full set
+// (filteredNotifications), and pageSizeOption instead controls how many of
+// the *filtered* results are shown per page (see
+// displayedNotifications/changePage below).
+const pageSizeOption = ref('50')
+const totalCount = ref(0)
+const currentPage = ref(1)
+
 async function fetchNotifications() {
   loading.value = true
   try {
-    const res = await api.get('/notifications/', { params: { page_size: 1000 } })
-    notifications.value = res.data.results || res.data || []
+    // Always the full dataset — filtering/sorting/pagination below all
+    // need to see every row, not just one page of them.
+    const res = await api.get('/notifications/', { params: { page: 1, page_size: 100000 } })
+    const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
+    notifications.value = rawList
+    totalCount.value = res.data.count ?? rawList.length
   } catch (err) {
     console.error("Bildirishnomalarni yuklashda xatolik:", err)
   } finally {
@@ -179,26 +221,63 @@ async function fetchNotifications() {
   }
 }
 
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredNotifications.value.length / displayPageSize.value))
+})
+const displayedNotifications = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredNotifications.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredNotifications.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
+
+// The status-type tab is purely client-side, so nothing ever needs a
+// refetch after the initial load — the row-fetch-count selector only
+// resets the display page.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
+
 onMounted(() => {
   fetchNotifications()
 })
 
 async function markSingleAsRead(id) {
+  if (markingReadIds.value.has(id)) return
+  markingReadIds.value = new Set(markingReadIds.value).add(id)
   try {
     await api.post(`/notifications/${id}/mark_as_read/`)
     const item = notifications.value.find(n => n.id === id)
     if (item) item.is_read = true
   } catch (err) {
     console.error("O'qilgan deb belgilashda xatolik:", err)
+  } finally {
+    const next = new Set(markingReadIds.value)
+    next.delete(id)
+    markingReadIds.value = next
   }
 }
 
 async function markAllAsRead() {
+  if (markingAllRead.value) return
+  markingAllRead.value = true
   try {
     await api.post('/notifications/mark_all_read/')
     notifications.value.forEach(n => { n.is_read = true })
   } catch (err) {
     console.error("Barchasini o'qilgan deb belgilashda xatolik:", err)
+  } finally {
+    markingAllRead.value = false
   }
 }
 
@@ -329,8 +408,54 @@ function formatDateTime(dtStr) {
 
 .notif-card-right { flex-shrink: 0; }
 .read-indicator { font-size: 12.5px; font-weight: 600; color: #94A3B8; }
-.btn-mark-read { padding: 7px 14px; background: #EEF2FF; color: #4F46E5; border: 1px solid #C7D2FE; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
-.btn-mark-read:hover { background: #4F46E5; color: white; }
+.btn-mark-read { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: #EEF2FF; color: #4F46E5; border: 1px solid #C7D2FE; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+.btn-mark-read:hover:not(:disabled) { background: #4F46E5; color: white; }
+.btn-mark-read:disabled, .btn-primary-action:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.btn-spinner { width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, 0.4); border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+.btn-spinner-sm { width: 11px; height: 11px; border-width: 1.5px; }
+
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; margin-top: 8px; border-radius: 0 0 14px 14px; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.select-wrap { position: relative; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #4F46E5; outline: none; }
 
 .state-box, .empty-state { text-align: center; padding: 40px 0; color: #6B7280; }
 .spinner { width: 28px; height: 28px; border: 3px solid #E5E7EB; border-top-color: #4F46E5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }

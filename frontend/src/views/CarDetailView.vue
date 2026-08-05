@@ -171,6 +171,84 @@
               </tbody>
             </table></div>
           </div>
+
+          <!-- Driving Lesson History (under the instructor section) -->
+          <div class="info-card">
+            <div class="card-header">
+              <div class="icon-circle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="2" width="20" height="20">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 12l4-2"></path>
+                </svg>
+              </div>
+              <h4>Amaliy Haydash Darslari Tarixi</h4>
+            </div>
+
+            <div v-if="lessonsLoading" class="history-empty">Yuklanmoqda...</div>
+            <div v-else-if="drivingLessons.length === 0" class="history-empty">
+              Ushbu avtomobil bilan hali amaliy dars o'tkazilmagan.
+            </div>
+            <div v-else class="table-scroll"><table class="history-table">
+              <thead>
+                <tr>
+                  <th>O'quvchi</th>
+                  <th>Dars sanasi</th>
+                  <th>Instruktor</th>
+                </tr>
+                <tr class="col-filter-row">
+                  <th>
+                    <input v-model="lessonFilterStudent" class="col-filter-input" type="text" placeholder="O'quvchi ismi..." />
+                  </th>
+                  <th>
+                    <div class="col-sort-group">
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: lessonSortDir === 'asc' }" title="Eskidan yangiga" @click="setLessonSort('asc')">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V4"></path><path d="M3 8l3-4 3 4"></path></svg>
+                      </button>
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: lessonSortDir === 'desc' }" title="Yangidan eskiga" @click="setLessonSort('desc')">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"></path><path d="M3 16l3 4 3-4"></path></svg>
+                      </button>
+                    </div>
+                  </th>
+                  <th>
+                    <input v-model="lessonFilterInstructor" class="col-filter-input" type="text" placeholder="Instruktor ismi..." />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="filteredDrivingLessons.length === 0">
+                  <td colspan="3" class="text-muted" style="text-align: center; padding: 16px;">Mos darslar topilmadi.</td>
+                </tr>
+                <tr v-for="lesson in filteredDrivingLessons" :key="lesson.id">
+                  <td class="font-bold">
+                    <span v-if="lesson.student" class="link-value" @click="goStudent(lesson.student)">{{ lesson.student_name || 'Noma\'lum' }}</span>
+                    <span v-else>{{ lesson.student_name || 'Noma\'lum' }}</span>
+                  </td>
+                  <td>{{ formatDateTime(lesson.lesson_date) }}</td>
+                  <td>
+                    <span v-if="lesson.instructor" class="link-value" @click="goUser(lesson.instructor)">{{ lesson.instructor_name || 'Noma\'lum' }}</span>
+                    <span v-else>{{ lesson.instructor_name || 'Noma\'lum' }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table></div>
+            <div v-if="drivingLessons.length > 0" class="pagination-bar">
+              <span class="pagination-info">
+                Jami: <strong>{{ totalDrivingLessonsCount }}</strong> tadan <strong>{{ filteredDrivingLessons.length }}</strong> ko'rsatilmoqda
+                <span v-if="drivingLessons.length < totalDrivingLessonsCount" class="pagination-note">(ko'proq ko'rish uchun pastdagi tanlovni o'zgartiring)</span>
+              </span>
+              <div class="pagination-actions">
+                <label class="page-size-label" for="car-lessons-page-size">Ko'rsatish:</label>
+                <div class="select-wrap">
+                  <select id="car-lessons-page-size" v-model="lessonsPageSizeOption" class="page-size-select">
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="all">Barchasi</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Right: Insurance Policy & Inspection Cards -->
@@ -351,7 +429,7 @@
     </div>
 
     <!-- Edit Car Modal -->
-    <dialog ref="carModal" class="modal-dialog">
+    <dialog ref="carModal" class="modal-dialog" closedby="any" @click="onDialogBackdropClick($event, carModal)">
       <div class="car-modal-header">
         <div class="header-badge-wrap">
           <div class="header-badge-icon">
@@ -403,6 +481,7 @@
               <input
                 type="text"
                 class="form-input"
+                :class="{ 'has-clear': editForm.instructor }"
                 v-model="instructorSearchText"
                 @focus="instructorDropdownOpen = true"
                 @input="instructorDropdownOpen = true"
@@ -410,12 +489,14 @@
                 placeholder="Instruktorni qidirish..."
                 autocomplete="off"
               />
+              <button
+                v-if="editForm.instructor"
+                type="button"
+                class="btn-clear-instructor"
+                title="Tozalash"
+                @mousedown.prevent="clearInstructor"
+              >✕</button>
               <div v-if="instructorDropdownOpen" class="searchable-dropdown">
-                <div
-                  class="searchable-option"
-                  :class="{ selected: !editForm.instructor }"
-                  @mousedown.prevent="selectInstructor(null)"
-                >Biriktirilmagan</div>
                 <div
                   v-for="i in filteredInstructorOptions"
                   :key="i.id"
@@ -469,7 +550,7 @@
           <label class="form-label">Avtomobil Rasmi (Foto)</label>
           <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
             <img v-if="editForm.existingImage" :src="editForm.existingImage" alt="Current Photo" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-            <input type="file" accept="image/*" class="form-input" style="width: 100%;" @change="onCarFileChange" />
+            <FileSelectInput ref="carFileInputRef" accept="image/*" @change="onCarFileChange" />
           </div>
         </div>
 
@@ -488,7 +569,7 @@
     </dialog>
 
     <!-- Quick Date Change Modal -->
-    <dialog ref="quickDateModal" class="modal-dialog modal-sm-fixed" closedby="any">
+    <dialog ref="quickDateModal" class="modal-dialog modal-sm-fixed" closedby="any" @click="onDialogBackdropClick($event, quickDateModal)">
       <div class="car-modal-header">
         <div class="header-badge-wrap">
           <div class="header-badge-icon">
@@ -527,7 +608,7 @@
     </dialog>
 
     <!-- Oil Change Info Modal -->
-    <dialog ref="oilChangeModal" class="modal-dialog modal-sm-fixed" closedby="any">
+    <dialog ref="oilChangeModal" class="modal-dialog modal-sm-fixed" closedby="any" @click="onDialogBackdropClick($event, oilChangeModal)">
       <div class="car-modal-header">
         <div class="header-badge-wrap">
           <div class="header-badge-icon">
@@ -579,7 +660,7 @@
     </dialog>
 
     <!-- Instructor Assignment Modal -->
-    <dialog ref="instructorModal" class="modal-dialog modal-sm-fixed" closedby="any">
+    <dialog ref="instructorModal" class="modal-dialog modal-sm-fixed" closedby="any" @click="onDialogBackdropClick($event, instructorModal)">
       <div class="car-modal-header">
         <div class="header-badge-wrap">
           <div class="header-badge-icon">
@@ -697,9 +778,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate, formatNumber } from '@/utils/formatters'
@@ -717,6 +799,7 @@ const carModal = ref(null)
 const saving = ref(false)
 const modalError = ref(null)
 const selectedCarFile = ref(null)
+const carFileInputRef = ref(null)
 
 const instructors = ref([])
 async function fetchInstructors() {
@@ -727,6 +810,26 @@ async function fetchInstructors() {
     console.error("Instruktorlarni yuklashda xatolik:", err)
   }
 }
+
+// A car can have at most one instructor, so instructors already assigned to
+// another car are hidden from every picker on this page. This car itself is
+// excluded from the "taken" check so its own instructor still shows up.
+const allCars = ref([])
+async function fetchAllCars() {
+  try {
+    const res = await api.get('/cars/', { params: { page_size: 1000 } })
+    allCars.value = res.data.results || res.data || []
+  } catch (err) {
+    console.error("Avtomobillarni yuklashda xatolik:", err)
+  }
+}
+const assignedInstructorIds = computed(() => {
+  const ids = new Set()
+  allCars.value.forEach(c => {
+    if (c.instructor && c.id !== car.value?.id) ids.add(c.instructor)
+  })
+  return ids
+})
 
 const editForm = ref({
   car_name: '',
@@ -749,8 +852,9 @@ const instructorSearchText = ref('')
 const instructorDropdownOpen = ref(false)
 const filteredInstructorOptions = computed(() => {
   const q = instructorSearchText.value.trim().toLowerCase()
-  if (!q) return instructors.value
-  return instructors.value.filter(i =>
+  const available = instructors.value.filter(i => !assignedInstructorIds.value.has(i.id))
+  if (!q) return available
+  return available.filter(i =>
     (i.full_name || '').toLowerCase().includes(q) || (i.phone || '').includes(q)
   )
 })
@@ -758,6 +862,9 @@ function selectInstructor(i) {
   editForm.value.instructor = i ? i.id : null
   instructorSearchText.value = i ? (i.full_name || i.phone) : ''
   instructorDropdownOpen.value = false
+}
+function clearInstructor() {
+  selectInstructor(null)
 }
 function onInstructorBlur() {
   setTimeout(() => { instructorDropdownOpen.value = false }, 150)
@@ -778,8 +885,9 @@ const selectedInstrModalOption = computed(() => {
 
 const filteredInstrModalOptions = computed(() => {
   const q = instrModalSearch.value.trim().toLowerCase()
-  if (!q) return instructors.value
-  return instructors.value.filter(i =>
+  const available = instructors.value.filter(i => !assignedInstructorIds.value.has(i.id))
+  if (!q) return available
+  return available.filter(i =>
     (i.full_name || '').toLowerCase().includes(q) || (i.phone || '').includes(q)
   )
 })
@@ -795,12 +903,20 @@ function onInstrModalKeydown(e) {
   instrModalKb.onKeydown(e, filteredInstrModalOptions.value, selectInstrModalOption, () => { instrModalOpen.value = false })
 }
 
+// Any click landing outside the instructor searchable select closes its
+// dropdown, matching the pattern used on the students page.
+function handleInstrModalOutsideClick(e) {
+  if (e.target.closest('.search-select-container')) return
+  instrModalOpen.value = false
+}
+
 async function openInstructorModal() {
   instrModalError.value = null
   instrModalSearch.value = ''
   instrModalOpen.value = false
   instrModalForm.value = { instructor: car.value?.instructor || null }
   if (instructors.value.length === 0) await fetchInstructors()
+  if (allCars.value.length === 0) await fetchAllCars()
   instructorModal.value?.showModal()
 }
 
@@ -938,6 +1054,7 @@ async function fetchCarDetail() {
 function openEditModal() {
   modalError.value = null
   selectedCarFile.value = null
+  carFileInputRef.value?.reset()
   editForm.value = {
     car_name: car.value.car_name || '',
     manufact_year: car.value.manufact_year || '',
@@ -1026,6 +1143,11 @@ function goUser(id) {
   router.push(`/users/${id}`)
 }
 
+function goStudent(id) {
+  if (!id) return
+  router.push(`/students/${id}`)
+}
+
 // ── Quick date change (policy_date / tech_inspection_date) ───────────
 const quickDateModal = ref(null)
 const quickDateField = ref('')
@@ -1110,9 +1232,81 @@ async function saveOilChangeInfo() {
   }
 }
 
+// A click on the <dialog> element itself (rather than on its content) means
+// the click landed on the backdrop, since the dialog box is sized to its
+// content — checking bounding coordinates is more reliable cross-browser
+// than comparing event.target.
+function onDialogBackdropClick(e, dialogEl) {
+  if (!dialogEl) return
+  const rect = dialogEl.getBoundingClientRect()
+  const outside = e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom
+  if (outside) dialogEl.close()
+}
+
+// ── Driving lesson history for this car ───────────────
+const drivingLessons = ref([])
+const lessonsLoading = ref(false)
+const lessonFilterStudent = ref('')
+const lessonFilterInstructor = ref('')
+const lessonSortDir = ref('')
+
+// ── Row-fetch-count selector ──────────────────────────────────
+// Pick how many rows to pull from the backend in one shot, then filter/sort
+// them instantly on the client (see filteredDrivingLessons below) instead of
+// round-tripping per filter change.
+const lessonsPageSizeOption = ref('50')
+const totalDrivingLessonsCount = ref(0)
+const resolvedLessonsPageSize = computed(() => lessonsPageSizeOption.value === 'all' ? 100000 : Number(lessonsPageSizeOption.value))
+
+async function fetchDrivingLessons() {
+  lessonsLoading.value = true
+  try {
+    const res = await api.get('/driving-lessons/', { params: { car: route.params.id, page_size: resolvedLessonsPageSize.value } })
+    drivingLessons.value = res.data.results || res.data || []
+    totalDrivingLessonsCount.value = res.data.count ?? drivingLessons.value.length
+  } catch (err) {
+    console.error("Amaliy dars tarixini yuklashda xatolik:", err)
+  } finally {
+    lessonsLoading.value = false
+  }
+}
+
+// Only the row-fetch-count selector needs a backend round trip; the
+// student/instructor filters and sort above run entirely client-side.
+watch(lessonsPageSizeOption, () => {
+  fetchDrivingLessons()
+})
+
+function setLessonSort(dir) {
+  lessonSortDir.value = lessonSortDir.value === dir ? '' : dir
+}
+
+const filteredDrivingLessons = computed(() => {
+  const q = lessonFilterStudent.value.trim().toLowerCase()
+  const instructorQ = lessonFilterInstructor.value.trim().toLowerCase()
+  const list = drivingLessons.value.filter(l => {
+    const matchStudent = !q || (l.student_name || '').toLowerCase().includes(q)
+    const matchInstructor = !instructorQ || (l.instructor_name || '').toLowerCase().includes(instructorQ)
+    return matchStudent && matchInstructor
+  })
+  if (!lessonSortDir.value) return list
+  return [...list].sort((a, b) => {
+    const da = new Date(a.lesson_date).getTime()
+    const db = new Date(b.lesson_date).getTime()
+    return lessonSortDir.value === 'asc' ? da - db : db - da
+  })
+})
+
 onMounted(() => {
   fetchCarDetail()
   fetchInstructors()
+  fetchAllCars()
+  fetchDrivingLessons()
+  document.addEventListener('click', handleInstrModalOutsideClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleInstrModalOutsideClick)
 })
 </script>
 
@@ -1322,7 +1516,7 @@ onMounted(() => {
 .item-label { font-size: 13.5px; color: #6B7280; }
 .item-value { font-size: 14px; color: #111827; }
 .font-bold { font-weight: 700; }
-.link-value { color: #2D6A4F; cursor: pointer; }
+.link-value { color: #2563EB; text-decoration: underline; cursor: pointer; }
 .link-value:hover { text-decoration: underline; }
 .font-mono { font-family: monospace; }
 
@@ -1394,9 +1588,79 @@ onMounted(() => {
 .history-table { width: 100%; border-collapse: collapse; }
 .history-table th { text-align: left; font-size: 11.5px; font-weight: 700; color: #6B7280; padding: 8px 10px; border-bottom: 1px solid #E5E7EB; }
 .history-table td { font-size: 13px; color: #1F2937; padding: 10px; border-bottom: 1px solid #F3F4F6; }
+/* Sticky is applied to <thead> itself, not to individual <th> cells — that
+   keeps both header rows (labels + filters) moving as a single pinned unit. */
+.history-table thead { position: sticky; top: 0; z-index: 3; }
 .current-badge { display: inline-block; padding: 2px 10px; background: #DCFCE7; color: #15803D; border-radius: 12px; font-size: 11px; font-weight: 700; }
 .oil-snapshot-row { font-size: 11.5px; color: #4B5563; white-space: nowrap; }
 .text-muted { color: #9CA3AF; }
+
+/* ── Column-head filters (driving lesson history table) ──────────── */
+.history-table thead tr.col-filter-row th { padding: 6px 8px; background: #FAFAFB; }
+.col-filter-input, .col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  outline: none;
+  background: white;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus, .col-filter-select:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0FDF4; }
+
+/* ── Row-fetch-count pagination bar (driving lesson history) ─────── */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #F9FAFB;
+  border-top: 1px solid #E5E7EB;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pagination-info { font-size: 12.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 6px; font-size: 11.5px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-label { font-size: 12.5px; font-weight: 600; color: #4B5563; }
+.select-wrap { position: relative; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 
 /* Modal Styles */
 .modal-dialog {
@@ -1454,6 +1718,26 @@ select.form-input {
 
 /* Searchable instructor select */
 .searchable-select { position: relative; }
+.searchable-select .form-input.has-clear { padding-right: 34px; }
+.btn-clear-instructor {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: #F3F4F6;
+  color: #6B7280;
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 1;
+}
+.btn-clear-instructor:hover { background: #E5E7EB; color: #374151; }
 .searchable-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1.5px solid #E5E7EB; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-height: 200px; overflow-y: auto; z-index: 20; }
 .searchable-option { padding: 9px 14px; font-size: 13.5px; color: #374151; cursor: pointer; }
 .searchable-option:hover { background: #F3F4F6; }

@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     # Local
     "management",
@@ -101,7 +102,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalisation
 # ---------------------------------------------------------------------------
 LANGUAGE_CODE = "uz"
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Tashkent"
 USE_I18N = True
 USE_TZ = True
 
@@ -151,6 +152,21 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
+    # No throttling existed at all before this — every endpoint, including
+    # the login/token endpoint, could be hit an unlimited number of times
+    # per second by one client. These rates are deliberately generous (this
+    # is an internal staff/student tool, not a public API) — the point is a
+    # floor that stops a single runaway client or script from drowning out
+    # everyone else, not to constrain normal usage.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "30/minute",
+        "user": "300/minute",
+        "login": "10/minute",
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -165,9 +181,25 @@ SIMPLE_JWT = {
     # every 10 days never has to log back in.
     "REFRESH_TOKEN_LIFETIME": timedelta(days=10),
     "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": False,
+    "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_FIELD_NAME": "phone",
+}
+
+# ---------------------------------------------------------------------------
+# Cache — backs DRF's request throttling above. Redis (already running for
+# Celery) rather than Django's default local-memory cache, which each
+# gunicorn worker process would keep a separate copy of — under
+# --workers 3, that would silently let each throttle scope run at ~3x its
+# configured rate instead of one shared count across the whole process.
+# A different DB index than Celery's broker (db 0) so cache keys and
+# Celery's queue data never collide on the same Redis instance.
+# ---------------------------------------------------------------------------
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.environ.get("DJANGO_CACHE_URL", "redis://redis:6379/1"),
+    }
 }
 
 # ---------------------------------------------------------------------------

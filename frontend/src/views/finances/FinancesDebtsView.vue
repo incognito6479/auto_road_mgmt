@@ -4,17 +4,9 @@
     <!-- Page Header -->
     <div class="page-top">
       <div>
-        <h2 class="page-main-title">Qarzdorlar Ro'yxati (Debts)</h2>
+        <h2 class="page-main-title">Qarzdorlar Ro'yxati</h2>
         <p class="page-sub-title">Shartnoma to'lovi to'liq to'lanmagan barcha qarzdor o'quvchilar ro'yxati</p>
       </div>
-
-      <button class="btn-primary-action" @click="openGeneralPayModal">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        <span>Qarzdorlik to'lovini kiritish</span>
-      </button>
     </div>
 
     <!-- Metrics Cards -->
@@ -23,7 +15,7 @@
         <div class="card-metric-icon">⚠️</div>
         <div>
           <span class="metric-lbl">Qarzdor O'quvchilar Soni</span>
-          <h4 class="metric-val text-red">{{ debtEnrollments.length }} ta o'quvchi</h4>
+          <h4 class="metric-val text-red">{{ filteredDebtEnrollments.length }} ta o'quvchi</h4>
         </div>
       </div>
 
@@ -38,105 +30,194 @@
 
     <!-- Table Section with Filters -->
     <div class="table-section-card margin-top">
-      <div class="toolbar-bar">
-        <div class="search-box">
-          <svg viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
-            <circle cx="8.5" cy="8.5" r="5.5"/>
-            <line x1="13" y1="13" x2="18" y2="18"/>
-          </svg>
-          <input
-            v-model="filterSearchQuery"
-            type="text"
-            placeholder="O'quvchi F.I.SH., JSHSHR yoki telefon..."
-            class="search-input"
-          />
-        </div>
-
-        <div class="filter-controls">
-          <div class="filter-item">
-            <label class="flabel">Kategoriya:</label>
-            <div class="select-wrap-relative">
-              <select v-model="filterCategory" class="fselect-field">
-                <option value="">Barcha kategoriyalar</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                  {{ cat.name }}
-                </option>
-              </select>
-              <div class="select-chevron-icon">▼</div>
-            </div>
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Guruh:</label>
-            <div class="select-wrap-relative">
-              <select v-model="filterGroup" class="fselect-field">
-                <option value="">Barcha guruhlar</option>
-                <option v-for="g in groupOptions" :key="g" :value="g">
-                  {{ g }}
-                </option>
-              </select>
-              <div class="select-chevron-icon">▼</div>
-            </div>
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Sertifikat:</label>
-            <div class="select-wrap-relative">
-              <select v-model="filterCertificate" class="fselect-field">
-                <option value="">Barchasi</option>
-                <option value="bor">Bor</option>
-                <option value="yoq">Yo'q</option>
-              </select>
-              <div class="select-chevron-icon">▼</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="total-count">
-          Jami: <strong>{{ filteredDebtEnrollments.length }}</strong> ta qarzdor
-        </div>
-      </div>
-
       <div class="table-container">
         <div v-if="loading" class="state-box">
           <div class="spinner"></div>
           <span>Qarzdorlar ro'yxati yuklanmoqda...</span>
         </div>
 
-        <div v-else-if="filteredDebtEnrollments.length === 0" class="empty-state">
-          <p>Qarzdor o'quvchilar topilmadi</p>
-        </div>
-
-        <table v-else class="data-table">
+        <div v-else class="table-scroll-area">
+        <table class="data-table">
           <thead>
             <tr>
               <th>O'quvchi F.I.SH.</th>
-              <th>Kategoriya / Guruh</th>
+              <th>Kategoriya</th>
+              <th>Agent</th>
+              <th>Guruh nomi</th>
+              <th>Guruh boshlanishi</th>
+              <th>Guruh tugashi</th>
               <th class="th-cert">Sertifikat</th>
               <th class="th-amount">Shartnoma Summasi</th>
-              <th class="th-amount">To'langan Summa</th>
+              <th class="th-amount">O'quvchi to'lagan summa</th>
               <th class="th-amount">Qarzdorlik Summasi</th>
               <th>Holati</th>
-              <th style="text-align: right;">Amallar</th>
+              <th>Izoh</th>
+              <th style="width: 110px; text-align: right;">Amallar</th>
+            </tr>
+            <tr class="col-filter-row">
+              <th>
+                <input v-model="filterStudentName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCategory" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterAgent" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="a in agentOptions" :key="a.id" :value="a.id">{{ a.name }}</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <input v-model="filterGroup" class="col-filter-input" type="text" placeholder="Guruh nomi..." />
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupStart', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupStart', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button v-if="startDateFrom || startDateTo" type="button" class="btn-clear-date" @click="startDateFrom = ''; startDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="startDateFrom" type="date" class="col-date-input" title="Guruh boshlanishi (dan)" />
+                  <input v-model="startDateTo" type="date" class="col-date-input" title="Guruh boshlanishi (gacha)" />
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupEnd', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupEnd', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button v-if="endDateFrom || endDateTo" type="button" class="btn-clear-date" @click="endDateFrom = ''; endDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="endDateFrom" type="date" class="col-date-input" title="Guruh tugashi (dan)" />
+                  <input v-model="endDateTo" type="date" class="col-date-input" title="Guruh tugashi (gacha)" />
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCertificate" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option value="bor">Bor</option>
+                    <option value="yoq">Yo'q</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterEnrolledAmount" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="amt in distinctEnrolledAmounts" :key="amt" :value="amt">{{ formatMoney(amt) }}</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paidAmountSort === 'asc' }" title="O'sish tartibida" @click="setSort('paidAmount', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paidAmountSort === 'desc' }" title="Kamayish tartibida" @click="setSort('paidAmount', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: debtAmountSort === 'asc' }" title="O'sish tartibida" @click="setSort('debtAmount', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: debtAmountSort === 'desc' }" title="Kamayish tartibida" @click="setSort('debtAmount', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterStatus" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option value="new">Yangi</option>
+                    <option value="enrolled">Faol</option>
+                    <option value="finished">Tugatgan</option>
+                    <option value="canceled">Bekor qilingan</option>
+                  </select>
+                </div>
+              </th>
+              <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="e in filteredDebtEnrollments" :key="e.id" class="table-row">
+            <tr v-if="displayedDebtEnrollments.length === 0">
+              <td colspan="13" class="no-data">Qarzdor o'quvchilar topilmadi</td>
+            </tr>
+            <tr v-for="e in displayedDebtEnrollments" :key="e.id" class="table-row">
               <td class="td-name">
                 <div class="student-name-link" @click="goStudent(e.student)">{{ e.student_name || 'Noma\'lum' }}</div>
-                <div class="student-sub">
-                  <div v-if="e.student_phone">📞 {{ formatPhone(e.student_phone) }}</div>
-                  <div v-if="e.student_phone2">📞 {{ formatPhone(e.student_phone2) }} (qo'shimcha)</div>
-                  <div v-if="e.student_jshshr">JSHSHR: {{ e.student_jshshr }}</div>
-                </div>
+              </td>
+              <td><span class="cat-pill">{{ e.category_name || '-' }}</span></td>
+              <td>
+                <span v-if="e.agent" class="link-value" @click="goAgent(e.agent)">{{ e.agent_name || '-' }}</span>
+                <span v-else>-</span>
               </td>
               <td>
-                <span class="cat-pill">{{ e.category_name || '-' }}</span>
-                <div v-if="e.group_name" class="group-sub">{{ e.group_name }}</div>
-                <div v-if="groupsById[e.group]" class="group-dates">
-                  {{ formatDate(groupsById[e.group].started_at) }} — {{ formatDate(groupsById[e.group].ends_at) }}
-                </div>
+                <span v-if="e.group" class="link-value" @click="goGroup(e.group)">{{ e.group_name || '-' }}</span>
+                <span v-else>{{ e.group_name || '-' }}</span>
               </td>
+              <td>{{ groupsById[e.group] ? formatDate(groupsById[e.group].started_at) : '-' }}</td>
+              <td>{{ groupsById[e.group] ? formatDate(groupsById[e.group].ends_at) : '-' }}</td>
               <td class="td-cert">
                 <span v-if="e.student_certificate_number">{{ certLabel(e) }}</span>
                 <span v-else>-</span>
@@ -149,6 +230,7 @@
               <td>
                 <span class="status-chip" :class="e.status">{{ statusText(e.status) }}</span>
               </td>
+              <td>{{ e.notes || '-' }}</td>
               <td style="text-align: right;">
                 <button class="btn-pay-action" @click="openPayModal(e)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="13" height="13">
@@ -161,6 +243,28 @@
             </tr>
           </tbody>
         </table>
+        </div>
+      </div>
+
+      <!-- Pagination controls -->
+      <div class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ sortedDebtEnrollments.length }}</strong> tadan <strong>{{ displayedDebtEnrollments.length }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions">
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="debts-page-size">Ko'rsatish:</label>
+          <div class="select-wrap-relative">
+            <select id="debts-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -187,43 +291,8 @@
           <form @submit.prevent="savePayment" class="modal-body">
             <div v-if="modalError" class="alert-error">{{ modalError }}</div>
 
-            <!-- Searchable Student Selector (For General Payment Button) -->
-            <div class="form-group" v-if="isGeneralModal">
-              <label class="flabel required">Qarzdor O'quvchini Ism bo'yicha Qidirish *</label>
-              <div class="searchable-select-wrap">
-                <input
-                  v-model="studentSearchQuery"
-                  type="text"
-                  class="finput search-input-field"
-                  placeholder="Ism bo'yicha qidiring..."
-                  @focus="showStudentDropdown = true"
-                  @keydown="onStudentKeydown"
-                />
-                <div v-if="showStudentDropdown" class="dropdown-options-list">
-                  <div
-                    v-for="(e, idx) in filteredModalDebtEnrollments"
-                    :key="e.id"
-                    class="dropdown-option-item"
-                    :class="{ selected: selectedEnrollmentId === e.id, highlighted: studentKb.highlightedIndex.value === idx }"
-                    @click="selectDebtEnrollment(e)"
-                  >
-                    <div class="opt-name">{{ e.student_name }}</div>
-                    <div class="opt-sub">
-                      {{ e.category_name }} | Qarzdorlik: <strong class="text-red">-{{ formatMoney(getDebt(e)) }}</strong>
-                    </div>
-                  </div>
-                  <div v-if="filteredModalDebtEnrollments.length === 0" class="dropdown-empty">
-                    Qarzdor o'quvchi topilmadi
-                  </div>
-                </div>
-              </div>
-              <div v-if="selectedStudentLabel" class="selected-chip">
-                Tanlandi: <strong>{{ selectedStudentLabel }}</strong>
-              </div>
-            </div>
-
-            <!-- Student Info Display (When Pre-selected from row) -->
-            <div v-else class="info-card-box">
+            <!-- Student Info Display (pre-selected from the row's "To'lov qilish" button) -->
+            <div class="info-card-box">
               <div class="info-line">
                 <span>O'quvchi:</span> <strong>{{ activeEnrollment?.student_name }}</strong>
               </div>
@@ -263,6 +332,12 @@
               </div>
             </div>
 
+            <!-- Click check photo -->
+            <div class="form-group" v-if="payForm.method === 'click'">
+              <label class="flabel">Click cheki rasmi (ixtiyoriy)</label>
+              <FileSelectInput ref="checkFileInputRef" accept="image/*" @change="onCheckFileChange" />
+            </div>
+
             <!-- Notes -->
             <div class="form-group">
               <label class="flabel">Izoh / Eslatma</label>
@@ -284,14 +359,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
-import { formatMoney, formatPhone, formatDate } from '@/utils/formatters'
-import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+import { formatMoney, formatDate } from '@/utils/formatters'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -308,21 +383,54 @@ const groupsById = computed(() => {
   return map
 })
 
-const filterSearchQuery = ref('')
+const filterStudentName = ref('')
 const filterCategory = ref('')
+const filterAgent = ref('')
 const filterGroup = ref('')
 const filterCertificate = ref('')
+const filterStatus = ref('')
+
+const filterEnrolledAmount = ref('')
+const startDateFrom = ref('')
+const startDateTo = ref('')
+const endDateFrom = ref('')
+const endDateTo = ref('')
+
+// ── Row-fetch-count selector ──────────────────────────────────
+// Controls how many of the *filtered* debtors show per page (see
+// displayedDebtEnrollments below). The fetch itself always pulls every
+// enrollment — debt totals/metrics and filtering all need to see every
+// debtor, not just whatever page happened to be fetched. Defaults to
+// "Barchasi", preserving the previous behavior of always showing every
+// debtor at once.
+const pageSizeOption = ref('all')
+const currentPage = ref(1)
+
+// ── Sorting (group start/end, paid amount, debt amount) — only one column
+// sorts at a time. ──────────────────────────────────────────────────────
+const groupStartSort = ref('') // '', 'asc', 'desc'
+const groupEndSort = ref('')
+const paidAmountSort = ref('')
+const debtAmountSort = ref('')
+
+const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, paidAmount: paidAmountSort, debtAmount: debtAmountSort }
+function setSort(column, direction) {
+  const target = sortRefs[column]
+  Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
+  target.value = target.value === direction ? '' : direction
+}
+
+// Row-fetch-count no longer needs a backend round trip — it only resets to
+// page 1 of the filtered result set; every filter/sort/page above is
+// purely client-side.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
 
 const showPayModal = ref(false)
-const isGeneralModal = ref(false)
 const activeEnrollment = ref(null)
-const selectedEnrollmentId = ref(null)
 const saving = ref(false)
 const modalError = ref(null)
-
-const studentSearchQuery = ref('')
-const showStudentDropdown = ref(false)
-const selectedStudentLabel = ref('')
 
 const payForm = ref({ amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
@@ -338,56 +446,119 @@ const debtEnrollments = computed(() => {
 })
 
 const totalDebtSum = computed(() => {
-  return debtEnrollments.value.reduce((sum, e) => sum + getDebt(e), 0)
+  return filteredDebtEnrollments.value.reduce((sum, e) => sum + getDebt(e), 0)
 })
 
-const filteredModalDebtEnrollments = computed(() => {
-  const q = studentSearchQuery.value.toLowerCase().trim()
-  if (!q) return debtEnrollments.value
-  return debtEnrollments.value.filter(e => (e.student_name || '').toLowerCase().includes(q))
+// Built from the debtors actually on screen, not a separate unrelated
+// "all agents" fetch — an agent only shows up as a filter option if one of
+// their referred students actually has debt right now.
+const agentOptions = computed(() => {
+  const map = new Map()
+  debtEnrollments.value.forEach(e => {
+    if (e.agent && !map.has(e.agent)) map.set(e.agent, e.agent_name || '')
+  })
+  return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-const groupOptions = computed(() => {
-  const names = debtEnrollments.value.map(e => e.group_name).filter(Boolean)
-  return [...new Set(names)].sort()
+// Deduped, sorted contract (enrolled) amounts among the current debtors.
+const distinctEnrolledAmounts = computed(() => {
+  const amounts = new Set()
+  debtEnrollments.value.forEach(e => {
+    if (!e.enrolled_free && e.enrolled_amount) amounts.add(Number(e.enrolled_amount))
+  })
+  return [...amounts].sort((a, b) => a - b)
 })
 
 const certLabel = (e) => `${e.student_certificate_series || ''} ${e.student_certificate_number}`.trim()
 
 const filteredDebtEnrollments = computed(() => {
   return debtEnrollments.value.filter(e => {
-    const q = filterSearchQuery.value.toLowerCase().trim()
-    const matchSearch = !q ||
-      (e.student_name || '').toLowerCase().includes(q) ||
-      (e.student_jshshr || '').toLowerCase().includes(q) ||
-      (e.student_phone || '').toLowerCase().includes(q) ||
-      (e.group_name || '').toLowerCase().includes(q) ||
-      (e.category_name || '').toLowerCase().includes(q)
+    const q = filterStudentName.value.toLowerCase().trim()
+    const matchSearch = !q || (e.student_name || '').toLowerCase().includes(q)
 
-    const catVal = filterCategory.value
-    const catObj = categories.value.find(c => String(c.id) === String(catVal))
-    const catName = catObj ? catObj.name.toLowerCase() : ''
+    const matchCategory = !filterCategory.value || String(e.category) === String(filterCategory.value)
 
-    const matchCategory = !catVal ||
-      String(e.category) === String(catVal) ||
-      (e.category_name && e.category_name.toLowerCase() === catVal.toString().toLowerCase()) ||
-      (catName && e.category_name && e.category_name.toLowerCase() === catName)
+    const matchAgent = !filterAgent.value || e.agent === filterAgent.value
 
-    const matchGroup = !filterGroup.value || e.group_name === filterGroup.value
+    const matchGroup = !filterGroup.value || (e.group_name || '').toLowerCase().includes(filterGroup.value.toLowerCase().trim())
 
     const hasCert = !!e.student_certificate_number
     const matchCertificate = !filterCertificate.value ||
       (filterCertificate.value === 'bor' && hasCert) ||
       (filterCertificate.value === 'yoq' && !hasCert)
 
-    return matchSearch && matchCategory && matchGroup && matchCertificate
+    const matchStatus = !filterStatus.value || e.status === filterStatus.value
+
+    const matchEnrolledAmount = !filterEnrolledAmount.value || Number(e.enrolled_amount) === Number(filterEnrolledAmount.value)
+
+    const gStart = groupsById.value[e.group]?.started_at
+    const gEnd = groupsById.value[e.group]?.ends_at
+    const matchStartDate = (!startDateFrom.value || (gStart && gStart >= startDateFrom.value)) &&
+      (!startDateTo.value || (gStart && gStart <= startDateTo.value))
+    const matchEndDate = (!endDateFrom.value || (gEnd && gEnd >= endDateFrom.value)) &&
+      (!endDateTo.value || (gEnd && gEnd <= endDateTo.value))
+
+    return matchSearch && matchCategory && matchAgent && matchGroup && matchCertificate && matchStatus && matchEnrolledAmount && matchStartDate && matchEndDate
   })
 })
+
+// Sorting doesn't remove rows, only reorders — applied after filtering, before
+// the pagination slice. Enrollments without a resolved group sort last
+// regardless of direction.
+const sortedDebtEnrollments = computed(() => {
+  const list = [...filteredDebtEnrollments.value]
+
+  if (paidAmountSort.value || debtAmountSort.value) {
+    const direction = paidAmountSort.value || debtAmountSort.value
+    const dir = direction === 'asc' ? 1 : -1
+    list.sort((a, b) => {
+      const va = paidAmountSort.value ? (Number(a.paid_amount) || 0) : getDebt(a)
+      const vb = paidAmountSort.value ? (Number(b.paid_amount) || 0) : getDebt(b)
+      return (va - vb) * dir
+    })
+    return list
+  }
+
+  const field = groupStartSort.value ? 'started_at' : (groupEndSort.value ? 'ends_at' : null)
+  if (!field) return list
+  const direction = groupStartSort.value || groupEndSort.value
+  list.sort((a, b) => {
+    const da = groupsById.value[a.group]?.[field] || ''
+    const db = groupsById.value[b.group]?.[field] || ''
+    if (!da && !db) return 0
+    if (!da) return 1
+    if (!db) return -1
+    return direction === 'asc' ? da.localeCompare(db) : db.localeCompare(da)
+  })
+  return list
+})
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(sortedDebtEnrollments.value.length / displayPageSize.value))
+})
+const displayedDebtEnrollments = computed(() => {
+  if (pageSizeOption.value === 'all') return sortedDebtEnrollments.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return sortedDebtEnrollments.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
 async function fetchEnrollments() {
   loading.value = true
   try {
-    const res = await api.get('/enrollments/', { params: { page_size: 1000 } })
+    // Always the full enrollment list — filtering/sorting/pagination above
+    // all need to see every debtor, not just one page of them.
+    const res = await api.get('/enrollments/', { params: { page_size: 100000 } })
     enrollments.value = res.data.results || res.data
   } catch (err) { console.error(err) }
   finally { loading.value = false }
@@ -421,22 +592,16 @@ function goStudent(studentId) {
   if (studentId) router.push(`/students/${studentId}`)
 }
 
-function openGeneralPayModal() {
-  isGeneralModal.value = true
-  activeEnrollment.value = null
-  selectedEnrollmentId.value = null
-  studentSearchQuery.value = ''
-  selectedStudentLabel.value = ''
-  showStudentDropdown.value = false
-  modalError.value = null
-  payForm.value = { amountFormatted: '', amount: 0, method: 'cash', notes: 'Qarzdorlik to\'lovi' }
-  showPayModal.value = true
+function goGroup(groupId) {
+  if (groupId) router.push(`/groups/${groupId}`)
+}
+
+function goAgent(agentId) {
+  if (agentId) router.push(`/agents/${agentId}`)
 }
 
 function openPayModal(e) {
-  isGeneralModal.value = false
   activeEnrollment.value = e
-  selectedEnrollmentId.value = e.id
   const debtAmt = getDebt(e)
   modalError.value = null
   payForm.value = {
@@ -445,26 +610,19 @@ function openPayModal(e) {
     method: 'cash',
     notes: 'Qarzdorlik to\'lovi'
   }
+  checkFile.value = null
+  checkFileInputRef.value?.reset()
   showPayModal.value = true
-}
-
-function selectDebtEnrollment(e) {
-  selectedEnrollmentId.value = e.id
-  activeEnrollment.value = e
-  selectedStudentLabel.value = `${e.student_name} (${e.category_name})`
-  studentSearchQuery.value = e.student_name
-  showStudentDropdown.value = false
-  const debtAmt = getDebt(e)
-  payForm.value.amount = debtAmt
-  payForm.value.amountFormatted = formatMoney(debtAmt, false)
-}
-const studentKb = useSearchSelectKeyboard()
-function onStudentKeydown(e) {
-  studentKb.onKeydown(e, filteredModalDebtEnrollments.value, selectDebtEnrollment, () => { showStudentDropdown.value = false })
 }
 
 function closePayModal() {
   showPayModal.value = false
+}
+
+const checkFile = ref(null)
+const checkFileInputRef = ref(null)
+function onCheckFileChange(e) {
+  checkFile.value = e.target.files?.[0] || null
 }
 
 function onAmountInput(e) {
@@ -476,7 +634,7 @@ function onAmountInput(e) {
 }
 
 async function savePayment() {
-  const enrollmentId = isGeneralModal.value ? selectedEnrollmentId.value : activeEnrollment.value?.id
+  const enrollmentId = activeEnrollment.value?.id
   if (!enrollmentId) {
     modalError.value = "O'quvchini tanlang."
     return
@@ -489,14 +647,26 @@ async function savePayment() {
   saving.value = true
   modalError.value = null
   try {
-    await api.post('/payments/', {
-      user: authStore.user?.id,
-      enrollment: enrollmentId,
-      amount: payForm.value.amount,
-      status: 'accepted',
-      method: payForm.value.method,
-      notes: payForm.value.notes
-    })
+    if (checkFile.value) {
+      const formData = new FormData()
+      formData.append('user', authStore.user?.id)
+      formData.append('enrollment', enrollmentId)
+      formData.append('amount', payForm.value.amount)
+      formData.append('status', 'accepted')
+      formData.append('method', payForm.value.method)
+      if (payForm.value.notes) formData.append('notes', payForm.value.notes)
+      formData.append('click_check_image', checkFile.value)
+      await api.post('/payments/', formData)
+    } else {
+      await api.post('/payments/', {
+        user: authStore.user?.id,
+        enrollment: enrollmentId,
+        amount: payForm.value.amount,
+        status: 'accepted',
+        method: payForm.value.method,
+        notes: payForm.value.notes
+      })
+    }
     closePayModal()
     fetchEnrollments()
   } catch (err) {
@@ -518,14 +688,6 @@ onMounted(() => {
 .page-main-title { font-size: 22px; font-weight: 700; color: #111827; }
 .page-sub-title { font-size: 13px; color: #6B7280; margin-top: 2px; }
 
-.btn-primary-action {
-  display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px;
-  background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%); color: white;
-  border-radius: 12px; font-weight: 700; font-size: 13.5px;
-  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.25); cursor: pointer; transition: all 0.2s ease;
-  &:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(45, 106, 79, 0.35); }
-}
-
 .metrics-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
 .card-metric { background: white; border: 1.5px solid #E5E7EB; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
 .card-metric-icon { font-size: 30px; }
@@ -537,22 +699,146 @@ onMounted(() => {
 .margin-top { margin-top: 24px; }
 
 .table-section-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
-.toolbar-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; gap: 16px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 10px; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 9px 14px; width: 300px; &:focus-within { border-color: #2D6A4F; background: white; box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12); } }
-.search-input { border: none; background: transparent; outline: none; font-size: 13.5px; width: 100%; }
+.flabel { font-size: 12.5px; font-weight: 600; color: #4B5563; }
 
-.filter-controls { display: flex; align-items: center; gap: 12px; }
-.filter-item { display: flex; align-items: center; gap: 6px; }
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) can stick to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
+.table-scroll-area { overflow: auto; max-height: 600px; }
 
-.total-count { font-size: 13px; color: #6B7280; }
-.table-container { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
+.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; white-space: nowrap; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
 
-.student-name-link { font-weight: 700; color: #111827; cursor: pointer; &:hover { color: #2D6A4F; text-decoration: underline; } }
-.student-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+/* Sticky is applied to <thead> itself, not to individual <th> cells —
+   that keeps both header rows (labels + filters) moving as a single
+   pinned unit with no per-row offset math needed. */
+.data-table thead { position: sticky; top: 0; z-index: 3; }
+
+/* ── Column-head filters ─────────────────────────────────── */
+/* Higher specificity than ".data-table th" (0,1,1) on purpose — equal
+   specificity would let source order decide and flatten this row's
+   padding/background back to the label row's values. */
+.data-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.col-filter-input, .col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus, .col-filter-select:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
+
+/* ── Per-column date-range filters (under sort buttons) ────── */
+.col-date-range {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+  font-family: 'Inter', sans-serif;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+.no-data { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
+
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
+
+.student-name-link { font-weight: 700; color: #2563EB; cursor: pointer; text-decoration: underline; &:hover { color: #1D4ED8; } }
+.link-value { cursor: pointer; color: #2563EB !important; font-weight: 700 !important; text-decoration: underline; &:hover { color: #1D4ED8 !important; } }
 .cat-pill { padding: 4px 10px; background: #E8F5E9; color: #2D6A4F; border-radius: 8px; font-size: 12px; font-weight: 700; }
-.group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
-.group-dates { font-size: 13px; font-weight: 600; color: #374151; margin-top: 4px; white-space: nowrap; }
 .debt-chip { padding: 4px 10px; background: #FEE2E2; color: #991B1B; border-radius: 8px; font-size: 12.5px; display: inline-block; }
 .th-cert, .td-cert, .th-amount, .td-amount { white-space: nowrap; }
 
@@ -561,6 +847,7 @@ onMounted(() => {
   &.enrolled { background: #DCFCE7; color: #15803D; }
   &.new { background: #E0F2FE; color: #0369A1; }
   &.finished { background: #F3F4F6; color: #4B5563; }
+  &.canceled { background: #FEE2E2; color: #991B1B; }
 }
 
 /* PAY ACTION BUTTON WITH DEBT AMOUNT (COMPACT) */
@@ -603,13 +890,6 @@ onMounted(() => {
 .select-wrap-relative { position: relative; width: 100%; }
 .select-chevron-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9CA3AF; font-size: 10px; }
 
-.searchable-select-wrap { position: relative; width: 100%; }
-.dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #2D6A4F; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
-.dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #F0FDF4; } &.selected { background: #E8F5E9; font-weight: 700; } &.highlighted { background: #F0FDF4; } }
-.opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }
-.opt-sub { font-size: 11.5px; color: #6B7280; margin-top: 1px; }
-.dropdown-empty { padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px; }
-.selected-chip { font-size: 12.5px; color: #2D6A4F; margin-top: 6px; }
 
 .amount-input { font-size: 16.5px; font-weight: 800; color: #2D6A4F; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }

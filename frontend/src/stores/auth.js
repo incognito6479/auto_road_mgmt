@@ -100,7 +100,9 @@ export const useAuthStore = defineStore('auth', {
       await this.fetchCurrentUser()
     },
 
-    logout() {
+    async logout() {
+      const refreshToken = this.refreshToken
+
       this.accessToken = null
       this.refreshToken = null
       this.user = null
@@ -108,6 +110,16 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('refresh_token')
       sessionStorage.removeItem('access_token')
       sessionStorage.removeItem('refresh_token')
+
+      if (refreshToken) {
+        try {
+          await api.post('/auth/token/blacklist/', { refresh: refreshToken })
+        } catch (err) {
+          // Token may already be expired/blacklisted — local state is
+          // already cleared above, so this is best-effort only.
+          console.error('Failed to blacklist refresh token:', err)
+        }
+      }
     },
   },
 })

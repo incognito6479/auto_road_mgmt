@@ -34,6 +34,9 @@
         <button class="quick-action-btn action-amber" @click="openAddCertModal">
           <span class="qa-icon">+</span> Sertifikat qo'shish
         </button>
+        <button v-if="authStore.isSuperuser" class="quick-action-btn action-teal" @click="openImportExcelModal">
+          <span class="qa-icon">+</span> Excel orqali guruh yuklash
+        </button>
       </div>
     </div>
 
@@ -46,7 +49,10 @@
           </div>
           <span class="stat-label">{{ s.label }}</span>
         </div>
-        <div class="stat-value">{{ loadingStats ? '…' : s.value }}</div>
+        <div class="stat-value">
+          <span v-if="loadingStats" class="stat-spinner"></span>
+          <template v-else>{{ s.value }}</template>
+        </div>
       </div>
     </div>
 
@@ -69,7 +75,10 @@
             </div>
             <span class="stat-label">{{ s.label }}</span>
           </div>
-          <div class="stat-value">{{ loadingMoneyStats ? '…' : s.value }}</div>
+          <div class="stat-value">
+            <span v-if="loadingMoneyStats" class="stat-spinner"></span>
+            <template v-else>{{ s.value }}</template>
+          </div>
         </div>
       </div>
     </div>
@@ -188,6 +197,11 @@
               </div>
             </div>
 
+            <div class="form-group" v-if="payForm.method === 'click'">
+              <label class="flabel">Click cheki rasmi (ixtiyoriy)</label>
+              <FileSelectInput ref="payCheckFileInputRef" accept="image/*" @change="onPayCheckFileChange" />
+            </div>
+
             <div class="form-group">
               <label class="flabel">Izoh / Eslatma</label>
               <input v-model="payForm.notes" type="text" class="finput" placeholder="Ixtiyoriy izoh..." />
@@ -247,7 +261,10 @@
                     :class="{ selected: agentPayForm.agent === ag.id, highlighted: agentPayKb.highlightedIndex.value === idx }"
                     @click="selectPayAgent(ag)"
                   >
-                    <div class="opt-name">👤 {{ ag.full_name }}</div>
+                    <div class="opt-name">
+                      👤 {{ ag.full_name }}
+                      <span v-if="ag.user" class="opt-teacher-badge">{{ ag.user_role === 'instructor' ? 'Instruktor' : "O'qituvchi" }}</span>
+                    </div>
                     <div class="opt-sub">{{ ag.phone || 'Telefon ko\'rsatilmagan' }}</div>
                   </div>
                   <div v-if="filteredAgentsForPay.length === 0" class="dropdown-empty">
@@ -257,6 +274,40 @@
               </div>
               <div v-if="selectedAgentLabel" class="selected-chip gold-chip">
                 Tanlandi: <strong>{{ selectedAgentLabel }}</strong>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="flabel">O'quvchini Ism bo'yicha Qidirish (Ixtiyoriy)</label>
+              <div class="searchable-select-wrap" ref="agentPayStudentSelectRef">
+                <input
+                  v-model="agentPayStudentSearchQuery"
+                  type="text"
+                  class="finput search-input-field"
+                  :placeholder="agentPayForm.agent ? 'O\'quvchi ismini kiriting...' : 'Barcha o\'quvchilar (avval agentni tanlang)'"
+                  @click="showAgentPayStudentDropdown = !showAgentPayStudentDropdown"
+                  @input="showAgentPayStudentDropdown = true"
+                  @keydown="onAgentPayStudentKeydown"
+                />
+                <button v-if="agentPayForm.enrollment" type="button" class="input-clear-btn" title="O'quvchini bekor qilish" @click="clearAgentPayStudentSelection">✕</button>
+                <div v-if="showAgentPayStudentDropdown" class="dropdown-options-list">
+                  <div
+                    v-for="(e, idx) in filteredEnrollmentsForAgentPay"
+                    :key="e.id"
+                    class="dropdown-option-item"
+                    :class="{ selected: agentPayForm.enrollment === e.id, highlighted: agentPayStudentKb.highlightedIndex.value === idx }"
+                    @click="selectAgentPayStudent(e)"
+                  >
+                    <div class="opt-name">{{ e.student_name }}</div>
+                    <div class="opt-sub">{{ e.category_name }} {{ e.group_name ? `(${e.group_name})` : '' }}</div>
+                  </div>
+                  <div v-if="filteredEnrollmentsForAgentPay.length === 0" class="dropdown-empty">
+                    Mos o'quvchi topilmadi
+                  </div>
+                </div>
+              </div>
+              <div v-if="selectedAgentPayStudentLabel" class="selected-chip gold-chip">
+                Tanlandi: <strong>{{ selectedAgentPayStudentLabel }}</strong>
               </div>
             </div>
 
@@ -518,6 +569,78 @@
       </div>
     </Transition>
 
+    <!-- ── Import Excel Modal ─────────────────────────── -->
+    <Transition name="modal">
+      <div v-if="showImportModal" class="modal-overlay" @click.self="closeImportModal">
+        <div class="modal-card">
+          <div class="modal-header-banner teal-banner">
+            <div class="header-left-info">
+              <div class="header-icon-box teal-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <polyline points="9 15 12 12 15 15"></polyline>
+                </svg>
+              </div>
+              <div>
+                <h3>Excel Orqali Guruh Yuklash</h3>
+                <p>Eski tizimdagi guruh, o'quvchi va to'lov ma'lumotlarini import qilish</p>
+              </div>
+            </div>
+            <button class="btn-modal-close" @click="closeImportModal">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <div v-if="importError" class="alert-error">{{ importError }}</div>
+
+            <template v-if="!importTaskId">
+              <div class="form-group">
+                <label class="flabel required">Excel fayl (.xlsx, .xlsm, .xls) *</label>
+                <FileSelectInput ref="importFileInputRef" accept=".xlsx,.xlsm,.xls" @change="onImportFileChange" />
+              </div>
+              <p class="import-hint">Fayldagi "Гурух" varag'idan guruhlar, o'quvchilar, to'lovlar va agent bonuslari import qilinadi. Bu amalni faqat bir marta bajarish tavsiya etiladi.</p>
+            </template>
+
+            <template v-else-if="importPolling">
+              <div class="import-progress">
+                <div class="spinner"></div>
+                <p>Import bajarilmoqda, bu bir necha daqiqa vaqt olishi mumkin...</p>
+              </div>
+            </template>
+
+            <template v-else-if="importSummary">
+              <div class="import-summary">
+                <p class="import-summary-title">Import muvaffaqiyatli yakunlandi:</p>
+                <ul>
+                  <li>Yangi kategoriyalar: <strong>{{ importSummary.created.categories }}</strong></li>
+                  <li>Yangi guruhlar: <strong>{{ importSummary.created.groups }}</strong></li>
+                  <li>Yangi agentlar: <strong>{{ importSummary.created.agents }}</strong></li>
+                  <li>Yangi o'quvchilar: <strong>{{ importSummary.created.students }}</strong></li>
+                  <li>Yangi ro'yxatga olishlar: <strong>{{ importSummary.created.enrollments }}</strong></li>
+                  <li>Yangi to'lovlar: <strong>{{ importSummary.created.payments }}</strong></li>
+                  <li>Agent bonus to'lovlari: <strong>{{ importSummary.created.bonus_payments }}</strong></li>
+                </ul>
+                <template v-if="importSummary.warnings.length > 0">
+                  <p class="import-summary-title">Ogohlantirishlar ({{ importSummary.warnings.length }}):</p>
+                  <ul class="import-warnings-list">
+                    <li v-for="(w, idx) in importSummary.warnings" :key="idx">{{ w }}</li>
+                  </ul>
+                </template>
+              </div>
+            </template>
+
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="closeImportModal">{{ importSummary ? 'Yopish' : 'Bekor qilish' }}</button>
+              <button v-if="!importTaskId" type="button" class="btn-save btn-teal-save" :disabled="importSaving || !importSelectedFile" @click="submitImportExcel">
+                {{ importSaving ? "Yuklanmoqda..." : "Yuklash" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
   </AppLayout>
 </template>
 
@@ -525,6 +648,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatNumber } from '@/utils/formatters'
@@ -578,7 +702,17 @@ const monthIncome = ref(0)
 const monthOutcomeAgents = ref(0)
 const monthOutcomeTeachers = ref(0)
 const monthOutcomeOther = ref(0)
+const monthReturned = ref(0)
+const monthBank = ref(0)
 const totalDebt = ref(0)
+// Clean/net accepted income: gross "accepted" collections minus everything
+// paid back out (returned, paid to instructors, agent/teacher bonuses, bank
+// transfers) — for the same date-range filter as the raw figures above.
+const netIncome = computed(() => Math.max(
+  0,
+  monthIncome.value - monthReturned.value - monthOutcomeOther.value -
+  monthOutcomeAgents.value - monthOutcomeTeachers.value - monthBank.value
+))
 
 const enrollments = ref([])
 const agents = ref([])
@@ -636,7 +770,7 @@ async function fetchMoneyStats() {
     const [paymentsRes, enrollmentsRes, agentsRes, teachersRes] = await Promise.all([
       api.get('/payments/', {
         params: {
-          status: 'accepted,bonus,bonus_teacher,paid',
+          status: 'accepted,bonus,bonus_teacher,paid,returned,bank',
           date_from: moneyDateFrom.value,
           date_to: moneyDateTo.value,
           page_size: 1000,
@@ -652,6 +786,8 @@ async function fetchMoneyStats() {
     monthOutcomeAgents.value = periodPayments.filter(p => p.status === 'bonus').reduce((s, p) => s + (Number(p.amount) || 0), 0)
     monthOutcomeTeachers.value = periodPayments.filter(p => p.status === 'bonus_teacher').reduce((s, p) => s + (Number(p.amount) || 0), 0)
     monthOutcomeOther.value = periodPayments.filter(p => p.status === 'paid').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    monthReturned.value = periodPayments.filter(p => p.status === 'returned').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    monthBank.value = periodPayments.filter(p => p.status === 'bank').reduce((s, p) => s + (Number(p.amount) || 0), 0)
 
     enrollments.value = listOf(enrollmentsRes.data)
     totalDebt.value = enrollments.value.reduce((s, e) => s + getDebt(e), 0)
@@ -679,7 +815,7 @@ const countStatCards = computed(() => [
 ])
 
 const moneyStatCards = computed(() => [
-  { key: 'income', label: 'Davr daromadi', value: formatMoney(monthIncome.value), iconBg: '#d1fae5', icon: icoMoney },
+  { key: 'income', label: 'Davr sof daromadi', value: formatMoney(netIncome.value), iconBg: '#d1fae5', icon: icoMoney },
   { key: 'outcome-agents', label: 'Davr chiqimi (Agentlar)', value: formatMoney(monthOutcomeAgents.value), iconBg: '#fef3c7', icon: icoOutcome },
   { key: 'outcome-teachers', label: "Davr chiqimi (O'qituvchilar)", value: formatMoney(monthOutcomeTeachers.value), iconBg: '#fef3c7', icon: icoOutcome },
   { key: 'outcome-other', label: 'Davr chiqimi (Boshqa)', value: formatMoney(monthOutcomeOther.value), iconBg: '#fef3c7', icon: icoOutcome },
@@ -749,9 +885,16 @@ function openAcceptPaymentModal() {
   showStudentDropdown.value = false
   resetPayGroupSelect()
   payForm.value = { enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
+  payCheckFile.value = null
+  payCheckFileInputRef.value?.reset()
   showAcceptPaymentModal.value = true
 }
 function closeAcceptPaymentModal() { showAcceptPaymentModal.value = false }
+const payCheckFile = ref(null)
+const payCheckFileInputRef = ref(null)
+function onPayCheckFileChange(e) {
+  payCheckFile.value = e.target.files?.[0] || null
+}
 
 function selectPayEnrollment(e) {
   payForm.value.enrollment = e.id
@@ -778,14 +921,26 @@ async function submitAcceptPayment() {
   paySaving.value = true
   payModalError.value = null
   try {
-    await api.post('/payments/', {
-      user: authStore.user?.id,
-      enrollment: payForm.value.enrollment,
-      amount: payForm.value.amount,
-      status: 'accepted',
-      method: payForm.value.method,
-      notes: payForm.value.notes,
-    })
+    if (payCheckFile.value) {
+      const formData = new FormData()
+      formData.append('user', authStore.user?.id)
+      formData.append('enrollment', payForm.value.enrollment)
+      formData.append('amount', payForm.value.amount)
+      formData.append('status', 'accepted')
+      formData.append('method', payForm.value.method)
+      if (payForm.value.notes) formData.append('notes', payForm.value.notes)
+      formData.append('click_check_image', payCheckFile.value)
+      await api.post('/payments/', formData)
+    } else {
+      await api.post('/payments/', {
+        user: authStore.user?.id,
+        enrollment: payForm.value.enrollment,
+        amount: payForm.value.amount,
+        status: 'accepted',
+        method: payForm.value.method,
+        notes: payForm.value.notes,
+      })
+    }
     closeAcceptPaymentModal()
     fetchDashboardStats()
   } catch (err) {
@@ -803,7 +958,7 @@ const agentSearchQuery = ref('')
 const showAgentDropdown = ref(false)
 const selectedAgentLabel = ref('')
 const agentSelectRef = ref(null)
-const agentPayForm = ref({ agent: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
+const agentPayForm = ref({ agent: '', enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
 const filteredAgentsForPay = computed(() => {
   const q = agentSearchQuery.value.toLowerCase().trim()
@@ -811,12 +966,30 @@ const filteredAgentsForPay = computed(() => {
   return agents.value.filter(a => (a.full_name || '').toLowerCase().includes(q))
 })
 
+// Student cascade — narrows to the selected agent's own students, just like
+// the Bonus (agent) payment create modal in the finance section.
+const agentPayStudentSearchQuery = ref('')
+const showAgentPayStudentDropdown = ref(false)
+const selectedAgentPayStudentLabel = ref('')
+const agentPayStudentSelectRef = ref(null)
+
+const filteredEnrollmentsForAgentPay = computed(() => {
+  const q = agentPayStudentSearchQuery.value.toLowerCase().trim()
+  return enrollments.value.filter(e => {
+    if (agentPayForm.value.agent && e.agent !== agentPayForm.value.agent) return false
+    return !q || (e.student_name || '').toLowerCase().includes(q)
+  })
+})
+
 function openPayAgentModal() {
   agentPayModalError.value = null
   agentSearchQuery.value = ''
   selectedAgentLabel.value = ''
   showAgentDropdown.value = false
-  agentPayForm.value = { agent: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
+  agentPayStudentSearchQuery.value = ''
+  selectedAgentPayStudentLabel.value = ''
+  showAgentPayStudentDropdown.value = false
+  agentPayForm.value = { agent: '', enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
   showPayAgentModal.value = true
 }
 function closePayAgentModal() { showPayAgentModal.value = false }
@@ -826,10 +999,29 @@ function selectPayAgent(a) {
   selectedAgentLabel.value = `${a.full_name} (${a.phone || 'No phone'})`
   agentSearchQuery.value = a.full_name
   showAgentDropdown.value = false
+  agentPayStudentSearchQuery.value = ''
+  selectedAgentPayStudentLabel.value = ''
+  agentPayForm.value.enrollment = ''
 }
 const agentPayKb = useSearchSelectKeyboard()
 function onAgentPayKeydown(e) {
   agentPayKb.onKeydown(e, filteredAgentsForPay.value, selectPayAgent, () => { showAgentDropdown.value = false })
+}
+
+function selectAgentPayStudent(e) {
+  agentPayForm.value.enrollment = e.id
+  selectedAgentPayStudentLabel.value = `${e.student_name} (${e.category_name})`
+  agentPayStudentSearchQuery.value = e.student_name
+  showAgentPayStudentDropdown.value = false
+}
+function clearAgentPayStudentSelection() {
+  agentPayStudentSearchQuery.value = ''
+  selectedAgentPayStudentLabel.value = ''
+  agentPayForm.value.enrollment = ''
+}
+const agentPayStudentKb = useSearchSelectKeyboard()
+function onAgentPayStudentKeydown(e) {
+  agentPayStudentKb.onKeydown(e, filteredEnrollmentsForAgentPay.value, selectAgentPayStudent, () => { showAgentPayStudentDropdown.value = false })
 }
 
 function onAgentPayAmountInput(e) {
@@ -849,6 +1041,7 @@ async function submitPayAgent() {
     await api.post('/payments/', {
       user: authStore.user?.id,
       agent: agentPayForm.value.agent,
+      enrollment: agentPayForm.value.enrollment || null,
       amount: agentPayForm.value.amount,
       status: 'bonus',
       method: agentPayForm.value.method,
@@ -1032,7 +1225,6 @@ async function submitAddCert() {
     await api.patch(`/students/${addCertForm.value.student}/`, {
       certificate_series: series,
       certificate_number: number,
-      certificate_added_date: new Date().toISOString(),
     })
     closeAddCertModal()
   } catch (err) {
@@ -1040,6 +1232,77 @@ async function submitAddCert() {
   } finally {
     addCertSaving.value = false
   }
+}
+
+// ── Excel Import Modal ──────────────────────────────────
+const showImportModal = ref(false)
+const importFileInputRef = ref(null)
+const importSelectedFile = ref(null)
+const importSaving = ref(false)
+const importError = ref('')
+const importTaskId = ref(null)
+const importPolling = ref(false)
+const importSummary = ref(null)
+let importPollTimer = null
+
+function openImportExcelModal() {
+  importError.value = ''
+  importSelectedFile.value = null
+  importFileInputRef.value?.reset()
+  importTaskId.value = null
+  importPolling.value = false
+  importSummary.value = null
+  showImportModal.value = true
+}
+
+function closeImportModal() {
+  showImportModal.value = false
+  clearInterval(importPollTimer)
+}
+
+function onImportFileChange(e) {
+  importSelectedFile.value = e.target.files?.[0] || null
+}
+
+async function submitImportExcel() {
+  if (!importSelectedFile.value) {
+    importError.value = "Excel faylni tanlang."
+    return
+  }
+  importSaving.value = true
+  importError.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('file', importSelectedFile.value)
+    const res = await api.post('/import-excel/', formData)
+    importTaskId.value = res.data.task_id
+    pollImportStatus()
+  } catch (err) {
+    importError.value = err.response?.data?.detail || "Yuklashda xatolik yuz berdi."
+  } finally {
+    importSaving.value = false
+  }
+}
+
+function pollImportStatus() {
+  importPolling.value = true
+  importPollTimer = setInterval(async () => {
+    try {
+      const res = await api.get(`/import-excel/status/${importTaskId.value}/`)
+      if (res.data.state === 'SUCCESS') {
+        importSummary.value = res.data.result
+        importPolling.value = false
+        clearInterval(importPollTimer)
+      } else if (res.data.state === 'FAILURE') {
+        importError.value = res.data.error || "Import bajarilishida xatolik yuz berdi."
+        importTaskId.value = null
+        importPolling.value = false
+        clearInterval(importPollTimer)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }, 3000)
 }
 
 // Both searchable selects close when the click lands outside their own wrapper.
@@ -1051,6 +1314,9 @@ function handleSelectOutsideClick(e) {
   }
   if (agentSelectRef.value && !agentSelectRef.value.contains(e.target)) {
     showAgentDropdown.value = false
+  }
+  if (agentPayStudentSelectRef.value && !agentPayStudentSelectRef.value.contains(e.target)) {
+    showAgentPayStudentDropdown.value = false
   }
   if (teacherSelectRef.value && !teacherSelectRef.value.contains(e.target)) {
     showTeacherDropdown.value = false
@@ -1073,6 +1339,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleSelectOutsideClick)
+  clearInterval(importPollTimer)
 })
 </script>
 
@@ -1172,6 +1439,7 @@ onUnmounted(() => {
 .action-green  { background: linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%); }
 .action-amber  { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
 .action-indigo { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
+.action-teal   { background: linear-gradient(135deg, #0D9488 0%, #115E59 100%); }
 
 /* ── Dashboard body layout ──────────────────────────────── */
 .stats-row {
@@ -1206,6 +1474,7 @@ onUnmounted(() => {
 
 .stat-label { font-size: 12.5px; color: #6B7280; font-weight: 500; line-height: 1.3; }
 .stat-value { font-size: 22px; font-weight: 700; color: #111827; line-height: 1.2; }
+.stat-spinner { display: inline-block; width: 18px; height: 18px; border: 2.5px solid #E5E7EB; border-top-color: #0D9488; border-radius: 50%; animation: spin 0.8s linear infinite; }
 
 /* ── Shared modal styles (Accept payment / Pay agent) ───── */
 .modal-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -1222,6 +1491,8 @@ onUnmounted(() => {
 .header-icon-box.gold-box { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
 .header-icon-box.indigo-box { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
 .header-icon-box.amber-box { background: linear-gradient(135deg, #D97706 0%, #92400E 100%); }
+.modal-header-banner.teal-banner { background: linear-gradient(180deg, #F0FDFA 0%, #FFFFFF 100%); }
+.header-icon-box.teal-box { background: linear-gradient(135deg, #0D9488 0%, #115E59 100%); }
 .btn-modal-close { background: none; border: none; font-size: 18px; color: #9CA3AF; cursor: pointer; }
 .modal-body { padding: 24px; }
 
@@ -1254,6 +1525,7 @@ onUnmounted(() => {
 .dropdown-option-item.highlighted { background: #F0FDF4; }
 .opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }
 .opt-sub { font-size: 11.5px; color: #6B7280; margin-top: 1px; }
+.opt-teacher-badge { margin-left: 6px; padding: 2px 7px; font-size: 10px; font-weight: 700; color: #4338CA; background: #E0E7FF; border-radius: 6px; vertical-align: middle; }
 .dropdown-empty { padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px; }
 .selected-chip { font-size: 12.5px; color: #2D6A4F; margin-top: 6px; }
 .selected-chip.gold-chip { color: #D97706; }
@@ -1268,8 +1540,19 @@ onUnmounted(() => {
 .btn-gold-save { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); }
 .btn-indigo-save { background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); }
 .btn-amber-save { background: linear-gradient(135deg, #D97706 0%, #92400E 100%); }
+.btn-teal-save { background: linear-gradient(135deg, #0D9488 0%, #115E59 100%); }
 .finput.text-upper { text-transform: uppercase; }
 .alert-error { background: #FEE2E2; color: #991B1B; padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
+
+.import-hint { font-size: 12.5px; color: #6B7280; margin-top: 10px; line-height: 1.5; }
+.import-progress { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 0; color: #4B5563; font-size: 13.5px; }
+.spinner { width: 30px; height: 30px; border: 3px solid #E5E7EB; border-top-color: #0D9488; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.import-summary-title { font-weight: 700; color: #111827; font-size: 13.5px; margin: 14px 0 6px; }
+.import-summary-title:first-child { margin-top: 0; }
+.import-summary ul { margin: 0; padding-left: 18px; font-size: 13px; color: #374151; }
+.import-summary li { margin-bottom: 4px; }
+.import-warnings-list { max-height: 220px; overflow-y: auto; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px 10px 10px 26px; color: #92400E; font-size: 12.5px; }
 
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }

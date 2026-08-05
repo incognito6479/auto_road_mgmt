@@ -39,13 +39,18 @@
   overflow-x: auto;
 }
 
-/* Sticky header row */
-.table-wrap table thead th,
-.table-container table thead th,
-.table-scroll table thead th,
-.pay-table-wrap table thead th,
-.payments-table-wrap table thead th,
-.waiting-students-table-wrap table thead th {
+/* Sticky header row — applied to the <thead> element itself, not to each
+   <th> cell, so both header rows (column labels + the column-filter row)
+   move together as a single pinned unit. Sticking every `th` independently
+   with the same `top: 0` would make the second row (filter inputs)
+   eventually hit its own `top: 0` threshold once scrolled far enough and
+   slide up to overlap the first row, instead of staying stacked beneath it. */
+.table-wrap table thead,
+.table-container table thead,
+.table-scroll table thead,
+.pay-table-wrap table thead,
+.payments-table-wrap table thead,
+.waiting-students-table-wrap table thead {
   position: sticky !important;
   top: 0 !important;
   z-index: 3 !important;

@@ -3,26 +3,17 @@
 
     <div class="page-top">
       <div>
-        <h2 class="page-main-title">Agent Bonuslari (Status: Bonus)</h2>
+        <h2 class="page-main-title">Agent Bonuslari</h2>
         <p class="page-sub-title">Hamkor agentlarga to'langan bonuslar va qaytarilgan bonuslar ro'yxati</p>
       </div>
 
-      <div style="display: flex; gap: 12px; align-items: center;">
-        <button v-if="authStore.canReturnMoney" class="btn-primary-action btn-red-action" @click="openReturnModal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
-            <path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6 6m-6-6l6-6"></path>
-          </svg>
-          <span>Bonusni Qaytarish</span>
-        </button>
-
-        <button class="btn-primary-action btn-gold" @click="openCreateModal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>Yangi bonus to'lovi</span>
-        </button>
-      </div>
+      <button class="btn-primary-action btn-gold" @click="openCreateModal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Bonus to'lovi</span>
+      </button>
     </div>
 
     <!-- Metrics Cards -->
@@ -58,6 +49,7 @@
             <tr>
               <th>Agent F.I.SH.</th>
               <th>O'quvchi F.I.SH.</th>
+              <th>O'quvchi to'lagan summa</th>
               <th>Kategoriya</th>
               <th>Guruh</th>
               <th>Guruh boshlanishi</th>
@@ -65,6 +57,8 @@
               <th>Bonus Summasi</th>
               <th>Usul</th>
               <th>Sana &amp; Vaqt</th>
+              <th>To'lovni kiritgan</th>
+              <th>Izoh</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
             </tr>
             <tr class="col-filter-row">
@@ -73,6 +67,26 @@
               </th>
               <th>
                 <input v-model="filterStudentName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: studentPaidSort === 'asc' }" title="O'sish tartibida" @click="setSort('studentPaid', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: studentPaidSort === 'desc' }" title="Kamayish tartibida" @click="setSort('studentPaid', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
               </th>
               <th>
                 <div class="select-wrap-relative">
@@ -103,6 +117,11 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="startDateFrom || startDateTo" type="button" class="btn-clear-date" @click="startDateFrom = ''; startDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="startDateFrom" type="date" class="col-date-input" title="Guruh boshlanishi (dan)" />
+                  <input v-model="startDateTo" type="date" class="col-date-input" title="Guruh boshlanishi (gacha)" />
                 </div>
               </th>
               <th>
@@ -123,9 +142,33 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="endDateFrom || endDateTo" type="button" class="btn-clear-date" @click="endDateFrom = ''; endDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="endDateFrom" type="date" class="col-date-input" title="Guruh tugashi (dan)" />
+                  <input v-model="endDateTo" type="date" class="col-date-input" title="Guruh tugashi (gacha)" />
                 </div>
               </th>
-              <th></th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: bonusAmountSort === 'asc' }" title="O'sish tartibida" @click="setSort('bonusAmount', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: bonusAmountSort === 'desc' }" title="Kamayish tartibida" @click="setSort('bonusAmount', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
               <th>
                 <div class="select-wrap-relative">
                   <select v-model="filterMethod" class="col-filter-select">
@@ -156,29 +199,44 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="paymentDateFrom || paymentDateTo" type="button" class="btn-clear-date" @click="paymentDateFrom = ''; paymentDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="paymentDateFrom" type="date" class="col-date-input" title="Sana (dan)" />
+                  <input v-model="paymentDateTo" type="date" class="col-date-input" title="Sana (gacha)" />
                 </div>
               </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCashierId" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="c in distinctCashiers" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
+                </div>
+              </th>
+              <th></th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="payments.length === 0">
-              <td colspan="10" class="no-data">Bonus statusidagi to'lovlar topilmadi</td>
+            <tr v-if="displayedPayments.length === 0">
+              <td colspan="13" class="no-data">Bonus statusidagi to'lovlar topilmadi</td>
             </tr>
-            <tr v-for="p in payments" :key="p.id" class="table-row">
+            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.agent" class="agent-name link-value" @click="goAgent(p.agent)">👤 {{ p.agent_name || 'Noma\'lum Agent' }}</div>
                 <div v-else class="agent-name">👤 {{ p.agent_name || 'Noma\'lum Agent' }}</div>
-                <div v-if="p.agent_phone" class="agent-phone">{{ p.agent_phone }}</div>
-                <div v-if="p.agent_phone2" class="agent-phone">{{ p.agent_phone2 }} (qo'shimcha)</div>
               </td>
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || '-' }}</div>
                 <div v-else class="student-name">{{ p.student_name || '-' }}</div>
-                <div v-if="p.student_jshshr" class="student-jshshr">JSHSHR: {{ p.student_jshshr }}</div>
               </td>
+              <td>{{ p.student_paid_amount != null ? formatMoney(p.student_paid_amount) : '-' }}</td>
               <td><span class="cat-pill">{{ p.category_name || '-' }}</span></td>
-              <td>{{ p.group_name || '-' }}</td>
+              <td>
+                <span v-if="p.group" class="link-value" @click="goGroup(p.group)">{{ p.group_name || '-' }}</span>
+                <span v-else>{{ p.group_name || '-' }}</span>
+              </td>
               <td>{{ p.group_started_at ? formatDate(p.group_started_at) : '-' }}</td>
               <td>{{ p.group_ends_at ? formatDate(p.group_ends_at) : '-' }}</td>
               <td class="td-amount">
@@ -186,6 +244,11 @@
               </td>
               <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
+              <td>
+                <span v-if="p.created_by" class="link-value" @click="goUser(p.created_by)">{{ p.created_by_name || '-' }}</span>
+                <span v-else>{{ p.created_by_name || '-' }}</span>
+              </td>
+              <td>{{ p.notes || '-' }}</td>
               <td style="text-align: right;">
                 <div class="row-actions">
                   <template v-if="authStore.isSuperuser">
@@ -213,12 +276,21 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
-          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
-          <span class="page-num">Sahifa {{ currentPage }} / {{ totalPages }}</span>
-          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="bonus-page-size">Ko'rsatish:</label>
+          <div class="select-wrap-relative">
+            <select id="bonus-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -249,7 +321,7 @@
             <!-- Searchable Agent Selector -->
             <div class="form-group" v-if="!isEditing">
               <label class="flabel required">Agentni Ism bo'yicha Qidirish *</label>
-              <div class="searchable-select-wrap">
+              <div class="searchable-select-wrap" ref="agentSelectWrapRef">
                 <input
                   v-model="agentSearchQuery"
                   type="text"
@@ -258,6 +330,7 @@
                   @focus="showAgentDropdown = true"
                   @keydown="onAgentKeydown"
                 />
+                <button v-if="form.agent" type="button" class="input-clear-btn" title="Agentni bekor qilish" @click="clearAgentSelection">✕</button>
                 <div v-if="showAgentDropdown" class="dropdown-options-list">
                   <div
                     v-for="(ag, idx) in filteredAgents"
@@ -266,7 +339,10 @@
                     :class="{ selected: form.agent === ag.id, highlighted: agentKb.highlightedIndex.value === idx }"
                     @click="selectAgent(ag)"
                   >
-                    <div class="opt-name">👤 {{ ag.full_name }}</div>
+                    <div class="opt-name">
+                      👤 {{ ag.full_name }}
+                      <span v-if="ag.user" class="opt-teacher-badge">{{ ag.user_role === 'instructor' ? 'Instruktor' : "O'qituvchi" }}</span>
+                    </div>
                     <div class="opt-sub">{{ ag.phone || 'Telefon ko\'rsatilmagan' }}</div>
                   </div>
                   <div v-if="filteredAgents.length === 0" class="dropdown-empty">
@@ -282,15 +358,16 @@
             <!-- Searchable Student Selector (Search by name) -->
             <div class="form-group" v-if="!isEditing">
               <label class="flabel">O'quvchini Ism bo'yicha Qidirish (Ixtiyoriy)</label>
-              <div class="searchable-select-wrap">
+              <div class="searchable-select-wrap" ref="studentSelectWrapRef">
                 <input
                   v-model="studentSearchQuery"
                   type="text"
                   class="finput search-input-field"
-                  placeholder="O'quvchi ismini kiriting..."
+                  :placeholder="form.agent ? 'O\'quvchi ismini kiriting...' : 'Barcha o\'quvchilar (avval agentni tanlang)'"
                   @focus="showStudentDropdown = true"
                   @keydown="onStudentKeydown"
                 />
+                <button v-if="form.enrollment" type="button" class="input-clear-btn" title="O'quvchini bekor qilish" @click="clearStudentSelection">✕</button>
                 <div v-if="showStudentDropdown" class="dropdown-options-list">
                   <div
                     v-for="(e, idx) in filteredEnrollments"
@@ -357,106 +434,6 @@
       </div>
     </Transition>
 
-    <!-- RETURN AGENT BONUS MONEY MODAL -->
-    <Transition name="modal">
-      <div v-if="showReturnModal" class="modal-overlay" @click.self="closeReturnModal">
-        <div class="modal-card">
-          <div class="modal-header-banner red-banner">
-            <div class="header-left-info">
-              <div class="header-icon-box red-box">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-                  <path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6 6m-6-6l6-6"></path>
-                </svg>
-              </div>
-              <div>
-                <h3>Agentdan Bonusni Qaytarish</h3>
-                <p>Agent berilgan bonusni qaytarganda kiritiladi</p>
-              </div>
-            </div>
-            <button class="btn-modal-close" @click="closeReturnModal">✕</button>
-          </div>
-
-          <form @submit.prevent="saveReturnBonus" class="modal-body">
-            <div v-if="returnModalError" class="alert-error">{{ returnModalError }}</div>
-
-            <!-- Searchable Agent Selector for Return -->
-            <div class="form-group">
-              <label class="flabel required">Agentni Ism bo'yicha Qidirish *</label>
-              <div class="searchable-select-wrap">
-                <input
-                  v-model="returnAgentSearchQuery"
-                  type="text"
-                  class="finput search-input-field"
-                  placeholder="Agent ismini kiriting..."
-                  @focus="showReturnAgentDropdown = true"
-                  @keydown="onReturnAgentKeydown"
-                />
-                <div v-if="showReturnAgentDropdown" class="dropdown-options-list">
-                  <div
-                    v-for="(ag, idx) in filteredReturnAgents"
-                    :key="ag.id"
-                    class="dropdown-option-item"
-                    :class="{ selected: returnForm.agent === ag.id, highlighted: returnAgentKb.highlightedIndex.value === idx }"
-                    @click="selectReturnAgent(ag)"
-                  >
-                    <div class="opt-name">👤 {{ ag.full_name }}</div>
-                    <div class="opt-sub">{{ ag.phone || 'No phone' }}</div>
-                  </div>
-                  <div v-if="filteredReturnAgents.length === 0" class="dropdown-empty">
-                    Mos agent topilmadi
-                  </div>
-                </div>
-              </div>
-              <div v-if="selectedReturnAgentLabel" class="selected-chip red-chip">
-                Tanlandi: <strong>{{ selectedReturnAgentLabel }}</strong>
-              </div>
-            </div>
-
-            <!-- Amount Input -->
-            <div class="form-group">
-              <label class="flabel required">Qaytarilayotgan Summa *</label>
-              <input
-                v-model="returnForm.amountFormatted"
-                type="text"
-                class="finput amount-input red-text"
-                placeholder="0"
-                required
-                @input="onReturnAmountInput"
-              />
-            </div>
-
-            <!-- Method Select -->
-            <div class="form-group">
-              <label class="flabel required">Qaytarish Usuli *</label>
-              <div class="select-wrap-relative">
-                <select v-model="returnForm.method" class="fselect-field">
-                  <option value="cash">Naqd</option>
-                  <option value="card">Karta</option>
-                  <option value="qr_code">QR code</option>
-                  <option value="click">Click</option>
-                  <option value="transfer">O'tkazma</option>
-                </select>
-                <div class="select-chevron-icon">▼</div>
-              </div>
-            </div>
-
-            <!-- Notes -->
-            <div class="form-group">
-              <label class="flabel">Qaytarish Sababi / Izoh</label>
-              <input v-model="returnForm.notes" type="text" class="finput" placeholder="Masalan: Bekor qilingan o'quvchi uchun bonus qaytarildi..." />
-            </div>
-
-            <div class="modal-footer">
-              <button type="button" class="btn-cancel" @click="closeReturnModal">Bekor qilish</button>
-              <button type="submit" class="btn-save btn-red-save" :disabled="returnSaving">
-                {{ returnSaving ? "Saqlanmoqda..." : "Qaytarishni Saqlash" }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Transition>
-
     <ConfirmDeleteModal
       ref="deleteModal"
       title="To'lovni O'chirish"
@@ -493,58 +470,153 @@ function goAgent(id) {
   router.push(`/agents/${id}`)
 }
 
+function goGroup(id) {
+  if (!id) return
+  router.push(`/groups/${id}`)
+}
+
+function goUser(id) {
+  if (!id) return
+  router.push(`/users/${id}`)
+}
+
 const payments = ref([])
 const enrollments = ref([])
 const agents = ref([])
 const categories = ref([])
 const loading = ref(true)
-const totalCount = ref(0)
 
-// ── Pagination state ─────────────────────────────────────────────────────
+// ── Row-fetch-count selector ──────────────────────────────────
+// fetchPayments always pulls the entire status=bonus scope (see
+// page_size: 100000 below) so every filter below sees every row, not just
+// whatever page happened to be loaded. pageSizeOption instead controls how
+// many of the *filtered* rows show per page (see displayedPayments/
+// changePage below).
+const pageSizeOption = ref('50')
 const currentPage = ref(1)
-const pageSize = 50
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
-
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
-  fetchPayments()
-}
 
 const filterAgentName = ref('')
 const filterStudentName = ref('')
 const filterCategory = ref('')
 const filterGroupName = ref('')
 const filterMethod = ref('')
+const filterCashierId = ref('')
+const startDateFrom = ref('')
+const startDateTo = ref('')
+const endDateFrom = ref('')
+const endDateTo = ref('')
+const paymentDateFrom = ref('')
+const paymentDateTo = ref('')
 
-// ── Group start/end and payment-date sorting ────────────────────────────
+// ── Sorting (group start/end, payment date, student-paid amount, bonus
+// amount) — only one column sorts at a time. ────────────────────────────
 const groupStartSort = ref('') // '', 'asc', 'desc'
 const groupEndSort = ref('')
 const paymentDateSort = ref('')
+const studentPaidSort = ref('')
+const bonusAmountSort = ref('')
 
-// Clicking the already-active direction clears the sort; clicking the other
-// direction (or another column) switches to it. Only one column sorts at a time.
+const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, paymentDate: paymentDateSort, studentPaid: studentPaidSort, bonusAmount: bonusAmountSort }
 function setSort(column, direction) {
-  if (column === 'groupStart') {
-    groupEndSort.value = ''
-    paymentDateSort.value = ''
-    groupStartSort.value = groupStartSort.value === direction ? '' : direction
-  } else if (column === 'groupEnd') {
-    groupStartSort.value = ''
-    paymentDateSort.value = ''
-    groupEndSort.value = groupEndSort.value === direction ? '' : direction
-  } else if (column === 'paymentDate') {
-    groupStartSort.value = ''
-    groupEndSort.value = ''
-    paymentDateSort.value = paymentDateSort.value === direction ? '' : direction
-  }
+  const target = sortRefs[column]
+  Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
+  target.value = target.value === direction ? '' : direction
 }
 
-const orderingParam = computed(() => {
-  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
-  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
-  if (paymentDateSort.value) return (paymentDateSort.value === 'desc' ? '-' : '') + 'created_at'
-  return ''
+// All header filters (agent name, student name, category, group name,
+// method, cashier, group start/end date ranges) and sorting run entirely on
+// the client against the already-fetched `payments` list — no per-keystroke
+// or per-filter network round trip, AND they see every row matching
+// status=bonus, not just whatever page happened to be fetched.
+const filteredPayments = computed(() => {
+  let list = payments.value
+
+  if (filterAgentName.value.trim()) {
+    const q = filterAgentName.value.trim().toLowerCase()
+    list = list.filter(p => (p.agent_name || '').toLowerCase().includes(q))
+  }
+  if (filterStudentName.value.trim()) {
+    const q = filterStudentName.value.trim().toLowerCase()
+    list = list.filter(p => (p.student_name || '').toLowerCase().includes(q))
+  }
+  if (filterCategory.value) {
+    list = list.filter(p => String(p.category) === String(filterCategory.value))
+  }
+  if (filterGroupName.value.trim()) {
+    const q = filterGroupName.value.trim().toLowerCase()
+    list = list.filter(p => (p.group_name || '').toLowerCase().includes(q))
+  }
+  if (filterMethod.value) {
+    list = list.filter(p => p.method === filterMethod.value)
+  }
+  if (filterCashierId.value) {
+    list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
+  }
+  if (startDateFrom.value) list = list.filter(p => p.group_started_at && p.group_started_at >= startDateFrom.value)
+  if (startDateTo.value) list = list.filter(p => p.group_started_at && p.group_started_at <= startDateTo.value)
+  if (endDateFrom.value) list = list.filter(p => p.group_ends_at && p.group_ends_at >= endDateFrom.value)
+  if (endDateTo.value) list = list.filter(p => p.group_ends_at && p.group_ends_at <= endDateTo.value)
+  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
+  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
+
+  if (groupStartSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.group_started_at || '').localeCompare(b.group_started_at || '')
+      return groupStartSort.value === 'desc' ? -d : d
+    })
+  } else if (groupEndSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.group_ends_at || '').localeCompare(b.group_ends_at || '')
+      return groupEndSort.value === 'desc' ? -d : d
+    })
+  } else if (paymentDateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.created_at || '').localeCompare(b.created_at || '')
+      return paymentDateSort.value === 'desc' ? -d : d
+    })
+  } else if (studentPaidSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (Number(a.student_paid_amount) || 0) - (Number(b.student_paid_amount) || 0)
+      return studentPaidSort.value === 'desc' ? -d : d
+    })
+  } else if (bonusAmountSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (Number(a.amount) || 0) - (Number(b.amount) || 0)
+      return bonusAmountSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
+})
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here so it self-corrects the moment a
+// filter shrinks the result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
+})
+const displayedPayments = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredPayments.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredPayments.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
+
+// Distinct cashiers among this status's payments, for the "To'lov qabul
+// qiluvchi" filter select — built from the full fetched batch, not the
+// currently filtered subset.
+const distinctCashiers = computed(() => {
+  const map = {}
+  payments.value.forEach(p => {
+    if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
+  })
+  return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
 })
 
 const showModal = ref(false)
@@ -563,37 +635,12 @@ const selectedStudentLabel = ref('')
 
 const form = ref({ agent: '', enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
-// Return Bonus Modal State
-const showReturnModal = ref(false)
-const returnSaving = ref(false)
-const returnModalError = ref(null)
-const returnAgentSearchQuery = ref('')
-const showReturnAgentDropdown = ref(false)
-const selectedReturnAgentLabel = ref('')
-const returnForm = ref({ agent: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
-
-// Unpaginated but filtered the same way as the table (minus pagination/
-// ordering) — feeds the metrics cards, so they reflect the currently
-// applied filters instead of always summing everything.
-const allPayments = ref([])
+// Metrics reflect the full filtered set (matching status=bonus + any active
+// column filters), not just the current page's slice.
 const metrics = computed(() => {
-  const total = allPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  return { total, count: allPayments.value.length }
+  const total = filteredPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
+  return { total, count: filteredPayments.value.length }
 })
-
-async function fetchAllPaymentsMetrics() {
-  try {
-    const params = { status: 'bonus', page_size: 1000 }
-    if (filterAgentName.value) params.agent_name = filterAgentName.value.trim()
-    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
-    if (filterMethod.value) params.method = filterMethod.value
-
-    const res = await api.get('/payments/', { params })
-    allPayments.value = res.data.results || res.data
-  } catch (err) { console.error(err) }
-}
 
 const filteredAgents = computed(() => {
   const q = agentSearchQuery.value.toLowerCase().trim()
@@ -601,33 +648,22 @@ const filteredAgents = computed(() => {
   return agents.value.filter(ag => (ag.full_name || '').toLowerCase().includes(q))
 })
 
-const filteredReturnAgents = computed(() => {
-  const q = returnAgentSearchQuery.value.toLowerCase().trim()
-  if (!q) return agents.value
-  return agents.value.filter(ag => (ag.full_name || '').toLowerCase().includes(q))
-})
-
 const filteredEnrollments = computed(() => {
   const q = studentSearchQuery.value.toLowerCase().trim()
-  if (!q) return enrollments.value
-  return enrollments.value.filter(e => (e.student_name || '').toLowerCase().includes(q))
+  return enrollments.value.filter(e => {
+    if (form.value.agent && e.agent !== form.value.agent) return false
+    return !q || (e.student_name || '').toLowerCase().includes(q)
+  })
 })
 
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'bonus', page: currentPage.value, page_size: pageSize }
-    if (filterAgentName.value) params.agent_name = filterAgentName.value.trim()
-    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
-    if (filterMethod.value) params.method = filterMethod.value
-    if (orderingParam.value) params.ordering = orderingParam.value
+    const params = { status: 'bonus', page: 1, page_size: 100000 }
 
     const res = await api.get('/payments/', { params })
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     payments.value = rawList
-    totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
   finally { loading.value = false }
 }
@@ -641,7 +677,7 @@ async function fetchEnrollments() {
 
 async function fetchAgents() {
   try {
-    const res = await api.get('/agents/')
+    const res = await api.get('/agents/', { params: { page_size: 1000 } })
     agents.value = res.data.results || res.data
   } catch (err) { console.error(err) }
 }
@@ -653,30 +689,14 @@ async function fetchCategories() {
   } catch (err) { console.error(err) }
 }
 
-// Text-input filters wait for the user to pause typing (1.2s) before
-// re-fetching, so each keystroke doesn't trigger its own request.
-let searchDebounceTimer = null
-watch([filterAgentName, filterStudentName, filterGroupName], () => {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    currentPage.value = 1
-    fetchPayments()
-    fetchAllPaymentsMetrics()
-  }, 1200)
-})
-
-// Category/method selects apply immediately and also refresh the cards.
-watch([filterCategory, filterMethod], () => {
-  clearTimeout(searchDebounceTimer)
+// pageSizeOption no longer needs a backend round trip — every column filter
+// (agent/student name, category, group, method, cashier, group start/end
+// date ranges) and sort above runs purely client-side in filteredPayments,
+// with zero debounce and no re-render that could steal focus/cursor
+// position from a text input. It only controls how many of the filtered
+// rows show per page, so just reset to page 1.
+watch(pageSizeOption, () => {
   currentPage.value = 1
-  fetchPayments()
-  fetchAllPaymentsMetrics()
-})
-
-// Sorting doesn't change which rows match, so it only re-fetches the table.
-watch([groupStartSort, groupEndSort, paymentDateSort], () => {
-  currentPage.value = 1
-  fetchPayments()
 })
 
 function selectAgent(ag) {
@@ -684,21 +704,40 @@ function selectAgent(ag) {
   selectedAgentLabel.value = `${ag.full_name} (${ag.phone || 'No phone'})`
   agentSearchQuery.value = ag.full_name
   showAgentDropdown.value = false
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
 }
+
+function clearAgentSelection() {
+  form.value.agent = ''
+  selectedAgentLabel.value = ''
+  agentSearchQuery.value = ''
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+
+function clearStudentSelection() {
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+
+const agentSelectWrapRef = ref(null)
+const studentSelectWrapRef = ref(null)
+function handleSelectOutsideClick(e) {
+  if (agentSelectWrapRef.value && !agentSelectWrapRef.value.contains(e.target)) {
+    showAgentDropdown.value = false
+  }
+  if (studentSelectWrapRef.value && !studentSelectWrapRef.value.contains(e.target)) {
+    showStudentDropdown.value = false
+  }
+}
+
 const agentKb = useSearchSelectKeyboard()
 function onAgentKeydown(e) {
   agentKb.onKeydown(e, filteredAgents.value, selectAgent, () => { showAgentDropdown.value = false })
-}
-
-function selectReturnAgent(ag) {
-  returnForm.value.agent = ag.id
-  selectedReturnAgentLabel.value = `${ag.full_name} (${ag.phone || 'No phone'})`
-  returnAgentSearchQuery.value = ag.full_name
-  showReturnAgentDropdown.value = false
-}
-const returnAgentKb = useSearchSelectKeyboard()
-function onReturnAgentKeydown(e) {
-  returnAgentKb.onKeydown(e, filteredReturnAgents.value, selectReturnAgent, () => { showReturnAgentDropdown.value = false })
 }
 
 function selectEnrollment(e) {
@@ -737,14 +776,6 @@ function onAmountInput(e) {
   form.value.amountFormatted = formatMoney(num, false)
 }
 
-function onReturnAmountInput(e) {
-  const digits = e.target.value.replace(/\D/g, '')
-  if (!digits) { returnForm.value.amount = 0; returnForm.value.amountFormatted = ''; return }
-  const num = parseInt(digits, 10)
-  returnForm.value.amount = num
-  returnForm.value.amountFormatted = formatMoney(num, false)
-}
-
 function openCreateModal() {
   isEditing.value = false
   editingId.value = null
@@ -758,17 +789,6 @@ function openCreateModal() {
   form.value = { agent: '', enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
   showModal.value = true
 }
-
-function openReturnModal() {
-  returnModalError.value = null
-  returnAgentSearchQuery.value = ''
-  selectedReturnAgentLabel.value = ''
-  showReturnAgentDropdown.value = false
-  returnForm.value = { agent: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' }
-  showReturnModal.value = true
-}
-
-function closeReturnModal() { showReturnModal.value = false }
 
 function openEditModal(p) {
   isEditing.value = true
@@ -801,30 +821,8 @@ async function savePayment() {
     }
     closeModal()
     fetchPayments()
-    fetchAllPaymentsMetrics()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
-}
-
-async function saveReturnBonus() {
-  if (!returnForm.value.agent) { returnModalError.value = "Agentni tanlang."; return }
-  if (!returnForm.value.amount || returnForm.value.amount <= 0) { returnModalError.value = "To'g'ri summani kiriting."; return }
-  returnSaving.value = true
-  returnModalError.value = null
-  try {
-    await api.post('/payments/', {
-      user: authStore.user?.id,
-      agent: returnForm.value.agent,
-      amount: returnForm.value.amount,
-      status: 'returned',
-      method: returnForm.value.method,
-      notes: `Agent bonus qaytarishi: ${returnForm.value.notes || ''}`
-    })
-    closeReturnModal()
-    fetchPayments()
-    fetchAllPaymentsMetrics()
-  } catch (err) { returnModalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
-  finally { returnSaving.value = false }
 }
 
 const deleteModal = ref(null)
@@ -846,7 +844,6 @@ async function performDelete() {
     await api.delete(`/payments/${deletingPayment.value.id}/`)
     deleteModal.value?.close()
     fetchPayments()
-    fetchAllPaymentsMetrics()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -856,12 +853,14 @@ async function performDelete() {
 
 onMounted(() => {
   fetchPayments()
-  fetchAllPaymentsMetrics()
   fetchEnrollments()
   fetchAgents()
   fetchCategories()
+  document.addEventListener('click', handleSelectOutsideClick)
 })
-onUnmounted(() => { clearTimeout(searchDebounceTimer) })
+onUnmounted(() => {
+  document.removeEventListener('click', handleSelectOutsideClick)
+})
 </script>
 
 <style scoped>
@@ -871,7 +870,6 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 
 .btn-primary-action { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 12px; font-weight: 700; font-size: 13.5px; cursor: pointer; transition: all 0.2s ease; }
 .btn-gold { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); color: white; box-shadow: 0 4px 14px rgba(217, 119, 6, 0.25); &:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(217, 119, 6, 0.35); } }
-.btn-red-action { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%); color: white; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25); &:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35); } }
 
 .metrics-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
 .card-metric { background: white; border: 1.5px solid #E5E7EB; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
@@ -943,13 +941,59 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #D97706; color: #D97706; background: #FFFBEB; }
 
+/* ── Per-column date-range filters (under sort buttons) ────── */
+.col-date-range {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+  font-family: 'Inter', sans-serif;
+}
+.col-date-input:focus { border-color: #D97706; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
 .no-data { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
 
-/* ── Pagination ───────────────────────────────────────────── */
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
 .pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
 .pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
 .pagination-actions { display: flex; align-items: center; gap: 8px; }
-.page-num { display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #D97706; outline: none; }
 .btn-page {
   padding: 6px 14px;
   background: white;
@@ -963,13 +1007,20 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 }
 .btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
 .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
 
 .agent-name { font-weight: 700; color: #D97706; }
-.link-value { cursor: pointer; }
-.link-value:hover { text-decoration: underline; }
-.agent-phone { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.link-value { cursor: pointer; color: #2563EB !important; font-weight: 700 !important; text-decoration: underline; }
+.link-value:hover { color: #1D4ED8 !important; }
 .student-name { font-weight: 600; color: #111827; }
-.student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .cat-pill { padding: 4px 10px; background: #FEF3C7; color: #92400E; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
@@ -982,9 +1033,9 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 
 .modal-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px; }
 .modal-card { background: white; border-radius: 20px; width: 100%; max-width: 500px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
-.modal-header-banner { padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #F3F4F6; &.gold-banner { background: linear-gradient(180deg, #FEF3C7 0%, #FFFFFF 100%); } &.red-banner { background: linear-gradient(180deg, #FEE2E2 0%, #FFFFFF 100%); } }
+.modal-header-banner { padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #F3F4F6; &.gold-banner { background: linear-gradient(180deg, #FEF3C7 0%, #FFFFFF 100%); } }
 .header-left-info { display: flex; align-items: center; gap: 12px; h3 { font-size: 17px; font-weight: 700; color: #111827; } p { font-size: 12px; color: #6B7280; margin-top: 2px; } }
-.header-icon-box { width: 42px; height: 42px; border-radius: 12px; color: white; display: flex; align-items: center; justify-content: center; &.gold-box { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); } &.red-box { background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%); } }
+.header-icon-box { width: 42px; height: 42px; border-radius: 12px; color: white; display: flex; align-items: center; justify-content: center; &.gold-box { background: linear-gradient(135deg, #D97706 0%, #B45309 100%); } }
 .btn-modal-close { background: none; border: none; font-size: 18px; color: #9CA3AF; cursor: pointer; }
 .modal-body { padding: 24px; }
 
@@ -1003,18 +1054,25 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 .select-chevron-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9CA3AF; font-size: 10px; }
 
 .searchable-select-wrap { position: relative; width: 100%; }
+.input-clear-btn {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%; border: none;
+  background: #E5E7EB; color: #4B5563; font-size: 11px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.input-clear-btn:hover { background: #D1D5DB; color: #111827; }
+.searchable-select-wrap .finput { padding-right: 34px; }
 .dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #D97706; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
 .dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #FEF3C7; } &.selected { background: #FDE68A; font-weight: 700; } &.highlighted { background: #FEF3C7; } }
 .opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }
 .opt-sub { font-size: 11.5px; color: #6B7280; margin-top: 1px; }
+.opt-teacher-badge { margin-left: 6px; padding: 2px 7px; font-size: 10px; font-weight: 700; color: #4338CA; background: #E0E7FF; border-radius: 6px; vertical-align: middle; }
 .dropdown-empty { padding: 12px; text-align: center; color: #9CA3AF; font-size: 13px; }
-.selected-chip { font-size: 12.5px; color: #D97706; margin-top: 6px; &.red-chip { color: #DC2626; } }
+.selected-chip { font-size: 12.5px; color: #D97706; margin-top: 6px; }
 
 .amount-input.gold-text { font-size: 16.5px; font-weight: 800; color: #B45309; }
-.amount-input.red-text { font-size: 16.5px; font-weight: 800; color: #DC2626; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 .btn-cancel { padding: 10px 18px; border: 1px solid #D1D5DB; background: white; border-radius: 10px; font-weight: 600; font-size: 13px; color: #374151; cursor: pointer; }
 .btn-gold-save { padding: 10px 22px; background: linear-gradient(135deg, #D97706 0%, #B45309 100%); color: white; border-radius: 10px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
-.btn-red-save { padding: 10px 22px; background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%); color: white; border-radius: 10px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
 .alert-error { background: #FEE2E2; color: #991B1B; padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
 </style>

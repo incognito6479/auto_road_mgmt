@@ -23,10 +23,14 @@ router.register(r"agents", views.AgentViewSet, basename="agent")
 router.register(r"holidays", views.HolidaysViewSet, basename="holiday")
 router.register(r"cars", views.CarViewSet, basename="car")
 router.register(r"driving-lessons", views.DrivingLessonsViewSet, basename="driving-lesson")
+router.register(r"autodrome-grants", views.AutodromeAccessGrantViewSet, basename="autodrome-grant")
 router.register(r"notifications", views.NotificationViewSet, basename="notification")
 router.register(r"teacher-reviews", views.TeacherReviewViewSet, basename="teacher-review")
 router.register(r"student-certificates", views.StudentCertificateViewSet, basename="student-certificate")
+router.register(r"attendance", views.AttendanceViewSet, basename="attendance")
 
 urlpatterns = [
+    path("import-excel/", views.import_excel_upload, name="import-excel-upload"),
+    path("import-excel/status/<str:task_id>/", views.import_excel_status, name="import-excel-status"),
     path("", include(router.urls)),
 ]

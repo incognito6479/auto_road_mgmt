@@ -4,7 +4,10 @@
     <div class="page-flex-col" ref="pageFlexColRef">
     <!-- Top action -->
     <div class="page-top">
-      <button v-if="authStore.isAdminOrSuperuser" class="btn-add" @click="openModal">Yangi O'quvchi Qo'shish</button>
+      <button v-if="authStore.isAdminOrSuperuser" class="btn-add" :disabled="openingModal" @click="openModal">
+        <span v-if="openingModal" class="btn-spinner"></span>
+        {{ openingModal ? 'Yuklanmoqda...' : "Yangi O'quvchi Qo'shish" }}
+      </button>
     </div>
 
     <!-- Enrollment status tabs -->
@@ -46,6 +49,7 @@
               <th>Guruh boshlanishi</th>
               <th>Guruh tugashi</th>
               <th>Passport Ma'lumotlari</th>
+              <th>Tug'ilgan sana</th>
               <th>Ro'yxatdan o'tgan sana</th>
               <th>To'langan</th>
               <th>Holat</th>
@@ -125,6 +129,11 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="groupStartDateFrom || groupStartDateTo" type="button" class="btn-clear-date" @click="groupStartDateFrom = ''; groupStartDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="groupStartDateFrom" type="date" class="col-date-input" title="Guruh boshlanishi (dan)" />
+                  <input v-model="groupStartDateTo" type="date" class="col-date-input" title="Guruh boshlanishi (gacha)" />
                 </div>
               </th>
               <th>
@@ -157,14 +166,94 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="groupEndDateFrom || groupEndDateTo" type="button" class="btn-clear-date" @click="groupEndDateFrom = ''; groupEndDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="groupEndDateFrom" type="date" class="col-date-input" title="Guruh tugashi (dan)" />
+                  <input v-model="groupEndDateTo" type="date" class="col-date-input" title="Guruh tugashi (gacha)" />
                 </div>
               </th>
-              <th colspan="6"></th>
+              <th></th>
+              <th>
+                <div class="col-sort-group">
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: birthDateSort === 'asc' }"
+                    title="O'sish tartibida (eskidan yangiga)"
+                    @click="setGroupSort('birth', 'asc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: birthDateSort === 'desc' }"
+                    title="Kamayish tartibida (yangidan eskiga)"
+                    @click="setGroupSort('birth', 'desc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button v-if="birthDateFrom || birthDateTo" type="button" class="btn-clear-date" @click="birthDateFrom = ''; birthDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="birthDateFrom" type="date" class="col-date-input" title="Tug'ilgan sana (dan)" />
+                  <input v-model="birthDateTo" type="date" class="col-date-input" title="Tug'ilgan sana (gacha)" />
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: joinedDateSort === 'asc' }"
+                    title="O'sish tartibida (eskidan yangiga)"
+                    @click="setGroupSort('joined', 'asc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="col-sort-icon-btn"
+                    :class="{ active: joinedDateSort === 'desc' }"
+                    title="Kamayish tartibida (yangidan eskiga)"
+                    @click="setGroupSort('joined', 'desc')"
+                  >
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button v-if="joinedDateFrom || joinedDateTo" type="button" class="btn-clear-date" @click="joinedDateFrom = ''; joinedDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="joinedDateFrom" type="date" class="col-date-input" title="Ro'yxatdan o'tgan sana (dan)" />
+                  <input v-model="joinedDateTo" type="date" class="col-date-input" title="Ro'yxatdan o'tgan sana (gacha)" />
+                </div>
+              </th>
+              <th colspan="4"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="displayedStudents.length === 0">
-              <td colspan="13" class="no-data">Ma'lumot topilmadi</td>
+              <td colspan="14" class="no-data">Ma'lumot topilmadi</td>
             </tr>
             <tr v-for="s in displayedStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
               <td class="td-name">
@@ -185,6 +274,7 @@
               <td class="td-muted">{{ s.groupStartedAt || '-' }}</td>
               <td class="td-muted">{{ s.groupEndsAt || '-' }}</td>
               <td class="td-muted">{{ s.passport }}</td>
+              <td class="td-muted">{{ s.birthDate || '-' }}</td>
               <td class="td-muted">{{ s.date_joined }}</td>
               <td class="td-muted">
                 <span v-if="s.enrolledFree" class="status-badge badge-free">Tekin</span>
@@ -210,20 +300,23 @@
       </div>
 
       <!-- Pagination controls -->
-      <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
-        <span class="pagination-info" style="font-size: 13.5px; color: #6B7280; font-weight: 500;">
-          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+      <div class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ filteredStudents.length }}</strong> tadan <strong>{{ displayedStudents.length }}</strong> ko'rsatilmoqda
         </span>
-        <div class="pagination-actions" style="display: flex; gap: 8px;">
-          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
-            Oldingi
-          </button>
-          <span class="page-num" style="display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px;">
-            Sahifa {{ currentPage }} / {{ totalPages }}
-          </span>
-          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
-            Keyingi
-          </button>
+        <div class="pagination-actions">
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="students-page-size">Ko'rsatish:</label>
+          <div class="select-wrap">
+            <select id="students-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -277,22 +370,12 @@
 
           <div class="form-group">
             <label class="form-label">O'quvchi rasmi (foto)</label>
-            <input
-              type="file"
-              accept="image/*"
-              class="form-input"
-              @change="onStudentPhotoChange"
-            />
+            <FileSelectInput ref="studentPhotoInputRef" accept="image/*" @change="onStudentPhotoChange" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Pasport rasmi / nusxasi</label>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              class="form-input"
-              @change="onPassportPhotoChange"
-            />
+            <FileSelectInput ref="passportPhotoInputRef" accept="image/*,.pdf" @change="onPassportPhotoChange" />
           </div>
 
           <!-- Row 2: Passport & JSHSHR -->
@@ -331,6 +414,17 @@
               placeholder="1234567"
               required
               maxlength="7"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="std-birth-date" class="form-label">Tug'ilgan sana</label>
+            <input
+              id="std-birth-date"
+              v-model="newStudent.birth_date"
+              type="date"
+              required
               class="form-input"
             />
           </div>
@@ -655,7 +749,7 @@
           </div>
 
           <!-- Row 6: Checkboxes, Custom Price & Notes -->
-          <div class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
+          <div v-if="authStore.isSuperuser" class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <input
                 id="std-enrolled-free"
@@ -676,7 +770,7 @@
             </div>
           </div>
 
-          <div v-if="newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
+          <div v-if="authStore.isSuperuser && newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
             <label for="std-enrolled-amount" class="form-label">Shartnoma summasi (so'm)</label>
             <input
               id="std-enrolled-amount"
@@ -686,6 +780,16 @@
               required
               class="form-input"
             />
+          </div>
+
+          <div class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+            <input
+              id="std-can-view-payments"
+              v-model="newStudent.can_view_payments"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            <label for="std-can-view-payments" class="form-checkbox-label" style="font-weight: 600; color: #374151; cursor: pointer; font-size: 13.5px;">O'quvchi to'lovlar tarixini ko'ra oladi</label>
           </div>
           <div class="form-group" style="grid-column: span 3;">
             <label for="std-notes" class="form-label">Eslatmalar</label>
@@ -755,22 +859,12 @@
 
           <div class="form-group">
             <label class="form-label">O'quvchi rasmi (foto)</label>
-            <input
-              type="file"
-              accept="image/*"
-              class="form-input"
-              @change="onEditStudentPhotoChange"
-            />
+            <FileSelectInput ref="editStudentPhotoInputRef" accept="image/*" @change="onEditStudentPhotoChange" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Pasport rasmi / nusxasi</label>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              class="form-input"
-              @change="onEditPassportPhotoChange"
-            />
+            <FileSelectInput ref="editPassportPhotoInputRef" accept="image/*,.pdf" @change="onEditPassportPhotoChange" />
           </div>
 
           <div class="form-group">
@@ -808,6 +902,17 @@
                 class="form-input"
               />
             </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-std-birth-date" class="form-label">Tug'ilgan sana</label>
+            <input
+              id="edit-std-birth-date"
+              v-model="editingStudent.birth_date"
+              type="date"
+              required
+              class="form-input"
+            />
           </div>
 
           <div class="form-group">
@@ -1076,6 +1181,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
@@ -1112,26 +1218,30 @@ const filterJshshr = ref('')
 const filterGroupName = ref('')
 const groupFilter = ref('') // '', 'true' (guruhga olingan), 'false' (guruhga olinmagan)
 
-// ── Group start/end sorting ─────────────────────────────────────
+// ── Date-column sorting & date-range filters (all client-side) ──────
 const groupStartSort = ref('') // '', 'asc', 'desc'
 const groupEndSort = ref('')
+const birthDateSort = ref('')
+const joinedDateSort = ref('')
+const groupStartDateFrom = ref('')
+const groupStartDateTo = ref('')
+const groupEndDateFrom = ref('')
+const groupEndDateTo = ref('')
+const birthDateFrom = ref('')
+const birthDateTo = ref('')
+const joinedDateFrom = ref('')
+const joinedDateTo = ref('')
 
 // Clicking the already-active direction clears the sort; clicking the other
-// direction (or the other column) switches to it. Only one column sorts at a time.
+// direction (or another column) switches to it. Only one column sorts at a time.
 function setGroupSort(column, direction) {
-  if (column === 'start') {
-    groupEndSort.value = ''
-    groupStartSort.value = groupStartSort.value === direction ? '' : direction
-  } else {
-    groupStartSort.value = ''
-    groupEndSort.value = groupEndSort.value === direction ? '' : direction
-  }
+  const refs = { start: groupStartSort, end: groupEndSort, birth: birthDateSort, joined: joinedDateSort }
+  const target = refs[column]
+  Object.entries(refs).forEach(([key, r]) => {
+    if (key !== column) r.value = ''
+  })
+  target.value = target.value === direction ? '' : direction
 }
-const orderingParam = computed(() => {
-  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
-  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
-  return ''
-})
 
 // ── Enrollment status tabs ─────────────────────────────────────
 const activeTab = ref('all')
@@ -1162,11 +1272,15 @@ function selectTab(key) {
   }
 }
 
-// Pagination state
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: fetch always pulls every row
+// matching the active scope tab (see fetchStudents below), filtering runs
+// client-side against the full set (filteredStudents), and pageSizeOption
+// instead controls how many of the *filtered* results are shown per page
+// (see displayedStudents/changePage below).
+const pageSizeOption = ref('50')
+const totalCount = ref(0) // total rows matching the active scope tab, per backend
 const currentPage = ref(1)
-const totalCount = ref(0)
-const pageSize = 50
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
 
 // ── Loading & state ──────────────────────────────────────────
 const students = ref([])
@@ -1183,12 +1297,14 @@ const newStudent = ref({
   jshshr: '',
   passport_serie: '',
   passport_number: '',
+  birth_date: '',
   category: '',
   learning_days: [],
   min_payment: null,
   enrolled_free: false,
   has_custom_price: false,
   enrolled_amount: null,
+  can_view_payments: true,
   notes: '',
 })
 const saving = ref(false)
@@ -1198,6 +1314,10 @@ const selectedStudentPhoto = ref(null)
 const selectedPassportPhoto = ref(null)
 const selectedEditStudentPhoto = ref(null)
 const selectedEditPassportPhoto = ref(null)
+const studentPhotoInputRef = ref(null)
+const passportPhotoInputRef = ref(null)
+const editStudentPhotoInputRef = ref(null)
+const editPassportPhotoInputRef = ref(null)
 
 function onStudentPhotoChange(e) {
   selectedStudentPhoto.value = e.target.files?.[0] || null
@@ -1222,6 +1342,7 @@ const editingStudent = ref({
   jshshr: '',
   passport_serie: '',
   passport_number: '',
+  birth_date: '',
   category: '',
   status: '',
   instructor: null,
@@ -1273,6 +1394,8 @@ watch(() => editingStudent.value.phone, (newValue) => {
 const openEditModal = async (student) => {
   selectedEditStudentPhoto.value = null
   selectedEditPassportPhoto.value = null
+  editStudentPhotoInputRef.value?.reset()
+  editPassportPhotoInputRef.value?.reset()
   editingStudent.value = {
     id: student.id,
     full_name: student.name,
@@ -1281,6 +1404,7 @@ const openEditModal = async (student) => {
     jshshr: student.jshshr,
     passport_serie: student.passportSerie,
     passport_number: student.passportNumber,
+    birth_date: student.birthDateRaw || '',
     category: student.categoryId || '',
     status: student.rawStatus,
     instructor: student.instructor || null,
@@ -1348,6 +1472,7 @@ const updateStudent = async () => {
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
+      birth_date: s.birth_date || null,
       category: parseInt(s.category, 10),
       status: s.status,
       instructor: s.instructor || '',
@@ -1470,22 +1595,23 @@ const formattedEnrolledAmount = computed({
 })
 
 // ── Fetch data ───────────────────────────────────────────────
+// Only the data scope (status/has-group tab) and how many rows to pull
+// need a backend round trip; every other filter below (name, phone,
+// jshshr, group name, category, group date ranges, sort) is purely
+// client-side against the already-fetched `students` list — see
+// displayedStudents below.
 const fetchStudents = async () => {
   loading.value = true
   error.value = ''
   try {
+    // Always the full tab-scoped dataset — filtering/sorting/pagination
+    // below all need to see every row, not just one page of them.
     const params = {
-      page: currentPage.value,
-      page_size: pageSize
+      page: 1,
+      page_size: 100000,
     }
     if (filterStatus.value) params.status = filterStatus.value
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterName.value) params.search = filterName.value.trim()
-    if (filterPhone.value) params.phone = filterPhone.value.trim()
-    if (filterJshshr.value) params.jshshr = filterJshshr.value.trim()
-    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
     if (groupFilter.value) params.has_group = groupFilter.value
-    if (orderingParam.value) params.ordering = orderingParam.value
 
     const response = await api.get('/students/', { params })
     const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
@@ -1499,32 +1625,16 @@ const fetchStudents = async () => {
   }
 }
 
-// Text-input filters wait for the user to pause typing (1.2s) before
-// re-fetching, so each keystroke doesn't trigger its own request.
-let searchDebounceTimer = null
-watch([filterName, filterPhone, filterJshshr, filterGroupName], () => {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    currentPage.value = 1
-    fetchStudents()
-  }, 1200)
-})
-
-// Tabs, category select, and sort toggles apply immediately.
-watch(
-  [filterStatus, filterCategory, groupFilter, groupStartSort, groupEndSort],
-  () => {
-    clearTimeout(searchDebounceTimer)
-    currentPage.value = 1
-    fetchStudents()
-  }
-)
-
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
+// Only the scope tab needs a backend round trip; everything else
+// filters/sorts instantly on the client.
+watch(activeTab, () => {
   fetchStudents()
-}
+})
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — it only resets the display page, no refetch needed.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
 
 const fetchCategories = async () => {
   try {
@@ -1573,14 +1683,19 @@ const mapStudent = (s) => {
     groupName: s.group_name || '',
     groupStartedAt: formatDateDisplay(s.group_started_at),
     groupEndsAt: formatDateDisplay(s.group_ends_at),
+    groupStartedAtRaw: s.group_started_at || '',
+    groupEndsAtRaw: s.group_ends_at || '',
     phone: formatPhoneDisplay(s.phone),
     phone2: s.phone2 ? formatPhoneDisplay(s.phone2) : '',
     jshshr: s.jshshr ? String(s.jshshr) : '-',
     passport: (s.passport_serie || s.passport_number) ? `${s.passport_serie || ''} ${s.passport_number || ''}`.trim() : '-',
     passportSerie: s.passport_serie || '',
     passportNumber: s.passport_number || '',
+    birthDate: formatDateDisplay(s.birth_date),
+    birthDateRaw: s.birth_date || '',
     date: dateStr,
     date_joined: dateStr,
+    dateJoinedRaw: s.date_joined || s.created_at || '',
     status: statusText,
     rawStatus: s.status,
     enrolledFree: s.enrolled_free || false,
@@ -1594,9 +1709,95 @@ const mapStudent = (s) => {
   }
 }
 
-const displayedStudents = computed(() => {
-  return students.value.filter(s => branchStore.isBranchMatch(s))
+// All header filters (name, category, phone, jshshr, group name, group
+// date ranges, sort) run entirely on the client against the already-
+// fetched `students` list — no per-keystroke or per-filter network round
+// trip, so there's no debounce delay and no input re-render to steal
+// focus/cursor position, AND they see every row matching the active tab
+// (fetchStudents always pulls all of them), not just whatever page
+// happened to be loaded. Only the scope tab triggers a new backend
+// request (see watch above fetchStudents).
+const filteredStudents = computed(() => {
+  let list = students.value.filter(s => branchStore.isBranchMatch(s))
+
+  if (filterName.value.trim()) {
+    const q = filterName.value.trim().toLowerCase()
+    list = list.filter(s => (s.name || '').toLowerCase().includes(q))
+  }
+  if (filterCategory.value) {
+    list = list.filter(s => s.category === filterCategory.value)
+  }
+  if (filterPhone.value.trim()) {
+    const q = filterPhone.value.replace(/\D/g, '')
+    if (q) {
+      list = list.filter(s => {
+        const p1 = (s.phone || '').replace(/\D/g, '')
+        const p2 = (s.phone2 || '').replace(/\D/g, '')
+        return p1.includes(q) || p2.includes(q)
+      })
+    }
+  }
+  if (filterJshshr.value.trim()) {
+    const q = filterJshshr.value.trim()
+    list = list.filter(s => (s.jshshr || '').includes(q))
+  }
+  if (filterGroupName.value.trim()) {
+    const q = filterGroupName.value.trim().toLowerCase()
+    list = list.filter(s => (s.groupName || '').toLowerCase().includes(q))
+  }
+  if (groupStartDateFrom.value) list = list.filter(s => s.groupStartedAtRaw && s.groupStartedAtRaw >= groupStartDateFrom.value)
+  if (groupStartDateTo.value) list = list.filter(s => s.groupStartedAtRaw && s.groupStartedAtRaw <= groupStartDateTo.value)
+  if (groupEndDateFrom.value) list = list.filter(s => s.groupEndsAtRaw && s.groupEndsAtRaw >= groupEndDateFrom.value)
+  if (groupEndDateTo.value) list = list.filter(s => s.groupEndsAtRaw && s.groupEndsAtRaw <= groupEndDateTo.value)
+  if (birthDateFrom.value) list = list.filter(s => s.birthDateRaw && s.birthDateRaw >= birthDateFrom.value)
+  if (birthDateTo.value) list = list.filter(s => s.birthDateRaw && s.birthDateRaw <= birthDateTo.value)
+  if (joinedDateFrom.value) list = list.filter(s => s.dateJoinedRaw && s.dateJoinedRaw >= joinedDateFrom.value)
+  if (joinedDateTo.value) list = list.filter(s => s.dateJoinedRaw && s.dateJoinedRaw <= joinedDateTo.value)
+
+  if (groupStartSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.groupStartedAtRaw || '').localeCompare(b.groupStartedAtRaw || '')
+      return groupStartSort.value === 'desc' ? -d : d
+    })
+  } else if (groupEndSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.groupEndsAtRaw || '').localeCompare(b.groupEndsAtRaw || '')
+      return groupEndSort.value === 'desc' ? -d : d
+    })
+  } else if (birthDateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.birthDateRaw || '').localeCompare(b.birthDateRaw || '')
+      return birthDateSort.value === 'desc' ? -d : d
+    })
+  } else if (joinedDateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.dateJoinedRaw || '').localeCompare(b.dateJoinedRaw || '')
+      return joinedDateSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
 })
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredStudents.value.length / displayPageSize.value))
+})
+const displayedStudents = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredStudents.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredStudents.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
 const formatPhoneDisplay = (p) => {
   if (!p) return ''
@@ -1646,7 +1847,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleSearchSelectOutsideClick)
-  clearTimeout(searchDebounceTimer)
 })
 
 // Any click landing outside all instructor/coordinator/agent searchable
@@ -1870,6 +2070,8 @@ const openModal = async () => {
   await Promise.all([fetchStaff(), fetchLearningPlaces(), fetchAgents()])
   selectedStudentPhoto.value = null
   selectedPassportPhoto.value = null
+  studentPhotoInputRef.value?.reset()
+  passportPhotoInputRef.value?.reset()
   newStudent.value = {
     full_name: '',
     phone: '',
@@ -1889,6 +2091,7 @@ const openModal = async () => {
     enrolled_free: false,
     has_custom_price: false,
     enrolled_amount: null,
+    can_view_payments: true,
     notes: '',
   }
   modalError.value = ''
@@ -1948,6 +2151,7 @@ const saveStudent = async () => {
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
+      birth_date: s.birth_date || null,
       category: parseInt(s.category, 10),
       instructor: s.instructor || null,
       coordinator: s.coordinator || null,
@@ -1959,6 +2163,7 @@ const saveStudent = async () => {
       payment_method: s.payment_method || 'cash',
       enrolled_free: s.enrolled_free || false,
       enrolled_amount: (s.has_custom_price && !s.enrolled_free) ? parseInt(s.enrolled_amount, 10) : null,
+      can_view_payments: s.can_view_payments !== false,
       notes: s.notes,
       status: 'new' // Register new student in new status
     }
@@ -2105,6 +2310,39 @@ const saveStudent = async () => {
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+/* ── Per-column date-range filters (under sort buttons) ────── */
+.col-date-range {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+  font-family: 'Inter', sans-serif;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+
 /* Select wrapper */
 .select-wrap {
   position: relative;
@@ -2232,9 +2470,74 @@ const saveStudent = async () => {
   min-height: 240px;
 }
 
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
 .pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #F9FAFB;
+  border-top: 1px solid #E5E7EB;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
   flex-shrink: 0;
 }
+.pagination-info {
+  font-size: 13.5px;
+  color: #6B7280;
+  font-weight: 500;
+}
+.pagination-note {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #9CA3AF;
+  font-weight: 400;
+}
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-size-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4B5563;
+}
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 
 .stbl {
   width: 100%;
@@ -2823,27 +3126,6 @@ const saveStudent = async () => {
   border-top-color: white;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-}
-
-/* Pagination styles */
-.btn-page {
-  padding: 6px 14px;
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.btn-page:hover:not(:disabled) {
-  background: #F3F4F6;
-  border-color: #D1D5DB;
-}
-.btn-page:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Strict phone column width */

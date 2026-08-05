@@ -26,7 +26,6 @@
             type="text"
             placeholder="Bayram nomini kiriting..."
             class="filter-input"
-            @input="handleSearch"
           />
           <svg class="search-ico" viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
             <circle cx="8.5" cy="8.5" r="5.5"/>
@@ -49,7 +48,7 @@
 
     <!-- Card Grid Layout -->
     <div v-else class="cards-grid">
-      <div v-if="holidays.length === 0" class="empty-state">
+      <div v-if="filteredHolidays.length === 0" class="empty-state">
         <div class="empty-icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="1.5" width="36" height="36">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -63,7 +62,7 @@
       </div>
 
       <div
-        v-for="h in holidays"
+        v-for="h in filteredHolidays"
         :key="h.id"
         class="holiday-card"
         :class="getHolidayStatus(h.start_date, h.end_date).statusClass"
@@ -310,12 +309,15 @@ const liveDaysCount = computed(() => {
   return calculateDays(form.value.start_date, form.value.end_date)
 })
 
+// Fetch the full holiday list once (page_size generous enough to cover the
+// whole table) and filter by name instantly client-side below — no
+// per-keystroke debounce/re-fetch, no lost input focus.
 async function fetchHolidays() {
   loading.value = true
   error.value = null
   try {
     const res = await api.get('/holidays/', {
-      params: { search: searchQuery.value || undefined, page_size: 100 }
+      params: { page_size: 1000 }
     })
     holidays.value = res.data.results ? res.data.results : res.data
   } catch (err) {
@@ -325,13 +327,11 @@ async function fetchHolidays() {
   }
 }
 
-let searchTimeout = null
-function handleSearch() {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    fetchHolidays()
-  }, 300)
-}
+const filteredHolidays = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return holidays.value
+  return holidays.value.filter(h => (h.holiday_name || '').toLowerCase().includes(q))
+})
 
 function calculateDays(startStr, endStr) {
   if (!startStr || !endStr) return 0

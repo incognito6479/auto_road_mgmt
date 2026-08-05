@@ -15,98 +15,101 @@
         </button>
       </div>
 
-      <!-- Filters and Search -->
+      <!-- Total count -->
       <div class="table-toolbar">
-        <div class="search-box">
-          <svg viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
-            <circle cx="8.5" cy="8.5" r="5.5"/>
-            <line x1="13" y1="13" x2="18" y2="18"/>
-          </svg>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Agent ismi yoki telefon raqami bo'yicha qidirish..."
-            class="search-input"
-            @input="onSearchInput"
-          />
-        </div>
         <div class="total-count">
           Jami: <strong>{{ totalAgents }}</strong> ta agent
         </div>
       </div>
 
       <!-- Data Table -->
-      <div class="table-container">
-        <div v-if="loading" class="loading-state">
+      <div class="table-card">
+        <div v-if="loading" class="state-container">
           <div class="spinner"></div>
-          <span>Yuklanmoqda...</span>
+          <p class="state-text">Agentlar yuklanmoqda...</p>
         </div>
 
-        <div v-else-if="agents.length === 0" class="empty-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" width="48" height="48">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-          <p>Agentlar topilmadi</p>
+        <div v-else class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Agent F.I.SH.</th>
+                <th>Telefon</th>
+                <th>Izoh</th>
+                <th v-if="authStore.isAdminOrSuperuser" style="text-align: center; width: 100px;">Amallar</th>
+              </tr>
+              <tr class="col-filter-row">
+                <th>
+                  <input v-model="filterName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+                </th>
+                <th>
+                  <input v-model="filterPhone" class="col-filter-input" type="text" placeholder="Telefon bo'yicha qidirish..." />
+                </th>
+                <th></th>
+                <th v-if="authStore.isAdminOrSuperuser"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="displayedAgents.length === 0">
+                <td :colspan="authStore.isAdminOrSuperuser ? 4 : 3" class="td-empty">Agentlar topilmadi.</td>
+              </tr>
+              <tr v-for="agent in displayedAgents" :key="agent.id" class="table-row clickable-row" @click="goToAgentDetail(agent.id)">
+                <td class="td-name">
+                  <div class="agent-user-cell">
+                    <div class="agent-avatar">
+                      {{ agent.full_name?.[0]?.toUpperCase() || 'A' }}
+                    </div>
+                    <div class="agent-name">
+                      {{ agent.full_name }}
+                      <span v-if="agent.user" class="teacher-badge">{{ agent.user_role === 'instructor' ? 'Instruktor' : "O'qituvchi" }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="td-phone">
+                  <div>{{ formatPhone(agent.phone) }}</div>
+                  <div v-if="agent.phone2" class="td-phone-sub">Qo'shimcha: {{ formatPhone(agent.phone2) }}</div>
+                </td>
+                <td>{{ agent.notes || '-' }}</td>
+                <td v-if="authStore.isAdminOrSuperuser" style="text-align: center;" @click.stop>
+                  <div class="action-btn-group">
+                    <button class="btn-action btn-edit" @click.stop="openEditModal(agent)" title="Tahrirlash">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                    </button>
+                    <button class="btn-action btn-delete" @click.stop="openDeleteModal(agent)" title="O'chirish">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <table v-else class="data-table">
-          <thead>
-            <tr>
-              <th style="width: 50px;">#</th>
-              <th>Agent F.I.SH.</th>
-              <th>Telefon</th>
-              <th v-if="authStore.isAdminOrSuperuser" style="width: 100px; text-align: right;">Amallar</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(agent, index) in displayedAgents" :key="agent.id" class="table-row clickable" @click="goToAgentDetail(agent.id)">
-              <td class="td-muted">{{ (currentPage - 1) * pageSize + index + 1 }}</td>
-              <td>
-                <div class="agent-user-cell">
-                  <div class="agent-avatar">
-                    {{ agent.full_name?.[0]?.toUpperCase() || 'A' }}
-                  </div>
-                  <div class="agent-info">
-                    <span class="agent-name agent-link-title">{{ agent.full_name }}</span>
-                    <span v-if="agent.notes" class="agent-notes">{{ agent.notes }}</span>
-                  </div>
-                </div>
-              </td>
-              <td class="td-phone">
-                <div>{{ formatPhone(agent.phone) }}</div>
-                <div v-if="agent.phone2" class="td-phone-sub">Qo'shimcha: {{ formatPhone(agent.phone2) }}</div>
-              </td>
-              <td v-if="authStore.isAdminOrSuperuser" style="text-align: right;" @click.stop>
-                <div class="action-btns">
-                  <button class="btn-icon btn-edit" @click.stop="openEditModal(agent)" title="Tahrirlash">
-                    <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
-                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                    </svg>
-                  </button>
-                  <button class="btn-icon btn-delete" @click.stop="openDeleteModal(agent)" title="O'chirish">
-                    <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
-                      <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination -->
-      <div v-if="totalPages > 1" class="pagination-bar">
-        <button class="page-btn" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
-          ‹ Oldingi
-        </button>
-        <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
-        <button class="page-btn" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
-          Keyingi ›
-        </button>
+        <div class="pagination-bar">
+          <span class="pagination-info">
+            Jami: <strong>{{ filteredAgents.length }}</strong> tadan <strong>{{ displayedAgents.length }}</strong> ko'rsatilmoqda
+          </span>
+          <div class="pagination-actions">
+            <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+            <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+            <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+            <label class="page-size-label" for="agents-page-size">Ko'rsatish:</label>
+            <div class="select-wrap">
+              <select id="agents-page-size" v-model="pageSizeOption" class="page-size-select">
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="all">Barchasi</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Add/Edit Modal -->
@@ -118,42 +121,93 @@
             {{ modalError }}
           </div>
 
-          <div class="form-group">
-            <label for="ag-name" class="form-label">F.I.SH. (To'liq ism) *</label>
+          <div class="form-group checkbox-row">
             <input
-              id="ag-name"
-              v-model="form.full_name"
-              type="text"
-              placeholder="Masalan: Qodirov Samandar"
-              required
-              class="form-input"
+              id="ag-is-teacher"
+              v-model="form.is_teacher"
+              type="checkbox"
+              class="form-checkbox"
+              @change="onToggleIsTeacher"
             />
+            <label for="ag-is-teacher" class="form-checkbox-label">O'qituvchimi/Instruktormi?</label>
           </div>
 
-          <div class="form-group">
-            <label for="ag-phone" class="form-label">Telefon raqami *</label>
-            <input
-              id="ag-phone"
-              v-model="form.phone"
-              type="tel"
-              placeholder="+998 90 900 90 90"
-              required
-              class="form-input"
-              @input="handlePhoneInput($event, 'phone')"
-            />
-          </div>
+          <template v-if="!form.is_teacher">
+            <div class="form-group">
+              <label for="ag-name" class="form-label">F.I.SH. (To'liq ism) *</label>
+              <input
+                id="ag-name"
+                v-model="form.full_name"
+                type="text"
+                placeholder="Masalan: Qodirov Samandar"
+                required
+                class="form-input"
+              />
+            </div>
 
-          <div class="form-group">
-            <label for="ag-phone2" class="form-label">Qo'shimcha telefon raqami</label>
-            <input
-              id="ag-phone2"
-              v-model="form.phone2"
-              type="tel"
-              placeholder="+998 90 900 90 90 (ixtiyoriy)"
-              class="form-input"
-              @input="handlePhoneInput($event, 'phone2')"
-            />
-          </div>
+            <div class="form-group">
+              <label for="ag-phone" class="form-label">Telefon raqami *</label>
+              <input
+                id="ag-phone"
+                v-model="form.phone"
+                type="tel"
+                placeholder="+998 90 900 90 90"
+                required
+                class="form-input"
+                @input="handlePhoneInput($event, 'phone')"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="ag-phone2" class="form-label">Qo'shimcha telefon raqami</label>
+              <input
+                id="ag-phone2"
+                v-model="form.phone2"
+                type="tel"
+                placeholder="+998 90 900 90 90 (ixtiyoriy)"
+                class="form-input"
+                @input="handlePhoneInput($event, 'phone2')"
+              />
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="form-group">
+              <label class="form-label">O'qituvchi / Instruktor *</label>
+              <div class="teacher-searchable-select" @click.stop>
+                <input
+                  type="text"
+                  class="form-input"
+                  :class="{ 'has-clear': form.user }"
+                  v-model="teacherSearchText"
+                  @focus="teacherDropdownOpen = true"
+                  @input="teacherDropdownOpen = true"
+                  placeholder="Ism yoki telefon bo'yicha qidirish..."
+                  autocomplete="off"
+                />
+                <button
+                  v-if="form.user"
+                  type="button"
+                  class="btn-clear-teacher"
+                  title="Tozalash"
+                  @mousedown.prevent="clearTeacher"
+                >✕</button>
+                <div v-if="teacherDropdownOpen" class="searchable-dropdown">
+                  <div
+                    v-for="t in filteredTeacherOptions"
+                    :key="t.id"
+                    class="searchable-option"
+                    :class="{ selected: form.user === t.id }"
+                    @mousedown.prevent="selectTeacher(t)"
+                  >
+                    {{ t.full_name || t.phone }}
+                    <span class="opt-role-tag">{{ t.role === 'instructor' ? 'Instruktor' : "O'qituvchi" }}</span>
+                  </div>
+                  <div v-if="filteredTeacherOptions.length === 0" class="searchable-empty">Topilmadi</div>
+                </div>
+              </div>
+            </div>
+          </template>
 
           <div class="form-group">
             <label for="ag-notes" class="form-label">Eslatmalar</label>
@@ -191,7 +245,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
@@ -210,14 +264,67 @@ function goToAgentDetail(id) {
 }
 
 const agents = ref([])
-const displayedAgents = computed(() => agents.value.filter(a => branchStore.isBranchMatch(a)))
 const loading = ref(false)
 const saving = ref(false)
-const searchQuery = ref('')
-const currentPage = ref(1)
-const totalPages = ref(1)
+const filterName = ref('')
+const filterPhone = ref('')
 const totalAgents = ref(0)
-const pageSize = 50
+
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: pick how many rows to pull from
+// the backend in one shot, then filter/sort them instantly on the client
+// (see displayedAgents below) instead of round-tripping per filter change.
+// Filtering has to see every row — not just whatever page happened to be
+// fetched — so the fetch itself always pulls everything; pageSizeOption
+// instead controls how many of the *filtered* results are shown per page
+// (see displayedAgents/changePage below).
+const pageSizeOption = ref('50')
+const currentPage = ref(1)
+
+// All header filters (name, phone) run entirely on the client against the
+// already-fetched `agents` list — no per-keystroke network round trip, so
+// there's no debounce delay and no input re-render to steal focus/cursor
+// position, AND they see every fetched row, not just whatever page happened
+// to be fetched.
+const filteredAgents = computed(() => {
+  let list = agents.value.filter(a => branchStore.isBranchMatch(a))
+
+  if (filterName.value.trim()) {
+    const q = filterName.value.trim().toLowerCase()
+    list = list.filter(a => (a.full_name || '').toLowerCase().includes(q))
+  }
+  if (filterPhone.value.trim()) {
+    const q = filterPhone.value.replace(/\D/g, '')
+    if (q) {
+      list = list.filter(a => {
+        const p1 = (a.phone || '').replace(/\D/g, '')
+        const p2 = (a.phone2 || '').replace(/\D/g, '')
+        return p1.includes(q) || p2.includes(q)
+      })
+    }
+  }
+
+  return list
+})
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here so it self-corrects the moment a
+// filter shrinks the result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredAgents.value.length / displayPageSize.value))
+})
+const displayedAgents = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredAgents.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredAgents.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
 const agentModal = ref(null)
 const isEditing = ref(false)
@@ -229,31 +336,95 @@ const form = ref({
   phone: '',
   phone2: '',
   notes: '',
+  is_teacher: false,
+  user: null,
 })
 
-let searchTimeout = null
+// ── Teacher/instructor agent picker ────────────────────
+// An instructor/coordinator can also be an "agent" (bringing in students
+// themselves) — Agent.user links the agent record to that staff account.
+// Since it's a one-to-one link, a teacher already linked to another agent
+// is excluded from the picker (except the agent currently being edited,
+// whose own link doesn't count as "taken").
+const teacherOptions = ref([])
+async function fetchTeacherOptions() {
+  try {
+    const [instRes, coordRes] = await Promise.all([
+      api.get('/users/', { params: { role: 'instructor', page_size: 1000 } }),
+      api.get('/users/', { params: { role: 'coordinator', page_size: 1000 } }),
+    ])
+    const instructors = instRes.data.results || instRes.data || []
+    const coordinators = coordRes.data.results || coordRes.data || []
+    teacherOptions.value = [...instructors, ...coordinators]
+  } catch (err) {
+    console.error("O'qituvchi/instruktorlarni yuklashda xatolik:", err)
+  }
+}
 
-const fetchAgents = async (page = 1) => {
+const allAgentLinks = ref([])
+async function fetchAllAgentLinks() {
+  try {
+    const res = await api.get('/agents/', { params: { page_size: 1000 } })
+    const list = res.data.results || res.data || []
+    allAgentLinks.value = list.filter(a => a.user).map(a => ({ id: a.id, user: a.user }))
+  } catch (err) {
+    console.error("Agent bog'lanishlarini yuklashda xatolik:", err)
+  }
+}
+const assignedTeacherUserIds = computed(() => {
+  const ids = new Set()
+  allAgentLinks.value.forEach(link => {
+    if (link.id !== editingId.value) ids.add(link.user)
+  })
+  return ids
+})
+
+const teacherSearchText = ref('')
+const teacherDropdownOpen = ref(false)
+const filteredTeacherOptions = computed(() => {
+  const q = teacherSearchText.value.trim().toLowerCase()
+  const available = teacherOptions.value.filter(t => !assignedTeacherUserIds.value.has(t.id))
+  if (!q) return available
+  return available.filter(t =>
+    (t.full_name || '').toLowerCase().includes(q) || (t.phone || '').includes(q)
+  )
+})
+function selectTeacher(t) {
+  form.value.user = t ? t.id : null
+  teacherSearchText.value = t ? (t.full_name || t.phone) : ''
+  teacherDropdownOpen.value = false
+}
+function clearTeacher() {
+  selectTeacher(null)
+}
+function onToggleIsTeacher() {
+  if (form.value.is_teacher) {
+    if (teacherOptions.value.length === 0) fetchTeacherOptions()
+    fetchAllAgentLinks()
+  } else {
+    form.value.user = null
+    teacherSearchText.value = ''
+  }
+}
+function handleTeacherOutsideClick(e) {
+  if (e.target.closest('.teacher-searchable-select')) return
+  teacherDropdownOpen.value = false
+}
+
+const fetchAgents = async () => {
   loading.value = true
   try {
-    const params = {
-      page,
-      page_size: pageSize,
-    }
-    if (searchQuery.value.trim()) {
-      params.search = searchQuery.value.trim()
-    }
+    // Always the full dataset — filtering/sorting/pagination above all
+    // need to see every row, not just one page of them.
+    const params = { page: 1, page_size: 100000 }
     const res = await api.get('/agents/', { params })
     if (Array.isArray(res.data)) {
       agents.value = res.data
       totalAgents.value = res.data.length
-      totalPages.value = 1
     } else {
       agents.value = res.data.results || []
       totalAgents.value = res.data.count || 0
-      totalPages.value = Math.ceil((res.data.count || 0) / pageSize) || 1
     }
-    currentPage.value = page
   } catch (err) {
     console.error('Failed to fetch agents:', err)
   } finally {
@@ -261,17 +432,12 @@ const fetchAgents = async (page = 1) => {
   }
 }
 
-const onSearchInput = () => {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    fetchAgents(1)
-  }, 300)
-}
-
-const changePage = (p) => {
-  if (p < 1 || p > totalPages.value) return
-  fetchAgents(p)
-}
+// Only fetchAgents (on mount) needs a backend round trip; every filter
+// above (name, phone) is purely client-side, and pageSizeOption now only
+// controls how many of the filtered rows show per page.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
 
 const openCreateModal = () => {
   isEditing.value = false
@@ -281,7 +447,11 @@ const openCreateModal = () => {
     phone: '',
     phone2: '',
     notes: '',
+    is_teacher: false,
+    user: null,
   }
+  teacherSearchText.value = ''
+  teacherDropdownOpen.value = false
   modalError.value = ''
   if (agentModal.value) agentModal.value.showModal()
   router.replace({ query: { ...route.query, action: 'add' } })
@@ -292,9 +462,17 @@ const openEditModal = (agent) => {
   editingId.value = agent.id
   form.value = {
     full_name: agent.full_name || '',
-    phone: agent.phone || '',
-    phone2: agent.phone2 || '',
+    phone: agent.phone ? formatPhoneDisplay(agent.phone) : '',
+    phone2: agent.phone2 ? formatPhoneDisplay(agent.phone2) : '',
     notes: agent.notes || '',
+    is_teacher: !!agent.user,
+    user: agent.user || null,
+  }
+  teacherSearchText.value = agent.user ? (agent.user_name || '') : ''
+  teacherDropdownOpen.value = false
+  if (agent.user) {
+    if (teacherOptions.value.length === 0) fetchTeacherOptions()
+    fetchAllAgentLinks()
   }
   modalError.value = ''
   if (agentModal.value) agentModal.value.showModal()
@@ -310,43 +488,53 @@ const closeModal = () => {
 }
 
 const saveAgent = async () => {
-  const name = form.value.full_name.trim()
-  const phoneCleaned = form.value.phone.replace(/\D/g, '')
+  let payload
 
-  if (!name || !phoneCleaned) {
-    modalError.value = "F.I.SH. va telefon raqamini kiriting."
-    return
+  if (form.value.is_teacher) {
+    if (!form.value.user) {
+      modalError.value = "O'qituvchi yoki instruktorni tanlang."
+      return
+    }
+    payload = { user: form.value.user, notes: form.value.notes?.trim() || '' }
+  } else {
+    const name = form.value.full_name.trim()
+    const phoneCleaned = form.value.phone.replace(/\D/g, '')
+
+    if (!name || !phoneCleaned) {
+      modalError.value = "F.I.SH. va telefon raqamini kiriting."
+      return
+    }
+
+    if (phoneCleaned.length < 12) {
+      modalError.value = "Telefon raqami noto'g'ri kiritilgan (+998 ...)."
+      return
+    }
+
+    const phone2Cleaned = form.value.phone2 ? form.value.phone2.replace(/\D/g, '') : null
+    payload = { user: null, full_name: name, phone: phoneCleaned, phone2: phone2Cleaned, notes: form.value.notes?.trim() || '' }
   }
-
-  if (phoneCleaned.length < 12) {
-    modalError.value = "Telefon raqami noto'g'ri kiritilgan (+998 ...)."
-    return
-  }
-
-  const phone2Cleaned = form.value.phone2 ? form.value.phone2.replace(/\D/g, '') : null
 
   saving.value = true
   modalError.value = ''
 
   try {
-    const payload = {
-      full_name: name,
-      phone: phoneCleaned,
-      phone2: phone2Cleaned,
-      notes: form.value.notes?.trim() || '',
-    }
-
     if (isEditing.value) {
       await api.patch(`/agents/${editingId.value}/`, payload)
     } else {
       await api.post('/agents/', payload)
     }
     closeModal()
-    fetchAgents(currentPage.value)
+    fetchAgents()
+    fetchAllAgentLinks()
   } catch (err) {
     console.error(err)
-    if (err.response?.data?.phone) {
+    const data = err.response?.data
+    if (data?.phone) {
       modalError.value = "Ushbu telefon raqamli agent allaqachon mavjud."
+    } else if (data?.user) {
+      modalError.value = Array.isArray(data.user) ? data.user[0] : String(data.user)
+    } else if (data?.full_name) {
+      modalError.value = Array.isArray(data.full_name) ? data.full_name[0] : String(data.full_name)
     } else {
       modalError.value = "Saqlashda xatolik yuz berdi."
     }
@@ -373,7 +561,7 @@ const performDelete = async () => {
   try {
     await api.delete(`/agents/${deletingAgent.value.id}/`)
     deleteModal.value?.close()
-    fetchAgents(currentPage.value)
+    fetchAgents()
   } catch (err) {
     console.error('Failed to delete agent:', err)
     deleteError.value = "Agentni o'chirishda xatolik yuz berdi."
@@ -433,6 +621,12 @@ onMounted(async () => {
       }
     })
   }
+
+  document.addEventListener('click', handleTeacherOutsideClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleTeacherOutsideClick)
 })
 </script>
 
@@ -482,34 +676,10 @@ onMounted(async () => {
 
 .table-toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: 16px;
   gap: 16px;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: white;
-  border: 1.5px solid #E5E7EB;
-  border-radius: 10px;
-  padding: 9px 14px;
-  width: 360px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.search-box:focus-within {
-  border-color: #2D6A4F;
-  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
-}
-
-.search-input {
-  border: none;
-  outline: none;
-  font-size: 13.5px;
-  width: 100%;
-  color: #111827;
 }
 
 .total-count {
@@ -517,60 +687,61 @@ onMounted(async () => {
   color: #4B5563;
 }
 
-.table-container {
+.table-card {
   background: white;
+  border-radius: 12px;
   border: 1px solid #E5E7EB;
-  border-radius: 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  overflow: hidden;
 }
-
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) sticks to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
+.table-wrap { overflow: auto; max-height: 600px; }
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  font-size: 13.5px;
 }
-
+.data-table thead { position: sticky; top: 0; z-index: 3; }
 .data-table th {
   background: #F9FAFB;
-  padding: 12px 16px;
-  font-size: 12px;
+  color: #4B5563;
   font-weight: 600;
-  color: #6B7280;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  padding: 12px 16px;
   border-bottom: 1px solid #E5E7EB;
 }
-
 .data-table td {
   padding: 14px 16px;
   border-bottom: 1px solid #F3F4F6;
-  font-size: 13.5px;
-  color: #111827;
+  color: #1F2937;
+  vertical-align: middle;
 }
+.table-row:hover { background: #F9FAFB; }
+.clickable-row { cursor: pointer; }
+.td-empty { text-align: center; padding: 32px; color: #6B7280; }
 
-.data-table tbody tr:last-child td {
-  border-bottom: none;
+/* ── Column-head filters ─────────────────────────────────── */
+.data-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
 }
-
-.data-table tbody tr.clickable {
-  cursor: pointer;
-  transition: background 0.15s ease;
+.col-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  transition: border-color 0.15s;
 }
-
-.data-table tbody tr.clickable:hover {
-  background: #F0FDF4;
-}
-
-.agent-link-title {
-  color: #2D6A4F;
-  font-weight: 600;
-}
-
-.agent-link-title:hover {
-  text-decoration: underline;
-}
+.col-filter-input:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
 
 .agent-user-cell {
   display: flex;
@@ -592,24 +763,9 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.agent-info {
-  display: flex;
-  flex-direction: column;
-}
-
 .agent-name {
   font-weight: 600;
   color: #111827;
-}
-
-.agent-notes {
-  font-size: 11.5px;
-  color: #6B7280;
-}
-
-.td-muted {
-  color: #6B7280;
-  font-size: 13px;
 }
 
 .td-phone {
@@ -624,96 +780,74 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
-.action-btns {
+.action-btn-group {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
 }
-
-.btn-icon {
+.btn-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
+  border: none;
   cursor: pointer;
-  transition: all 0.15s;
 }
+.btn-edit { background: #F3F4F6; color: #374151; }
+.btn-edit:hover { background: #E5E7EB; }
+.btn-delete { background: #FEE2E2; color: #DC2626; }
+.btn-delete:hover { background: #FCA5A5; }
 
-.btn-edit {
-  color: #2563EB;
-}
-.btn-edit:hover {
-  background: #EFF6FF;
-  border-color: #BFDBFE;
-}
+.state-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; gap: 12px; }
+.spinner { width: 32px; height: 32px; border: 3px solid #E5E7EB; border-top-color: #2D6A4F; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.state-text { color: #6B7280; font-size: 14px; }
 
-.btn-delete {
-  color: #DC2626;
-}
-.btn-delete:hover {
-  background: #FEF2F2;
-  border-color: #FCA5A5;
-}
-
-.loading-state, .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px;
-  gap: 12px;
-  color: #6B7280;
-}
-
-.spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid #E5E7EB;
-  border-top-color: #2D6A4F;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.pagination-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.page-btn {
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.select-wrap { position: relative; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.btn-page {
   padding: 6px 14px;
   background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.page-size-select {
+  padding: 6px 26px 6px 10px;
   border: 1px solid #D1D5DB;
   border-radius: 8px;
   font-size: 13px;
+  font-weight: 600;
   color: #374151;
+  background: white;
   cursor: pointer;
-  transition: background 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
 }
-.page-btn:hover:not(:disabled) {
-  background: #F3F4F6;
-}
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 13px;
-  color: #4B5563;
-  font-weight: 500;
-}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 
 /* Modal Dialog */
 .modal-dialog {
@@ -778,6 +912,72 @@ onMounted(async () => {
 .form-input:focus {
   border-color: #2D6A4F;
   box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+}
+
+.checkbox-row { flex-direction: row; align-items: center; gap: 8px; }
+.form-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: #2D6A4F; }
+.form-checkbox-label { font-size: 13.5px; font-weight: 600; color: #374151; cursor: pointer; }
+
+.teacher-searchable-select { position: relative; }
+.teacher-searchable-select .form-input { width: 100%; box-sizing: border-box; }
+.teacher-searchable-select .form-input.has-clear { padding-right: 34px; }
+.btn-clear-teacher {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: #F3F4F6;
+  color: #6B7280;
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 1;
+}
+.btn-clear-teacher:hover { background: #E5E7EB; color: #374151; }
+.searchable-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 20;
+}
+.searchable-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 13.5px;
+  color: #374151;
+  cursor: pointer;
+}
+.searchable-option:hover { background: #F3F4F6; }
+.searchable-option.selected { background: #F0F7F4; color: #1B4332; font-weight: 600; }
+.searchable-empty { padding: 10px 14px; font-size: 12.5px; color: #9CA3AF; text-align: center; }
+.opt-role-tag { font-size: 10.5px; font-weight: 700; color: #4338CA; background: #E0E7FF; padding: 2px 7px; border-radius: 6px; flex-shrink: 0; }
+
+.teacher-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #4338CA;
+  background: #E0E7FF;
+  border-radius: 6px;
+  vertical-align: middle;
 }
 
 .modal-actions {

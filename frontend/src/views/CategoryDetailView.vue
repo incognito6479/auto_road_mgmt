@@ -32,31 +32,8 @@
         </div>
       </div>
       <div class="cat-stat-badge">
-        <span class="stat-count">{{ students.length }}</span>
+        <span class="stat-count">{{ totalCount }}</span>
         <span class="stat-label">Yangi O'quvchi</span>
-      </div>
-    </div>
-
-    <!-- Filter card -->
-    <div v-if="category && !loading && !error" class="filter-card">
-      <div class="filter-field">
-        <label class="filter-label">Ism yoki Telefon raqami bo'yicha qidirish</label>
-        <input
-          v-model="filterSearch"
-          class="filter-input"
-          type="text"
-          placeholder="Ism yoki Telefon raqami bo'yicha qidirish"
-        />
-      </div>
-
-      <div class="filter-field">
-        <label class="filter-label">JSHSHR bo'yicha qidirish (faqat raqam)</label>
-        <input
-          v-model="filterJshshr"
-          class="filter-input"
-          type="text"
-          placeholder="JSHSHR"
-        />
       </div>
     </div>
 
@@ -75,7 +52,9 @@
     <div v-else class="table-wrap">
       <div class="table-header">
         <h3>Navbatdagi / Yangi O'quvchilar Ro'yxati</h3>
+        <span class="selected-count" v-if="selectedStudentIds.length > 0">Tanlangan: {{ selectedStudentIds.length }} ta</span>
       </div>
+      <div class="table-scroll-area">
       <table class="stbl">
         <thead>
           <tr>
@@ -92,12 +71,63 @@
             <th>Eslatma</th>
             <th>Amallar</th>
           </tr>
+          <tr class="col-filter-row">
+            <th>
+              <input v-model="filterName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+            </th>
+            <th></th>
+            <th>
+              <input v-model="filterPhone" class="col-filter-input" type="text" placeholder="Telefon bo'yicha qidirish..." />
+            </th>
+            <th>
+              <input v-model="filterJshshr" class="col-filter-input" type="text" placeholder="JSHSHR" />
+            </th>
+            <th></th>
+            <th>
+              <div class="col-sort-group">
+                <button type="button" class="col-sort-icon-btn" :class="{ active: enrolledDateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('enrolledDate', 'asc')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V4"></path><path d="M3 8l3-4 3 4"></path></svg>
+                </button>
+                <button type="button" class="col-sort-icon-btn" :class="{ active: enrolledDateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('enrolledDate', 'desc')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"></path><path d="M3 16l3 4 3-4"></path></svg>
+                </button>
+                <button v-if="enrolledDateFrom || enrolledDateTo" type="button" class="btn-clear-date" @click="enrolledDateFrom = ''; enrolledDateTo = ''" title="Tozalash">✕</button>
+              </div>
+              <div class="col-date-range">
+                <input v-model="enrolledDateFrom" type="date" class="col-date-input" title="Ro'yxatdan o'tgan sana (dan)" />
+                <input v-model="enrolledDateTo" type="date" class="col-date-input" title="Ro'yxatdan o'tgan sana (gacha)" />
+              </div>
+            </th>
+            <th>
+              <div class="col-sort-group">
+                <button type="button" class="col-sort-icon-btn" :class="{ active: paidAmountSort === 'asc' }" title="O'sish tartibida" @click="setSort('paidAmount', 'asc')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V4"></path><path d="M3 8l3-4 3 4"></path></svg>
+                </button>
+                <button type="button" class="col-sort-icon-btn" :class="{ active: paidAmountSort === 'desc' }" title="Kamayish tartibida" @click="setSort('paidAmount', 'desc')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"></path><path d="M3 16l3 4 3-4"></path></svg>
+                </button>
+              </div>
+            </th>
+            <th>
+              <div class="select-wrap-relative">
+                <select v-model="filterStatus" class="col-filter-select">
+                  <option value="">Barchasi</option>
+                  <option value="new">Yangi</option>
+                  <option value="enrolled">Faol</option>
+                  <option value="finished">Tugatgan</option>
+                  <option value="canceled">Bekor qilingan</option>
+                </select>
+              </div>
+            </th>
+            <th></th>
+            <th></th>
+          </tr>
         </thead>
         <tbody>
-          <tr v-if="filteredStudents.length === 0">
+          <tr v-if="displayedStudents.length === 0">
             <td colspan="10" class="no-data">Hozircha ushbu kategoriyada yangi o'quvchilar mavjud emas</td>
           </tr>
-          <tr v-for="s in filteredStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
+          <tr v-for="s in displayedStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
             <td class="td-name">{{ s.name }}</td>
             <td @click.stop>
               <input type="checkbox" :value="s.id" v-model="selectedStudentIds" class="td-chk" />
@@ -132,6 +162,26 @@
           </tr>
         </tbody>
       </table>
+      </div>
+      <div class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ filteredStudents.length }}</strong> tadan <strong>{{ displayedStudents.length }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions">
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="cat-students-page-size">Ko'rsatish:</label>
+          <div class="select-wrap-relative">
+            <select id="cat-students-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- New Student Modal Dialog -->
@@ -173,10 +223,20 @@
             <input
               id="std-phone2"
               v-model="newStudent.phone2"
-              type="tel"
-              placeholder="+998 90 123 45 67 (ixtiyoriy)"
+              type="text"
+              placeholder="+998 90 123 45 67 ayasi / dadasi (ixtiyoriy)"
               class="form-input"
             />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">O'quvchi rasmi (foto)</label>
+            <FileSelectInput ref="studentPhotoInputRef" accept="image/*" @change="onStudentPhotoChange" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pasport rasmi / nusxasi</label>
+            <FileSelectInput ref="passportPhotoInputRef" accept="image/*,.pdf" @change="onPassportPhotoChange" />
           </div>
 
           <!-- Row 2: Passport & JSHSHR -->
@@ -215,6 +275,17 @@
               placeholder="1234567"
               required
               maxlength="7"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="std-birth-date" class="form-label">Tug'ilgan sana</label>
+            <input
+              id="std-birth-date"
+              v-model="newStudent.birth_date"
+              type="date"
+              required
               class="form-input"
             />
           </div>
@@ -534,7 +605,7 @@
           </div>
 
           <!-- Row 6: Checkboxes, Custom Price & Notes -->
-          <div class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
+          <div v-if="authStore.isSuperuser" class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <input
                 id="std-enrolled-free"
@@ -555,7 +626,7 @@
             </div>
           </div>
 
-          <div v-if="newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
+          <div v-if="authStore.isSuperuser && newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
             <label for="std-enrolled-amount" class="form-label">Shartnoma summasi (so'm)</label>
             <input
               id="std-enrolled-amount"
@@ -565,6 +636,16 @@
               required
               class="form-input"
             />
+          </div>
+
+          <div class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+            <input
+              id="std-can-view-payments"
+              v-model="newStudent.can_view_payments"
+              type="checkbox"
+              class="form-checkbox"
+            />
+            <label for="std-can-view-payments" class="form-checkbox-label" style="font-weight: 600; color: #374151; cursor: pointer; font-size: 13.5px;">O'quvchi to'lovlar tarixini ko'ra oladi</label>
           </div>
           <div class="form-group" style="grid-column: span 3;">
             <label for="std-notes" class="form-label">Eslatmalar</label>
@@ -626,8 +707,8 @@
             <input
               id="edit-std-phone2"
               v-model="editingStudent.phone2"
-              type="tel"
-              placeholder="+998 90 123 45 67 (ixtiyoriy)"
+              type="text"
+              placeholder="+998 90 123 45 67 ayasi / dadasi (ixtiyoriy)"
               class="form-input"
             />
           </div>
@@ -667,6 +748,17 @@
                 class="form-input"
               />
             </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-std-birth-date" class="form-label">Tug'ilgan sana</label>
+            <input
+              id="edit-std-birth-date"
+              v-model="editingStudent.birth_date"
+              type="date"
+              required
+              class="form-input"
+            />
           </div>
 
           <div class="form-group">
@@ -792,6 +884,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
@@ -806,8 +899,33 @@ const goToStudentDetail = (id) => {
 }
 
 // ── Filter State ─────────────────────────────────────
-const filterSearch = ref('')
+const filterName = ref('')
+const filterPhone = ref('')
 const filterJshshr = ref('')
+const filterStatus = ref('')
+const enrolledDateSort = ref('')
+const enrolledDateFrom = ref('')
+const enrolledDateTo = ref('')
+const paidAmountSort = ref('')
+
+const sortRefs = { enrolledDate: enrolledDateSort, paidAmount: paidAmountSort }
+function setSort(field, dir) {
+  const target = sortRefs[field]
+  Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
+  target.value = target.value === dir ? '' : dir
+}
+
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: pick how many rows to pull from
+// the backend in one shot, then filter/sort them instantly on the client
+// (see displayedStudents below) instead of round-tripping per filter
+// change. Filtering has to see every row — not just whatever page happened
+// to be fetched — so the fetch itself always pulls everything;
+// pageSizeOption instead controls how many of the *filtered* results are
+// shown per page (see displayedStudents/changePage below).
+const pageSizeOption = ref('50')
+const totalCount = ref(0)
+const currentPage = ref(1)
 
 // ── State ───────────────────────────────────────────
 const category = ref(null)
@@ -919,6 +1037,7 @@ const editingStudent = ref({
   jshshr: '',
   passport_serie: '',
   passport_number: '',
+  birth_date: '',
   category: '',
   status: '',
   notes: '',
@@ -958,38 +1077,6 @@ watch(() => editingStudent.value.phone, (newValue) => {
   }
 })
 
-watch(() => editingStudent.value.phone2, (newValue) => {
-  if (!newValue) return
-  let digits = newValue.replace(/\D/g, '')
-
-  if (digits.length > 0 && !digits.startsWith('998')) {
-    digits = '998' + digits
-  }
-
-  digits = digits.substring(0, 12)
-
-  let formatted = ''
-  if (digits.length > 0) {
-    formatted += '+' + digits.substring(0, 3)
-  }
-  if (digits.length > 3) {
-    formatted += ' ' + digits.substring(3, 5)
-  }
-  if (digits.length > 5) {
-    formatted += ' ' + digits.substring(5, 8)
-  }
-  if (digits.length > 8) {
-    formatted += ' ' + digits.substring(8, 10)
-  }
-  if (digits.length > 10) {
-    formatted += ' ' + digits.substring(10, 12)
-  }
-
-  if (newValue !== formatted) {
-    editingStudent.value.phone2 = formatted
-  }
-})
-
 const openEditModal = (student) => {
   editingStudent.value = {
     id: student.id,
@@ -999,6 +1086,7 @@ const openEditModal = (student) => {
     jshshr: student.jshshr,
     passport_serie: student.passportSerie,
     passport_number: student.passportNumber,
+    birth_date: student.birthDateRaw || '',
     category: student.categoryId || '',
     status: student.rawStatus,
     notes: student.notes || '',
@@ -1034,12 +1122,6 @@ const updateStudent = async () => {
     return
   }
 
-  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
-  if (phone2Cleaned && phone2Cleaned.length < 12) {
-    editModalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
-    return
-  }
-
   editSaving.value = true
   editModalError.value = ''
 
@@ -1047,10 +1129,11 @@ const updateStudent = async () => {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
-      phone2: phone2Cleaned,
+      phone2: s.phone2 ? s.phone2.trim() : null,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
+      birth_date: s.birth_date || null,
       category: parseInt(s.category, 10),
       status: s.status,
       notes: s.notes,
@@ -1076,13 +1159,54 @@ const updateStudent = async () => {
 }
 
 const filteredStudents = computed(() => {
-  return students.value.filter(s => {
-    const q = filterSearch.value.toLowerCase()
-    const matchSearch = !q || s.name.toLowerCase().includes(q) || s.phone.includes(q)
-    const matchJshshr = !filterJshshr.value || s.jshshr.includes(filterJshshr.value)
-    return matchSearch && matchJshshr
+  const nameQ = filterName.value.toLowerCase().trim()
+  const phoneQ = filterPhone.value.replace(/\D/g, '')
+  let list = students.value.filter(s => {
+    if (nameQ && !s.name.toLowerCase().includes(nameQ)) return false
+    if (phoneQ && !s.phone.replace(/\D/g, '').includes(phoneQ)) return false
+    if (filterJshshr.value && !s.jshshr.includes(filterJshshr.value)) return false
+    if (filterStatus.value && s.rawStatus !== filterStatus.value) return false
+    if (enrolledDateFrom.value && !(s.dateRaw && s.dateRaw.slice(0, 10) >= enrolledDateFrom.value)) return false
+    if (enrolledDateTo.value && !(s.dateRaw && s.dateRaw.slice(0, 10) <= enrolledDateTo.value)) return false
+    return true
   })
+
+  if (enrolledDateSort.value) {
+    const dir = enrolledDateSort.value === 'asc' ? 1 : -1
+    list = list.slice().sort((a, b) => {
+      const ta = a.dateRaw ? new Date(a.dateRaw).getTime() : null
+      const tb = b.dateRaw ? new Date(b.dateRaw).getTime() : null
+      if (ta === null && tb === null) return 0
+      if (ta === null) return 1
+      if (tb === null) return -1
+      return (ta - tb) * dir
+    })
+  } else if (paidAmountSort.value) {
+    const dir = paidAmountSort.value === 'asc' ? 1 : -1
+    list = list.slice().sort((a, b) => (a.paymentAmountRaw - b.paymentAmountRaw) * dir)
+  }
+
+  return list
 })
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here so it self-corrects the moment a
+// filter shrinks the result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredStudents.value.length / displayPageSize.value))
+})
+const displayedStudents = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredStudents.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredStudents.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
 // ── Modal State ──────────────────────────────────────
 const studentModal = ref(null)
@@ -1093,16 +1217,30 @@ const newStudent = ref({
   jshshr: '',
   passport_serie: '',
   passport_number: '',
+  birth_date: '',
   category: categoryId,
   learning_days: [],
   min_payment: null,
   enrolled_free: false,
   has_custom_price: false,
   enrolled_amount: null,
+  can_view_payments: true,
   notes: '',
 })
 const saving = ref(false)
 const modalError = ref('')
+
+const selectedStudentPhoto = ref(null)
+const selectedPassportPhoto = ref(null)
+const studentPhotoInputRef = ref(null)
+const passportPhotoInputRef = ref(null)
+
+function onStudentPhotoChange(e) {
+  selectedStudentPhoto.value = e.target.files?.[0] || null
+}
+function onPassportPhotoChange(e) {
+  selectedPassportPhoto.value = e.target.files?.[0] || null
+}
 
 // Watch phone for formatting: +998 90 900 90 90
 watch(() => newStudent.value.phone, (newValue) => {
@@ -1135,38 +1273,6 @@ watch(() => newStudent.value.phone, (newValue) => {
 
   if (newValue !== formatted) {
     newStudent.value.phone = formatted
-  }
-})
-
-watch(() => newStudent.value.phone2, (newValue) => {
-  if (!newValue) return
-  let digits = newValue.replace(/\D/g, '')
-
-  if (digits.length > 0 && !digits.startsWith('998')) {
-    digits = '998' + digits
-  }
-
-  digits = digits.substring(0, 12)
-
-  let formatted = ''
-  if (digits.length > 0) {
-    formatted += '+' + digits.substring(0, 3)
-  }
-  if (digits.length > 3) {
-    formatted += ' ' + digits.substring(3, 5)
-  }
-  if (digits.length > 5) {
-    formatted += ' ' + digits.substring(5, 8)
-  }
-  if (digits.length > 8) {
-    formatted += ' ' + digits.substring(8, 10)
-  }
-  if (digits.length > 10) {
-    formatted += ' ' + digits.substring(10, 12)
-  }
-
-  if (newValue !== formatted) {
-    newStudent.value.phone2 = formatted
   }
 })
 
@@ -1261,14 +1367,17 @@ const fetchData = async () => {
   loading.value = true
   error.value = ''
   try {
+    // Always the full dataset — filtering/sorting/pagination above all
+    // need to see every row, not just one page of them.
     const [catRes, stdRes, allCatsRes] = await Promise.all([
       api.get(`/categories/${categoryId}/`),
-      api.get(`/students/?category=${categoryId}&status=new`),
+      api.get(`/students/`, { params: { category: categoryId, status: 'new', page: 1, page_size: 100000 } }),
       api.get(`/categories/`)
     ])
     category.value = catRes.data
     const stdList = Array.isArray(stdRes.data) ? stdRes.data : (stdRes.data?.results || [])
     students.value = stdList.map(mapStudent)
+    totalCount.value = stdRes.data?.count ?? students.value.length
     categories.value = Array.isArray(allCatsRes.data) ? allCatsRes.data : (allCatsRes.data?.results || [])
   } catch (err) {
     console.error(err)
@@ -1277,6 +1386,13 @@ const fetchData = async () => {
     loading.value = false
   }
 }
+
+// Only fetchData (on mount) needs a backend round trip; every filter/sort
+// above is purely client-side, and pageSizeOption now only controls how
+// many of the filtered rows show per page.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
 
 const formatPrice = (price) => {
   if (price === null || price === undefined) return "0 so'm"
@@ -1306,13 +1422,16 @@ const mapStudent = (s) => {
     passport: `${s.passport_serie} ${s.passport_number}`,
     passportSerie: s.passport_serie,
     passportNumber: s.passport_number,
+    birthDateRaw: s.birth_date || '',
     date: dateStr,
     date_joined: dateStr,
+    dateRaw: s.date_joined || s.created_at || null,
     status: statusLabels[s.status] || 'Yangi',
     rawStatus: s.status,
     categoryId: s.category_id,
     enrolledFree: s.enrolled_free || false,
     paymentAmount: formatPrice(s.payment_amount),
+    paymentAmountRaw: Number(s.payment_amount) || 0,
     notes: s.notes || '',
   }
 }
@@ -1340,20 +1459,29 @@ onMounted(async () => {
   }
   fetchData()
   
-  // Light dismiss fallback
-  if (studentModal.value && !('closedBy' in HTMLDialogElement.prototype)) {
-    studentModal.value.addEventListener('click', (event) => {
-      if (event.target !== studentModal.value) return
-      const rect = studentModal.value.getBoundingClientRect()
-      const isInside = (
-        rect.top <= event.clientY &&
-        event.clientY <= rect.top + rect.height &&
-        rect.left <= event.clientX &&
-        event.clientX <= rect.left + rect.width
-      )
-      if (!isInside) {
-        closeModal()
-      }
+  // Light dismiss fallback (for browsers that don't yet support the native
+  // `closedby="any"` dialog attribute)
+  const lightDismissDialogs = [
+    { dialog: studentModal, close: closeModal },
+    { dialog: editStudentModal, close: closeEditModal },
+    { dialog: groupConfirmModal, close: closeGroupConfirmModal },
+  ]
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    lightDismissDialogs.forEach(({ dialog, close }) => {
+      if (!dialog.value) return
+      dialog.value.addEventListener('click', (event) => {
+        if (event.target !== dialog.value) return
+        const rect = dialog.value.getBoundingClientRect()
+        const isInside = (
+          rect.top <= event.clientY &&
+          event.clientY <= rect.top + rect.height &&
+          rect.left <= event.clientX &&
+          event.clientX <= rect.left + rect.width
+        )
+        if (!isInside) {
+          close()
+        }
+      })
     })
   }
 
@@ -1496,6 +1624,10 @@ const openModal = async () => {
     return
   }
   await Promise.all([fetchStaff(), fetchLearningPlaces(), fetchAgents()])
+  selectedStudentPhoto.value = null
+  selectedPassportPhoto.value = null
+  studentPhotoInputRef.value?.reset()
+  passportPhotoInputRef.value?.reset()
   newStudent.value = {
     full_name: '',
     phone: '',
@@ -1503,6 +1635,7 @@ const openModal = async () => {
     jshshr: '',
     passport_serie: '',
     passport_number: '',
+    birth_date: '',
     category: categoryId,
     instructor: null,
     coordinator: null,
@@ -1515,6 +1648,7 @@ const openModal = async () => {
     enrolled_free: false,
     has_custom_price: false,
     enrolled_amount: null,
+    can_view_payments: true,
     notes: '',
   }
   modalError.value = ''
@@ -1562,23 +1696,18 @@ const saveStudent = async () => {
     return
   }
   
-  const phone2Cleaned = s.phone2 ? s.phone2.replace(/\D/g, '') : null
-  if (phone2Cleaned && phone2Cleaned.length < 12) {
-    modalError.value = "Qo'shimcha telefon raqami noto'g'ri kiritilgan."
-    return
-  }
-
   saving.value = true
   modalError.value = ''
-  
+
   try {
     const payload = {
       full_name: s.full_name.trim(),
       phone: phoneCleaned,
-      phone2: phone2Cleaned,
+      phone2: s.phone2 ? s.phone2.trim() : null,
       jshshr: parseInt(s.jshshr, 10),
       passport_serie: s.passport_serie.trim().toUpperCase(),
       passport_number: parseInt(s.passport_number, 10),
+      birth_date: s.birth_date || null,
       category: parseInt(s.category, 10),
       instructor: s.instructor || null,
       coordinator: s.coordinator || null,
@@ -1590,11 +1719,27 @@ const saveStudent = async () => {
       payment_method: s.payment_method || 'cash',
       enrolled_free: s.enrolled_free || false,
       enrolled_amount: (s.has_custom_price && !s.enrolled_free) ? parseInt(s.enrolled_amount, 10) : null,
+      can_view_payments: s.can_view_payments !== false,
       notes: s.notes,
       status: 'new' // Set student status to new!
     }
     
-    await api.post('/students/', payload)
+    if (selectedStudentPhoto.value || selectedPassportPhoto.value) {
+      const formData = new FormData()
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === null || payload[key] === undefined) return
+        if (Array.isArray(payload[key])) {
+          payload[key].forEach(v => formData.append(key, v))
+        } else {
+          formData.append(key, payload[key])
+        }
+      })
+      if (selectedStudentPhoto.value) formData.append('image', selectedStudentPhoto.value)
+      if (selectedPassportPhoto.value) formData.append('pass_img', selectedPassportPhoto.value)
+      await api.post('/students/', formData)
+    } else {
+      await api.post('/students/', payload)
+    }
     closeModal()
     await fetchData()
   } catch (err) {
@@ -1783,14 +1928,74 @@ const saveStudent = async () => {
   background: white;
   border-radius: 12px;
   border: 1px solid #E5E7EB;
-  overflow-x: auto;
   box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
+
+/* The scroll container is separate from .table-wrap so the whole table
+   (including the checkbox column) scrolls together on the x-axis, while
+   the title bar above it stays put. */
+.table-scroll-area {
+  overflow-x: auto;
+}
+
+/* ── Row-fetch-count pagination bar ──────────────────────────── */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #F9FAFB;
+  border-top: 1px solid #E5E7EB;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 
 .table-header {
   padding: 16px 20px;
   border-bottom: 1px solid #F3F4F6;
   text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .table-header h3 {
@@ -1800,10 +2005,37 @@ const saveStudent = async () => {
   color: #111827;
 }
 
+.selected-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2D6A4F;
+  background: #F0F7F4;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
 .stbl {
-  width: 100%;
+  /* `width: 100%` would force every column (including the checkbox column)
+     to always squeeze/stretch to fill the container instead of sizing to
+     its own content — which both made narrower columns unreadable and
+     prevented `.table-scroll-area`'s overflow-x from ever kicking in.
+     `width: max-content` (no min-width) sizes each column strictly to its
+     own text, growing past the container only when content actually needs
+     the room, which is exactly when horizontal scroll should appear. */
+  width: max-content;
   border-collapse: collapse;
   font-size: 13.5px;
+}
+
+/* Sticky on <thead> itself (not per-row) so both the label row and the
+   filter row beneath it move together as one unit while the body scrolls
+   vertically underneath — and both still scroll horizontally in sync with
+   the body, since they're all part of the same table inside
+   .table-scroll-area. */
+.stbl thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .stbl thead th {
@@ -1816,6 +2048,83 @@ const saveStudent = async () => {
   white-space: nowrap;
   background: white;
 }
+
+.stbl thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 2px solid #F3F4F6;
+}
+
+.col-filter-input,
+.col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus,
+.col-filter-select:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group {
+  display: flex;
+  gap: 4px;
+}
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
+
+.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+.select-wrap-relative { position: relative; width: 100%; }
 
 .stbl tbody .stbl-row td {
   padding: 13px 16px;
@@ -2390,43 +2699,6 @@ const saveStudent = async () => {
   animation: spin 0.8s linear infinite;
 }
 
-/* ── Filter card ─────────────────────────────────────────── */
-.filter-card {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 16px;
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-}
-
-.filter-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.filter-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-}
-
-.filter-input {
-  padding: 9px 12px;
-  border: 1px solid #D1D5DB;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #374151;
-  outline: none;
-  font-family: 'Inter', sans-serif;
-  transition: border-color 0.15s;
-}
-.filter-input:focus { border-color: #2D6A4F; }
-.filter-input::placeholder { color: #9CA3AF; }
-
 .btn-edit {
   display: inline-flex;
   align-items: center;
@@ -2531,7 +2803,6 @@ const saveStudent = async () => {
 }
 
 @media (max-width: 900px) {
-  .filter-card { grid-template-columns: 1fr; }
-  .table-wrap  { overflow-x: auto; }
+  .table-scroll-area { overflow-x: auto; }
 }
 </style>

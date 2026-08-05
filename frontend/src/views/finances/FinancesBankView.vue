@@ -3,7 +3,7 @@
 
     <div class="page-top">
       <div>
-        <h2 class="page-main-title">Bank uchun (Status: Bank)</h2>
+        <h2 class="page-main-title">Bank uchun to'lovlar</h2>
         <p class="page-sub-title">Bank orqali o'tkazilgan va rasmiylashtiriladigan to'lovlar</p>
       </div>
 
@@ -12,7 +12,7 @@
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-        <span>Yangi bank to'lovini kiritish</span>
+        <span>Bank to'lovini kiritish</span>
       </button>
     </div>
 
@@ -22,7 +22,7 @@
         <div class="card-metric-icon">🏦</div>
         <div>
           <span class="metric-lbl">Jami Bank Operatsiyalari</span>
-          <h4 class="metric-val text-blue">{{ payments.length }} ta to'lov</h4>
+          <h4 class="metric-val text-blue">{{ metrics.count }} ta to'lov</h4>
         </div>
       </div>
 
@@ -37,59 +37,100 @@
 
     <!-- Table Section -->
     <div class="table-section-card margin-top">
-      <div class="toolbar-bar">
-        <div class="search-box">
-          <svg viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="16" height="16">
-            <circle cx="8.5" cy="8.5" r="5.5"/>
-            <line x1="13" y1="13" x2="18" y2="18"/>
-          </svg>
-          <input
-            v-model="filterStudentName"
-            type="text"
-            placeholder="Izoh yoki sana bo'yicha qidirish..."
-            class="search-input"
-          />
-        </div>
-
-        <div class="filter-controls">
-          <div class="filter-item">
-            <label class="flabel">Dan:</label>
-            <input v-model="filterDateFrom" type="date" class="finput-date" />
-          </div>
-
-          <div class="filter-item">
-            <label class="flabel">Gacha:</label>
-            <input v-model="filterDateTo" type="date" class="finput-date" />
-          </div>
-        </div>
-
-        <div class="total-count">
-          Jami: <strong>{{ totalCount }}</strong> ta bank to'lovi
-        </div>
-      </div>
-
       <div class="table-container">
         <div v-if="loading" class="state-box">
           <div class="spinner"></div>
           <span>Bank to'lovlari yuklanmoqda...</span>
         </div>
 
-        <div v-else-if="payments.length === 0" class="empty-state">
-          <p>Bank statusidagi to'lovlar topilmadi</p>
-        </div>
-
-        <table v-else class="data-table">
+        <div v-else class="table-scroll-area">
+        <table class="data-table">
           <thead>
             <tr>
               <th>To'lov Tafsiloti / Izoh</th>
               <th>Bank Summasi</th>
               <th>Usul</th>
               <th>Sana & Vaqt</th>
+              <th>To'lovni kiritgan</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
+            </tr>
+            <tr class="col-filter-row">
+              <th>
+                <input v-model="filterNotes" class="col-filter-input" type="text" placeholder="Izoh bo'yicha qidirish..." />
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'asc' }" title="O'sish tartibida" @click="setAmountSort('asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'desc' }" title="Kamayish tartibida" @click="setAmountSort('desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterMethod" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option value="cash">Naqd</option>
+                    <option value="card">Karta</option>
+                    <option value="qr_code">QR code</option>
+                    <option value="click">Click</option>
+                    <option value="transfer">O'tkazma</option>
+                  </select>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paymentDateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: paymentDateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button v-if="paymentDateFrom || paymentDateTo" type="button" class="btn-clear-date" @click="paymentDateFrom = ''; paymentDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="paymentDateFrom" type="date" class="col-date-input" title="Sana (dan)" />
+                  <input v-model="paymentDateTo" type="date" class="col-date-input" title="Sana (gacha)" />
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCashierId" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="c in distinctCashiers" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
+                </div>
+              </th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="p in payments" :key="p.id" class="table-row">
+            <tr v-if="displayedPayments.length === 0">
+              <td colspan="6" class="no-data">Bank statusidagi to'lovlar topilmadi</td>
+            </tr>
+            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.notes || p.student_name || 'Bank Operatsiyasi' }}</div>
                 <div v-else class="student-name">{{ p.notes || p.student_name || 'Bank Operatsiyasi' }}</div>
@@ -100,6 +141,10 @@
               </td>
               <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
+              <td>
+                <span v-if="p.created_by" class="link-value" @click="goUser(p.created_by)">{{ p.created_by_name || '-' }}</span>
+                <span v-else>{{ p.created_by_name || '-' }}</span>
+              </td>
               <td style="text-align: right;">
                 <div class="row-actions">
                   <template v-if="authStore.isSuperuser">
@@ -121,6 +166,28 @@
             </tr>
           </tbody>
         </table>
+        </div>
+      </div>
+
+      <!-- Pagination controls -->
+      <div class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions">
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="bank-page-size">Ko'rsatish:</label>
+          <div class="select-wrap">
+            <select id="bank-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -221,13 +288,21 @@ function goStudent(id) {
   router.push(`/students/${id}`)
 }
 
+function goUser(id) {
+  if (!id) return
+  router.push(`/users/${id}`)
+}
+
 const payments = ref([])
 const loading = ref(true)
-const totalCount = ref(0)
 
-const filterStudentName = ref('')
-const filterDateFrom = ref('')
-const filterDateTo = ref('')
+const filterNotes = ref('')
+const filterMethod = ref('')
+const filterCashierId = ref('')
+const paymentDateSort = ref('') // '', 'asc', 'desc'
+const amountSort = ref('')
+const paymentDateFrom = ref('')
+const paymentDateTo = ref('')
 const showModal = ref(false)
 const isEditing = ref(false)
 const editingId = ref(null)
@@ -236,27 +311,108 @@ const modalError = ref(null)
 
 const form = ref({ amountFormatted: '', amount: 0, method: 'transfer', notes: '' })
 
-const metrics = computed(() => {
-  const total = payments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  return { total }
+// ── Row-fetch-count selector ──────────────────────────────────
+// fetchPayments always pulls the entire status=bank scope (see
+// page_size: 100000 below) so every filter below sees every row, not just
+// whatever page happened to be loaded. pageSizeOption instead controls how
+// many of the *filtered* rows show per page (see displayedPayments/
+// changePage below).
+const pageSizeOption = ref('50')
+const currentPage = ref(1)
+
+// All header filters (notes, method, cashier, sort) run entirely on the
+// client against the already-fetched `payments` list — no per-keystroke
+// or per-filter network round trip, so there's no debounce delay and no
+// input re-render to steal focus/cursor position, AND they see every row
+// matching status=bank, not just whatever page happened to be fetched.
+const filteredPayments = computed(() => {
+  let list = payments.value
+
+  if (filterNotes.value.trim()) {
+    const q = filterNotes.value.trim().toLowerCase()
+    list = list.filter(p => (p.notes || p.student_name || '').toLowerCase().includes(q))
+  }
+  if (filterMethod.value) list = list.filter(p => p.method === filterMethod.value)
+  if (filterCashierId.value) list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
+  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
+  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
+
+  if (paymentDateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.created_at || '').localeCompare(b.created_at || '')
+      return paymentDateSort.value === 'desc' ? -d : d
+    })
+  } else if (amountSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.amount || 0) - (b.amount || 0)
+      return amountSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
 })
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here so it self-corrects the moment a
+// filter shrinks the result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
+})
+const displayedPayments = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredPayments.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredPayments.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
+
+// Metrics reflect the full filtered set (matching status=bank + any active
+// column filters), not just the current page's slice.
+const metrics = computed(() => {
+  const total = filteredPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
+  return { total, count: filteredPayments.value.length }
+})
+
+// Distinct cashiers among the fetched batch, for the "To'lov qabul
+// qiluvchi" filter select.
+const distinctCashiers = computed(() => {
+  const map = {}
+  payments.value.forEach(p => {
+    if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
+  })
+  return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
+})
+
+function setSort(direction) {
+  amountSort.value = ''
+  paymentDateSort.value = paymentDateSort.value === direction ? '' : direction
+}
+function setAmountSort(direction) {
+  paymentDateSort.value = ''
+  amountSort.value = amountSort.value === direction ? '' : direction
+}
 
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'bank', page_size: 1000 }
-    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
-    if (filterDateFrom.value) params.date_from = filterDateFrom.value
-    if (filterDateTo.value) params.date_to = filterDateTo.value
-
+    const params = { status: 'bank', page: 1, page_size: 100000 }
     const res = await api.get('/payments/', { params })
-    payments.value = res.data.results || res.data
-    totalCount.value = res.data.count || payments.value.length
+    const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
+    payments.value = rawList
   } catch (err) { console.error(err) }
   finally { loading.value = false }
 }
 
-watch([filterStudentName, filterDateFrom, filterDateTo], () => { fetchPayments() })
+// pageSizeOption no longer needs a backend round trip — it only controls
+// how many of the filtered rows show per page, so just reset to page 1.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
 
 function methodText(m) {
   switch (m) {
@@ -343,7 +499,9 @@ async function performDelete() {
   }
 }
 
-onMounted(() => { fetchPayments() })
+onMounted(() => {
+  fetchPayments()
+})
 </script>
 
 <style scoped>
@@ -361,19 +519,144 @@ onMounted(() => { fetchPayments() })
 .text-purple { color: #9333EA; font-weight: 800; }
 .margin-top { margin-top: 24px; }
 .table-section-card { background: white; border: 1px solid #E5E7EB; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
-.toolbar-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; gap: 16px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 10px; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 9px 14px; width: 300px; }
-.search-input { border: none; background: transparent; outline: none; font-size: 13.5px; width: 100%; }
-.filter-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.filter-item { display: flex; align-items: center; gap: 6px; }
 .flabel { font-size: 12.5px; font-weight: 600; color: #4B5563; }
-.finput-date { padding: 8px 12px; border: 1.5px solid #E5E7EB; border-radius: 10px; font-size: 13px; background: #FAFAFA; outline: none; }
-.total-count { font-size: 13px; color: #6B7280; white-space: nowrap; }
-.table-container { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
+
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) can stick to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
+.table-scroll-area { overflow: auto; max-height: 600px; }
+
+.data-table { width: 100%; border-collapse: collapse; th { background: #F9FAFB; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #4B5563; text-align: left; border-bottom: 1px solid #E5E7EB; white-space: nowrap; } td { padding: 14px 16px; font-size: 13.5px; color: #1F2937; border-bottom: 1px solid #F3F4F6; vertical-align: middle; } }
+
+/* Sticky is applied to <thead> itself, not to individual <th> cells —
+   that keeps both header rows (labels + filters) moving as a single
+   pinned unit with no per-row offset math needed. */
+.data-table thead { position: sticky; top: 0; z-index: 3; }
+
+/* ── Column-head filters ─────────────────────────────────── */
+/* Higher specificity than ".data-table th" (0,1,1) on purpose — equal
+   specificity would let source order decide and flatten this row's
+   padding/background back to the label row's values. */
+.data-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.col-filter-input, .col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus, .col-filter-select:focus { border-color: #2563EB; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2563EB; color: #2563EB; background: #EFF6FF; }
+
+.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+}
+.col-date-input:focus { border-color: #2563EB; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+.select-wrap-relative { position: relative; width: 100%; }
+
+.no-data { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
+
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.select-wrap { position: relative; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2563EB; outline: none; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .student-name { font-weight: 700; color: #111827; }
-.link-value { cursor: pointer; }
-.link-value:hover { text-decoration: underline; }
+.link-value { cursor: pointer; color: #2563EB !important; font-weight: 700 !important; text-decoration: underline; }
+.link-value:hover { color: #1D4ED8 !important; }
 .group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }

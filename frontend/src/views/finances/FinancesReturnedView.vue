@@ -3,7 +3,7 @@
 
     <div class="page-top">
       <div>
-        <h2 class="page-main-title">Pul Qaytarish (Status: Qaytarilgan / Returned)</h2>
+        <h2 class="page-main-title">Pul Qaytarish</h2>
         <p class="page-sub-title">O'quvchilarga bekor qilingan yoki qaytarilgan pul operatsiyalari</p>
       </div>
 
@@ -12,7 +12,7 @@
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-        <span>Pul qaytarish to'lovini kiritish</span>
+        <span>Pul qaytarish</span>
       </button>
     </div>
 
@@ -52,9 +52,12 @@
               <th>Guruh</th>
               <th>Guruh boshlanishi</th>
               <th>Guruh tugashi</th>
+              <th>O'quvchi to'lagan summa</th>
               <th>Qaytarilgan Summa</th>
               <th>Usul</th>
               <th>Sana &amp; Vaqt</th>
+              <th>To'lovni kiritgan</th>
+              <th>Izoh</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
             </tr>
             <tr class="col-filter-row">
@@ -90,6 +93,11 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="groupStartFrom || groupStartTo" type="button" class="btn-clear-date" @click="groupStartFrom = ''; groupStartTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="groupStartFrom" type="date" class="col-date-input" title="Guruh boshlanishi (dan)" />
+                  <input v-model="groupStartTo" type="date" class="col-date-input" title="Guruh boshlanishi (gacha)" />
                 </div>
               </th>
               <th>
@@ -110,9 +118,53 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="groupEndFrom || groupEndTo" type="button" class="btn-clear-date" @click="groupEndFrom = ''; groupEndTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="groupEndFrom" type="date" class="col-date-input" title="Guruh tugashi (dan)" />
+                  <input v-model="groupEndTo" type="date" class="col-date-input" title="Guruh tugashi (gacha)" />
                 </div>
               </th>
-              <th></th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: studentPaidSort === 'asc' }" title="O'sish tartibida" @click="setSort('studentPaid', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: studentPaidSort === 'desc' }" title="Kamayish tartibida" @click="setSort('studentPaid', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'asc' }" title="O'sish tartibida" @click="setSort('amount', 'asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'desc' }" title="Kamayish tartibida" @click="setSort('amount', 'desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
               <th>
                 <div class="select-wrap-relative">
                   <select v-model="filterMethod" class="col-filter-select">
@@ -143,30 +195,52 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="paymentDateFrom || paymentDateTo" type="button" class="btn-clear-date" @click="paymentDateFrom = ''; paymentDateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="paymentDateFrom" type="date" class="col-date-input" title="Sana (dan)" />
+                  <input v-model="paymentDateTo" type="date" class="col-date-input" title="Sana (gacha)" />
                 </div>
               </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCashierId" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="c in distinctCashiers" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
+                </div>
+              </th>
+              <th></th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="payments.length === 0">
-              <td colspan="9" class="no-data">Qaytarilgan statusdagi to'lovlar topilmadi</td>
+            <tr v-if="displayedPayments.length === 0">
+              <td colspan="12" class="no-data">Qaytarilgan statusdagi to'lovlar topilmadi</td>
             </tr>
-            <tr v-for="p in payments" :key="p.id" class="table-row">
+            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
-                <div v-if="p.student_jshshr" class="student-jshshr">JSHSHR: {{ p.student_jshshr }}</div>
               </td>
               <td><span class="cat-pill">{{ p.category_name || '-' }}</span></td>
-              <td>{{ p.group_name || '-' }}</td>
+              <td>
+                <span v-if="p.group" class="link-value" @click="goGroup(p.group)">{{ p.group_name || '-' }}</span>
+                <span v-else>{{ p.group_name || '-' }}</span>
+              </td>
               <td>{{ p.group_started_at ? formatDate(p.group_started_at) : '-' }}</td>
               <td>{{ p.group_ends_at ? formatDate(p.group_ends_at) : '-' }}</td>
+              <td>{{ p.student_paid_amount != null ? formatMoney(p.student_paid_amount) : '-' }}</td>
               <td class="td-amount">
                 <span class="amount-val text-red">-{{ formatMoney(p.amount) }}</span>
               </td>
               <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
+              <td>
+                <span v-if="p.created_by" class="link-value" @click="goUser(p.created_by)">{{ p.created_by_name || '-' }}</span>
+                <span v-else>{{ p.created_by_name || '-' }}</span>
+              </td>
+              <td>{{ p.notes || '-' }}</td>
               <td style="text-align: right;">
                 <div class="row-actions">
                   <template v-if="authStore.isSuperuser">
@@ -194,12 +268,21 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
-          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
-          <span class="page-num">Sahifa {{ currentPage }} / {{ totalPages }}</span>
-          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="returned-page-size">Ko'rsatish:</label>
+          <div class="select-wrap">
+            <select id="returned-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -229,7 +312,7 @@
             <!-- Group-first cascade, then Searchable Student Select -->
             <div class="form-group" v-if="!isEditing">
               <label class="flabel required">Guruhni Tanlang *</label>
-              <div class="searchable-select-wrap">
+              <div class="searchable-select-wrap" ref="groupSelectWrapRef">
                 <input
                   v-model="groupSearchQuery"
                   type="text"
@@ -238,6 +321,7 @@
                   @focus="showGroupDropdown = true"
                   @keydown="onGroupKeydown"
                 />
+                <button v-if="selectedGroupId" type="button" class="input-clear-btn" title="Guruhni bekor qilish" @click="clearGroupSelection">✕</button>
                 <div v-if="showGroupDropdown" class="dropdown-options-list">
                   <div
                     v-for="(g, idx) in filteredGroups"
@@ -257,7 +341,7 @@
 
             <div class="form-group" v-if="!isEditing">
               <label class="flabel required">O'quvchini Ism bo'yicha Qidirish *</label>
-              <div class="searchable-select-wrap">
+              <div class="searchable-select-wrap" ref="studentSelectWrapRef">
                 <input
                   v-model="studentSearchQuery"
                   type="text"
@@ -267,6 +351,7 @@
                   @focus="showStudentDropdown = true"
                   @keydown="onStudentKeydown"
                 />
+                <button v-if="form.enrollment" type="button" class="input-clear-btn" title="O'quvchini bekor qilish" @click="clearStudentSelection">✕</button>
                 <div v-if="showStudentDropdown" class="dropdown-options-list">
                   <div
                     v-for="(e, idx) in filteredEnrollments"
@@ -362,23 +447,30 @@ function goStudent(id) {
   router.push(`/students/${id}`)
 }
 
+function goGroup(id) {
+  if (!id) return
+  router.push(`/groups/${id}`)
+}
+
+function goUser(id) {
+  if (!id) return
+  router.push(`/users/${id}`)
+}
+
 const payments = ref([])
 const enrollments = ref([])
 const categories = ref([])
 const groups = ref([])
 const loading = ref(true)
-const totalCount = ref(0)
 
-// ── Pagination state ─────────────────────────────────────────────────────
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: pick how many rows to show per
+// page of the filtered result set (see displayedPayments below). The
+// fetch itself always pulls the full status=returned dataset — filtering
+// has to see every row, not just whatever page happened to be fetched.
+const pageSizeOption = ref('50')
+const totalCount = ref(0) // total rows matching status=returned, per backend
 const currentPage = ref(1)
-const pageSize = 50
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
-
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
-  fetchPayments()
-}
 
 // Group-first cascade: pick a group, then the student list narrows to that group.
 const {
@@ -388,6 +480,8 @@ const {
   filtered: filteredGroups,
   select: selectGroupRaw,
   reset: resetGroupSelect,
+  isOutside: isGroupSelectOutside,
+  selectRef: groupSelectWrapRef,
 } = useGroupSelect(groups)
 
 function selectGroup(g) {
@@ -396,6 +490,30 @@ function selectGroup(g) {
   selectedStudentLabel.value = ''
   form.value.enrollment = ''
 }
+
+function clearGroupSelection() {
+  resetGroupSelect()
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+
+function clearStudentSelection() {
+  studentSearchQuery.value = ''
+  selectedStudentLabel.value = ''
+  form.value.enrollment = ''
+}
+
+const studentSelectWrapRef = ref(null)
+function handleSelectOutsideClick(e) {
+  if (isGroupSelectOutside(e.target)) {
+    showGroupDropdown.value = false
+  }
+  if (studentSelectWrapRef.value && !studentSelectWrapRef.value.contains(e.target)) {
+    showStudentDropdown.value = false
+  }
+}
+
 const groupKb = useSearchSelectKeyboard()
 function onGroupKeydown(e) {
   groupKb.onKeydown(e, filteredGroups.value, selectGroup, () => { showGroupDropdown.value = false })
@@ -405,35 +523,39 @@ const filterStudentName = ref('')
 const filterCategory = ref('')
 const filterGroupName = ref('')
 const filterMethod = ref('')
+const filterCashierId = ref('')
 
-// ── Group start/end and payment-date sorting ────────────────────────────
+// ── Group start/end date-range column filters ───────────────────────────
+const groupStartFrom = ref('')
+const groupStartTo = ref('')
+const groupEndFrom = ref('')
+const groupEndTo = ref('')
+const paymentDateFrom = ref('')
+const paymentDateTo = ref('')
+
+// ── Sorting (group start/end, payment date, student-paid amount, refund
+// amount) — only one column sorts at a time. ────────────────────────────
 const groupStartSort = ref('') // '', 'asc', 'desc'
 const groupEndSort = ref('')
 const paymentDateSort = ref('')
+const studentPaidSort = ref('')
+const amountSort = ref('')
 
-// Clicking the already-active direction clears the sort; clicking the other
-// direction (or another column) switches to it. Only one column sorts at a time.
+const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, paymentDate: paymentDateSort, studentPaid: studentPaidSort, amount: amountSort }
 function setSort(column, direction) {
-  if (column === 'groupStart') {
-    groupEndSort.value = ''
-    paymentDateSort.value = ''
-    groupStartSort.value = groupStartSort.value === direction ? '' : direction
-  } else if (column === 'groupEnd') {
-    groupStartSort.value = ''
-    paymentDateSort.value = ''
-    groupEndSort.value = groupEndSort.value === direction ? '' : direction
-  } else if (column === 'paymentDate') {
-    groupStartSort.value = ''
-    groupEndSort.value = ''
-    paymentDateSort.value = paymentDateSort.value === direction ? '' : direction
-  }
+  const target = sortRefs[column]
+  Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
+  target.value = target.value === direction ? '' : direction
 }
 
-const orderingParam = computed(() => {
-  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
-  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
-  if (paymentDateSort.value) return (paymentDateSort.value === 'desc' ? '-' : '') + 'created_at'
-  return ''
+// Distinct admins/superusers who recorded payments in the fetched batch,
+// for the "To'lovni kiritgan" filter select.
+const distinctCashiers = computed(() => {
+  const map = {}
+  payments.value.forEach(p => {
+    if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
+  })
+  return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
 })
 
 const showModal = ref(false)
@@ -448,27 +570,91 @@ const selectedStudentLabel = ref('')
 
 const form = ref({ enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
-// Unpaginated but filtered the same way as the table (minus pagination/
-// ordering) — feeds the metrics cards, so they reflect the currently
-// applied filters instead of always summing everything.
-const allPayments = ref([])
-const metrics = computed(() => {
-  const total = allPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  return { total, count: allPayments.value.length }
+// All header filters (student name, category, group name, date ranges,
+// method, cashier, sort) run entirely on the client against the
+// already-fetched `payments` list — no per-keystroke or per-filter network
+// round trip, so there's no debounce delay and no input re-render to steal
+// focus/cursor position, AND they see every row matching status=returned
+// (fetchPayments always pulls all of them), not just whatever page happened
+// to be loaded. No filter/sort triggers a backend request.
+const filteredPayments = computed(() => {
+  let list = payments.value
+
+  if (filterStudentName.value.trim()) {
+    const q = filterStudentName.value.trim().toLowerCase()
+    list = list.filter(p => (p.student_name || '').toLowerCase().includes(q))
+  }
+  if (filterCategory.value) list = list.filter(p => String(p.category) === String(filterCategory.value))
+  if (filterGroupName.value.trim()) {
+    const q = filterGroupName.value.trim().toLowerCase()
+    list = list.filter(p => (p.group_name || '').toLowerCase().includes(q))
+  }
+  if (filterMethod.value) list = list.filter(p => p.method === filterMethod.value)
+  if (filterCashierId.value) list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
+
+  if (groupStartFrom.value) list = list.filter(p => p.group_started_at && p.group_started_at >= groupStartFrom.value)
+  if (groupStartTo.value) list = list.filter(p => p.group_started_at && p.group_started_at <= groupStartTo.value)
+  if (groupEndFrom.value) list = list.filter(p => p.group_ends_at && p.group_ends_at >= groupEndFrom.value)
+  if (groupEndTo.value) list = list.filter(p => p.group_ends_at && p.group_ends_at <= groupEndTo.value)
+  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
+  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
+
+  if (groupStartSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.group_started_at || '').localeCompare(b.group_started_at || '')
+      return groupStartSort.value === 'desc' ? -d : d
+    })
+  } else if (groupEndSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.group_ends_at || '').localeCompare(b.group_ends_at || '')
+      return groupEndSort.value === 'desc' ? -d : d
+    })
+  } else if (paymentDateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.created_at || '').localeCompare(b.created_at || '')
+      return paymentDateSort.value === 'desc' ? -d : d
+    })
+  } else if (studentPaidSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.student_paid_amount ?? -Infinity) - (b.student_paid_amount ?? -Infinity)
+      return studentPaidSort.value === 'desc' ? -d : d
+    })
+  } else if (amountSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.amount || 0) - (b.amount || 0)
+      return amountSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
 })
 
-async function fetchAllPaymentsMetrics() {
-  try {
-    const params = { status: 'returned', page_size: 1000 }
-    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
-    if (filterMethod.value) params.method = filterMethod.value
-
-    const res = await api.get('/payments/', { params })
-    allPayments.value = res.data.results || res.data
-  } catch (err) { console.error(err) }
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
+})
+const displayedPayments = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredPayments.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredPayments.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
 }
+
+// Metrics reflect the currently filtered dataset (not just the visible
+// page) — consistent with "Jami" in the pagination footer below.
+const metrics = computed(() => {
+  const total = filteredPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
+  return { total, count: filteredPayments.value.length }
+})
 
 const filteredEnrollments = computed(() => {
   if (!selectedGroupId.value) return []
@@ -482,13 +668,9 @@ const filteredEnrollments = computed(() => {
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'returned', page: currentPage.value, page_size: pageSize }
-    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterGroupName.value) params.group_name = filterGroupName.value.trim()
-    if (filterMethod.value) params.method = filterMethod.value
-    if (orderingParam.value) params.ordering = orderingParam.value
-
+    // Always the full status=returned dataset — filtering/sorting/pagination
+    // above all need to see every row, not just one page of them.
+    const params = { status: 'returned', page: 1, page_size: 100000 }
     const res = await api.get('/payments/', { params })
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     payments.value = rawList
@@ -518,30 +700,11 @@ async function fetchGroups() {
   } catch (err) { console.error(err) }
 }
 
-// Text-input filters wait for the user to pause typing (1.2s) before
-// re-fetching, so each keystroke doesn't trigger its own request.
-let searchDebounceTimer = null
-watch([filterStudentName, filterGroupName], () => {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    currentPage.value = 1
-    fetchPayments()
-    fetchAllPaymentsMetrics()
-  }, 1200)
-})
-
-// Category/method selects apply immediately and also refresh the cards.
-watch([filterCategory, filterMethod], () => {
-  clearTimeout(searchDebounceTimer)
+// Row-fetch-count no longer needs a backend round trip — it only resets to
+// page 1 of the filtered result set; every filter/sort/page above is
+// purely client-side.
+watch(pageSizeOption, () => {
   currentPage.value = 1
-  fetchPayments()
-  fetchAllPaymentsMetrics()
-})
-
-// Sorting doesn't change which rows match, so it only re-fetches the table.
-watch([groupStartSort, groupEndSort, paymentDateSort], () => {
-  currentPage.value = 1
-  fetchPayments()
 })
 
 function selectEnrollment(e) {
@@ -615,7 +778,6 @@ async function savePayment() {
     }
     closeModal()
     fetchPayments()
-    fetchAllPaymentsMetrics()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
 }
@@ -639,7 +801,6 @@ async function performDelete() {
     await api.delete(`/payments/${deletingPayment.value.id}/`)
     deleteModal.value?.close()
     fetchPayments()
-    fetchAllPaymentsMetrics()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -649,12 +810,14 @@ async function performDelete() {
 
 onMounted(() => {
   fetchPayments()
-  fetchAllPaymentsMetrics()
   fetchEnrollments()
   fetchCategories()
   fetchGroups()
+  document.addEventListener('click', handleSelectOutsideClick)
 })
-onUnmounted(() => { clearTimeout(searchDebounceTimer) })
+onUnmounted(() => {
+  document.removeEventListener('click', handleSelectOutsideClick)
+})
 </script>
 
 <style scoped>
@@ -733,13 +896,48 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #DC2626; color: #DC2626; background: #FEF2F2; }
 
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+/* ── Per-column date-range filters (under sort buttons) ────── */
+.col-date-range {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+  font-family: 'Inter', sans-serif;
+}
+.col-date-input:focus { border-color: #DC2626; outline: none; }
+
 .no-data { text-align: center; padding: 40px; color: #9CA3AF; font-size: 14px; }
 
-/* ── Pagination ───────────────────────────────────────────── */
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
 .pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
 .pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
 .pagination-actions { display: flex; align-items: center; gap: 8px; }
-.page-num { display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
 .btn-page {
   padding: 6px 14px;
   background: white;
@@ -753,11 +951,33 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 }
 .btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
 .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.select-wrap { position: relative; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #DC2626; outline: none; }
 
 .student-name { font-weight: 700; color: #111827; }
-.link-value { cursor: pointer; }
-.link-value:hover { text-decoration: underline; }
-.student-jshshr { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.link-value { cursor: pointer; color: #2563EB !important; font-weight: 700 !important; text-decoration: underline; }
+.link-value:hover { color: #1D4ED8 !important; }
 .cat-pill { padding: 4px 10px; background: #FEE2E2; color: #991B1B; border-radius: 8px; font-size: 12px; font-weight: 700; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
@@ -792,6 +1012,14 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 .select-chevron-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9CA3AF; font-size: 10px; }
 
 .searchable-select-wrap { position: relative; width: 100%; }
+.input-clear-btn {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%; border: none;
+  background: #E5E7EB; color: #4B5563; font-size: 11px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.input-clear-btn:hover { background: #D1D5DB; color: #111827; }
+.searchable-select-wrap .finput { padding-right: 34px; }
 .dropdown-options-list { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1.5px solid #DC2626; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 50; margin-top: 4px; }
 .dropdown-option-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #F3F4F6; &:hover { background: #FEE2E2; } &.selected { background: #FCA5A5; font-weight: 700; } &.highlighted { background: #FEE2E2; } }
 .opt-name { font-size: 13.5px; font-weight: 600; color: #111827; }

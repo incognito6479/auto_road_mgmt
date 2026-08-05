@@ -116,6 +116,26 @@ class User(AbstractUser):
         help_text="Namuna: 2275679",
     )
 
+    birth_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Tug'ilgan sana (o'quvchilar uchun)",
+    )
+
+    license_series = models.CharField(
+        max_length=2,
+        blank=True,
+        null=True,
+        help_text="Instruktorlik guvohnomasi seriyasi (2 ta harf). Namuna: AB",
+    )
+
+    license_number = models.CharField(
+        max_length=6,
+        blank=True,
+        null=True,
+        help_text="Instruktorlik guvohnomasi raqami (6 ta raqam)",
+    )
+
     certificate_series = models.CharField(
         max_length=2,
         blank=True,
@@ -373,6 +393,15 @@ class Agent(BaseModel):
     full_name = models.CharField(max_length=255, help_text="Agent F.I.SH.")
     phone = models.CharField(max_length=20, unique=True, help_text="Telefon raqami")
     phone2 = models.CharField(max_length=20, blank=True, null=True, help_text="Qo'shimcha telefon raqami")
+    user = models.OneToOneField(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={"role__in": ["instructor", "coordinator"]},
+        related_name="agent_profile",
+        help_text="Agar bu agent aslida talaba olib kelgan o'qituvchi/instruktor bo'lsa, shu foydalanuvchiga bog'lanadi",
+    )
 
     class Meta:
         db_table = "agent"
@@ -472,6 +501,16 @@ class Enrollment(BaseModel):
         null=True,
         help_text="Shartnoma summasi",
     )
+    can_view_payments = models.BooleanField(
+        default=True,
+        blank=True,
+        null=True,
+        help_text="O'quvchi o'z to'lovlar tarixini ko'ra oladimi",
+    )
+    excel_imported = models.BooleanField(
+        default=False,
+        help_text="Excel fayl orqali import qilingan yozuv (shartnoma summasi bo'sh bo'lishi mumkin)",
+    )
 
     class Meta:
         db_table = "enrollment"
@@ -491,7 +530,7 @@ class Payment(BaseModel):
         PAID = "paid", "To'langan"
         BONUS = "bonus", "Bonus"
         BANK = "bank", "Bank"
-        BONUS_TEACHER = "bonus_teacher", "O'qituvchi bonusi"
+        BONUS_TEACHER = "bonus_teacher", "Sertifikat bonusi"
 
     class Method(models.TextChoices):
         CASH = "cash", "Naqd"
@@ -511,6 +550,17 @@ class Payment(BaseModel):
         User,
         on_delete=models.PROTECT,
         related_name="payments",
+        help_text="Payment's counterpart per status: cashier who accepted/returned/banked it, "
+                   "the agent-bonus payout's cashier, or the teacher/instructor being paid.",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recorded_payments",
+        help_text="The admin/superuser who entered this payment record into the system — "
+                   "distinct from 'user', which means different things per status.",
     )
     enrollment = models.ForeignKey(
         Enrollment,
@@ -536,6 +586,12 @@ class Payment(BaseModel):
         max_length=20,
         choices=Method.choices,
         default=Method.CASH,
+    )
+    click_check_image = models.FileField(
+        upload_to="click_checks/",
+        blank=True,
+        null=True,
+        help_text="Click orqali to'langanda, to'lov cheki rasmi (ixtiyoriy)",
     )
 
     class Meta:
@@ -765,6 +821,50 @@ class DrivingLessons(BaseModel):
         return f"{self.student.full_name} - {self.instructor.full_name} ({self.lesson_date})"
 
 
+class AutodromeAccessGrant(BaseModel):
+    """
+    Extra autodrome visit allowance an admin/superuser grants a student once
+    they've used up the standard AUTODROME_MAX_HOURS (or their group has
+    finished). Grants a number of extra visits/hours, valid only within an
+    explicit date range (e.g. "6 more times, for the next week").
+    """
+
+    student = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": "student"},
+        related_name="autodrome_grants",
+    )
+    granted_by = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="autodrome_grants_given",
+    )
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="autodrome_grants",
+    )
+    visits = models.PositiveSmallIntegerField(
+        help_text="Necha marta avtodromga qayta borishga ruxsat berilgan",
+    )
+    start_date = models.DateField(help_text="Amal qilish boshlanish sanasi")
+    end_date = models.DateField(help_text="Amal qilish tugash sanasi")
+
+    class Meta:
+        db_table = "autodrome_access_grant"
+        verbose_name = "Avtodrom qo'shimcha ruxsati"
+        verbose_name_plural = "Avtodrom qo'shimcha ruxsatlari"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.visits}x ({self.start_date} - {self.end_date})"
+
+
 class Notification(BaseModel):
     """System notifications model."""
 
@@ -863,8 +963,47 @@ class TeacherReview(BaseModel):
         return f"{self.student.full_name} -> {self.teacher.full_name} ({self.rating}/5)"
 
 
+class Attendance(BaseModel):
+    """
+    Per-day absence mark a teacher (coordinator) or instructor records for one
+    of their assigned students. Only today's record is ever writable from the
+    client (enforced in the view) — past days are frozen history, future days
+    don't exist yet.
+    """
+
+    enrollment = models.ForeignKey(
+        Enrollment,
+        on_delete=models.CASCADE,
+        related_name="attendance_records",
+    )
+    date = models.DateField(help_text="Yo'qlama sanasi")
+    is_absent = models.BooleanField(
+        default=True,
+        help_text="Belgilangan bo'lsa, o'quvchi shu kuni darsga kelmagan",
+    )
+    marked_by = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_marks",
+        help_text="Yo'qlamani belgilagan o'qituvchi/instruktor",
+    )
+
+    class Meta:
+        db_table = "attendance"
+        verbose_name = "Davomat"
+        verbose_name_plural = "Davomatlar"
+        ordering = ["-date"]
+        unique_together = ["enrollment", "date"]
+
+    def __str__(self):
+        state = "Kelmadi" if self.is_absent else "Keldi"
+        return f"{self.enrollment.student.full_name} - {self.date} ({state})"
+
+
 class StudentCertificate(BaseModel):
-    """A certificate photo an instructor uploads for a specific student."""
+    """A certificate photo a teacher (coordinator) uploads for a specific student."""
 
     branch = models.ForeignKey(
         "Branch",
@@ -880,14 +1019,14 @@ class StudentCertificate(BaseModel):
         related_name="certificates",
         help_text="Sertifikat tegishli bo'lgan o'quvchi",
     )
-    instructor = models.ForeignKey(
+    coordinator = models.ForeignKey(
         "User",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        limit_choices_to={"role": "instructor"},
+        limit_choices_to={"role": "coordinator"},
         related_name="uploaded_certificates",
-        help_text="Sertifikatni yuklagan instruktor",
+        help_text="Sertifikatni yuklagan o'qituvchi",
     )
     image = models.FileField(
         upload_to="certificates/",
@@ -899,7 +1038,7 @@ class StudentCertificate(BaseModel):
         null=True,
         blank=True,
         related_name="certificate",
-        help_text="Ushbu sertifikat uchun instruktorga to'langan bonus to'lovi (agar to'langan bo'lsa)",
+        help_text="Ushbu sertifikat uchun o'qituvchiga to'langan bonus to'lovi (agar to'langan bo'lsa)",
     )
 
     class Meta:

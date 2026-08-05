@@ -154,6 +154,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/absence-report',
+    name: 'absence-report',
+    component: () => import('@/views/AbsenceReportView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/holidays',
     name: 'holidays',
     component: () => import('@/views/HolidaysView.vue'),

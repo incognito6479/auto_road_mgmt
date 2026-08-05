@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, CarAssignmentHistory, CarWash, DrivingLessons, Notification, TeacherReview, StudentCertificate
+from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, CarAssignmentHistory, CarWash, DrivingLessons, AutodromeAccessGrant, Notification, TeacherReview, StudentCertificate, Attendance
 
 
 @admin.register(Branch)
@@ -122,12 +122,12 @@ class EnrollmentAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "enrollment", "branch", "amount", "status", "method", "is_active", "notes", "created_at", "updated_at")
+    list_display = ("id", "user", "created_by", "enrollment", "branch", "amount", "status", "method", "is_active", "notes", "created_at", "updated_at")
     list_filter = ("branch", "status", "method", "is_active", "created_at")
     search_fields = ("enrollment__student__first_name", "enrollment__student__last_name", "user__phone")
     ordering = ("-created_at",)
     readonly_fields = ("id", "created_at", "updated_at")
-    fields = ("enrollment", "user", "branch", "amount", "status", "method", "notes", "is_active", "created_at", "updated_at")
+    fields = ("enrollment", "user", "created_by", "branch", "amount", "status", "method", "click_check_image", "notes", "is_active", "created_at", "updated_at")
 
 
 @admin.register(Holidays)
@@ -180,6 +180,15 @@ class DrivingLessonsAdmin(admin.ModelAdmin):
     fields = ("student", "instructor", "car", "branch", "lesson_date", "notes", "is_active", "created_at", "updated_at")
 
 
+@admin.register(AutodromeAccessGrant)
+class AutodromeAccessGrantAdmin(admin.ModelAdmin):
+    list_display = ("id", "student", "granted_by", "branch", "visits", "start_date", "end_date", "is_active", "created_at")
+    list_filter = ("branch", "is_active", "start_date", "end_date")
+    search_fields = ("student__full_name", "student__phone", "granted_by__full_name")
+    ordering = ("-created_at",)
+    readonly_fields = ("id", "granted_by", "created_at", "updated_at")
+
+
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     list_display = ("id", "title", "status", "user", "branch", "is_read", "date", "is_active", "created_at", "updated_at")
@@ -201,8 +210,17 @@ class TeacherReviewAdmin(admin.ModelAdmin):
 
 @admin.register(StudentCertificate)
 class StudentCertificateAdmin(admin.ModelAdmin):
-    list_display = ("id", "student", "instructor", "branch", "bonus_payment", "is_active", "created_at")
+    list_display = ("id", "student", "coordinator", "branch", "bonus_payment", "is_active", "created_at")
     list_filter = ("branch", "is_active", "created_at")
-    search_fields = ("student__full_name", "instructor__full_name", "notes")
+    search_fields = ("student__full_name", "coordinator__full_name", "notes")
     ordering = ("-created_at",)
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    list_display = ("id", "enrollment", "date", "is_absent", "marked_by", "is_active", "created_at")
+    list_filter = ("is_absent", "is_active", "date")
+    search_fields = ("enrollment__student__full_name", "marked_by__full_name")
+    ordering = ("-date",)
     readonly_fields = ("id", "created_at", "updated_at")

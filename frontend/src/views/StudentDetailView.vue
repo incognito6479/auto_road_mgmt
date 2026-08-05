@@ -13,6 +13,13 @@
       <div v-if="student" class="header-info">
         <div class="header-avatar" @click="openImageModal(student.image || '/default_photo.png')" title="Rasmni kattalashtirish">
           <img :src="student.image || '/default_photo.png'" alt="Student" class="user-avatar-img" />
+          <button
+            v-if="!student.image && authStore.isAdminOrSuperuser"
+            type="button"
+            class="avatar-add-btn"
+            title="Rasm yuklash"
+            @click.stop="openStudentPhotoModal"
+          >+</button>
         </div>
         <div>
           <h1 class="header-name">{{ student.full_name || student.phone }}</h1>
@@ -40,19 +47,14 @@
           </svg>
           Pasport rasmi
         </button>
-        <button class="btn-confirm-lesson" v-if="canAddLesson" @click="openLessonModal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
+        <button class="btn-contract-header" v-if="enrollment" :disabled="downloadingContract" @click="downloadContract">
+          <div v-if="downloadingContract" class="spinner spinner-sm"></div>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Amaliy haydash darsini tasdiqlash
-        </button>
-        <button class="btn-payment" v-if="canTakePayment" @click="openPaymentModal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-            <rect x="2" y="5" width="20" height="14" rx="2"/>
-            <line x1="2" y1="10" x2="22" y2="10"/>
-          </svg>
-          To'lov qabul qilish
+          Shartnomani yuklash
         </button>
         <button class="btn-edit-main" v-if="authStore.isAdminOrSuperuser" @click="openEditModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
@@ -94,6 +96,7 @@
             <div class="info-row" v-if="student.phone2"><span class="info-label">Qo'shimcha tel.</span><span class="info-value">{{ formatPhone(student.phone2) }}</span></div>
             <div class="info-row"><span class="info-label">JSHSHR</span><span class="info-value mono">{{ student.jshshr || '-' }}</span></div>
             <div class="info-row"><span class="info-label">Pasport</span><span class="info-value mono">{{ student.passport_serie || '' }} {{ student.passport_number || '' }}</span></div>
+            <div class="info-row"><span class="info-label">Tug'ilgan sana</span><span class="info-value">{{ student.birth_date ? formatDate(student.birth_date) : '-' }}</span></div>
             <div class="info-row">
               <span class="info-label">Pasport nusxasi</span>
               <span class="info-value">
@@ -147,12 +150,26 @@
           <div class="info-grid">
             <div class="info-row"><span class="info-label">Kategoriya</span><span class="info-value"><span class="cat-badge">{{ enrollment.category_name || '-' }}</span></span></div>
             <div class="info-row"><span class="info-label">Holat</span><span class="info-value"><span class="status-badge" :class="statusClass(activeStatus)">{{ statusText(activeStatus) }}</span></span></div>
-            <div class="info-row" v-if="enrollment.instructor_name"><span class="info-label">Instruktor</span><span class="info-value link-value" @click="goTeacher(enrollment.instructor)">{{ enrollment.instructor_name }}</span></div>
-            <div class="info-row" v-if="enrollment.coordinator_name"><span class="info-label">O'qituvchi</span><span class="info-value link-value" @click="goTeacher(enrollment.coordinator)">{{ enrollment.coordinator_name }}</span></div>
-            <div class="info-row" v-if="enrollment.learning_place_name"><span class="info-label">O'quv joyi</span><span class="info-value">{{ enrollment.learning_place_name }}</span></div>
-            <div class="info-row" v-if="enrollment.learning_time"><span class="info-label">O'quv vaqti</span><span class="info-value">{{ enrollment.learning_time }}</span></div>
-            <div class="info-row" v-if="enrollment.learning_days"><span class="info-label">O'quv kunlari</span><span class="info-value">{{ formatLearningDays(enrollment.learning_days) }}</span></div>
-            <div class="info-row" v-if="enrollment.agent_name"><span class="info-label">Agent</span><span class="info-value link-value" @click="goAgent(enrollment.agent)">{{ enrollment.agent_name }}</span></div>
+            <div class="info-row">
+              <span class="info-label">Instruktor</span>
+              <span v-if="enrollment.instructor_name" class="info-value link-value" @click="goTeacher(enrollment.instructor)">{{ enrollment.instructor_name }}</span>
+              <span v-else-if="authStore.isAdminOrSuperuser" class="info-value"><button type="button" class="btn-assign-small" @click="openAssignModal('instructor')">+ Biriktirish</button></span>
+              <span v-else class="info-value">-</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">O'qituvchi</span>
+              <span v-if="enrollment.coordinator_name" class="info-value link-value" @click="goTeacher(enrollment.coordinator)">{{ enrollment.coordinator_name }}</span>
+              <span v-else-if="authStore.isAdminOrSuperuser" class="info-value"><button type="button" class="btn-assign-small" @click="openAssignModal('coordinator')">+ Biriktirish</button></span>
+              <span v-else class="info-value">-</span>
+            </div>
+            <div class="info-row"><span class="info-label">O'quv joyi</span><span class="info-value">{{ enrollment.learning_place_name || '-' }}</span></div>
+            <div class="info-row"><span class="info-label">O'quv vaqti</span><span class="info-value">{{ enrollment.learning_time || '-' }}</span></div>
+            <div class="info-row"><span class="info-label">O'quv kunlari</span><span class="info-value">{{ enrollment.learning_days ? formatLearningDays(enrollment.learning_days) : '-' }}</span></div>
+            <div class="info-row">
+              <span class="info-label">Agent</span>
+              <span v-if="enrollment.agent_name" class="info-value link-value" @click="goAgent(enrollment.agent)">{{ enrollment.agent_name }}</span>
+              <span v-else class="info-value">-</span>
+            </div>
             <div class="info-row" v-if="canSeePaymentInfo"><span class="info-label">Shartnoma summasi</span><span class="info-value fw"><span v-if="enrollment.enrolled_free" class="badge-free">Tekin (Bonus)</span><span v-else>{{ formatMoney(enrollment.enrolled_amount) }}</span></span></div>
           </div>
         </div>
@@ -168,7 +185,8 @@
           <div class="info-grid">
             <div class="info-row">
               <span class="info-label">Guruh nomi</span>
-              <span class="info-value fw">{{ group ? group.name : "Biriktirilmagan" }}</span>
+              <span v-if="group" class="info-value fw link-value" @click="goGroup(group.id)">{{ group.name }}</span>
+              <span v-else class="info-value fw">Biriktirilmagan</span>
             </div>
             <div class="info-row">
               <span class="info-label">Kategoriya</span>
@@ -270,7 +288,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="8" r="6"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg>
             </span>
             <h2 class="card-title">Imtihondan o'tganligi haqida</h2>
-            <button v-if="canUploadCertificate" type="button" class="btn-add-payment" @click="openCertModal">
+            <button v-if="canUploadCertificate && certificates.length === 0" type="button" class="btn-add-payment" @click="openCertModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Qo'shish
             </button>
@@ -281,11 +299,12 @@
             <div v-for="c in certificates" :key="c.id" class="cert-card">
               <img :src="c.image" alt="Imtihondan o'tganligi haqida" class="cert-image" @click="openImageModal(c.image)" />
               <div class="cert-meta">
-                <div class="cert-uploader">{{ c.instructor_name || '-' }}</div>
+                <div v-if="c.coordinator" class="cert-uploader link-value" @click="goTeacher(c.coordinator)">{{ c.coordinator_name || '-' }}</div>
+                <div v-else class="cert-uploader">{{ c.coordinator_name || '-' }}</div>
                 <div class="cert-date">{{ formatDate(c.created_at) }}</div>
                 <p v-if="c.notes" class="cert-notes">{{ c.notes }}</p>
               </div>
-              <div v-if="authStore.isAdminOrSuperuser" class="cert-bonus-row">
+              <div v-if="authStore.isSuperuser" class="cert-bonus-row">
                 <span v-if="c.bonus_paid" class="bonus-paid-badge">✓ Bonus to'landi ({{ formatMoney(c.bonus_amount) }})</span>
                 <button v-else type="button" class="btn-pay-cert-bonus" @click="openBonusModal(c)">Bonus to'lash</button>
               </div>
@@ -321,6 +340,37 @@
           </div>
         </div>
 
+        <!-- Davomat hisoboti (Absence report) -->
+        <div class="detail-card" v-if="enrollment">
+          <div class="card-header">
+            <span class="card-icon card-icon-red">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+                <path d="M9 16l2 2 4-4"/>
+              </svg>
+            </span>
+            <h2 class="card-title">Davomat hisoboti</h2>
+          </div>
+          <div v-if="loadingAttendanceSummary" class="mini-state"><div class="spinner spinner-sm"></div><span>Yuklanmoqda...</span></div>
+          <div v-else class="payment-stats cols-3">
+            <div class="pay-stat">
+              <div class="pay-stat-label">Kelgan kunlar</div>
+              <div class="pay-stat-value green">{{ visitedDaysCount }}</div>
+            </div>
+            <div class="pay-stat pay-stat-clickable" title="Kelmagan kunlarni ko'rish" @click="openAbsenceModal">
+              <div class="pay-stat-label">Kelmagan kunlar</div>
+              <div class="pay-stat-value red">{{ unvisitedDaysCount }}</div>
+            </div>
+            <div class="pay-stat">
+              <div class="pay-stat-label">Jami kunlar</div>
+              <div class="pay-stat-value">{{ totalDaysCount }}</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Payment History -->
         <div class="detail-card" v-if="canSeePaymentInfo">
           <div class="card-header">
@@ -328,6 +378,18 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             </span>
             <h2 class="card-title">To'lovlar Tarixi</h2>
+            <button
+              v-if="authStore.canManageFinances && enrollment"
+              type="button"
+              class="btn-toggle-payments"
+              :class="{ on: enrollment.can_view_payments !== false }"
+              :disabled="togglingCanViewPayments"
+              @click="toggleCanViewPayments"
+              :title="enrollment.can_view_payments !== false ? 'O\'quvchi ko\'ra oladi — o\'chirish uchun bosing' : 'O\'quvchidan yashirilgan — yoqish uchun bosing'"
+            >
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="toggle-label">{{ enrollment.can_view_payments !== false ? "O'quvchi ko'ra oladi" : "O'quvchidan yashirilgan" }}</span>
+            </button>
           </div>
           <div v-if="loadingPayments" class="mini-state"><div class="spinner spinner-sm"></div><span>Yuklanmoqda...</span></div>
           <div v-else-if="payments.length === 0" class="mini-state">
@@ -341,7 +403,10 @@
                 <tr v-for="p in payments" :key="p.id" class="pay-row">
                   <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
                   <td class="td-amount">{{ formatMoney(p.amount) }}</td>
-                  <td><span class="method-badge">{{ methodText(p.method) }}</span></td>
+                  <td>
+                    <span class="method-badge">{{ methodText(p.method) }}</span>
+                    <button v-if="p.method === 'click' && p.click_check_image" type="button" class="btn-check-preview" title="Chek rasmini ko'rish" @click="openImageModal(p.click_check_image)">🧾</button>
+                  </td>
                   <td><span class="pay-status-badge" :class="payStatusClass(p.status)">{{ payStatusText(p.status) }}</span></td>
                   <td class="td-notes">{{ p.notes || '-' }}</td>
                 </tr>
@@ -360,6 +425,7 @@
               </svg>
             </span>
             <h2 class="card-title">Amaliy Haydash Darslari Tarixi</h2>
+            <span v-if="drivingLessonsOnly.length > 0" class="lesson-count-badge">{{ drivingLessonsOnly.length }} marta tasdiqlangan</span>
             <button class="btn-add-payment btn-add-lesson" v-if="canAddLesson" @click="openLessonModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                 <line x1="12" y1="5" x2="12" y2="19"/>
@@ -397,8 +463,8 @@
               <tbody>
                 <tr v-for="l in drivingLessonsOnly" :key="l.id" class="pay-row">
                   <td class="td-date font-bold">📅 {{ formatDateTime(l.lesson_date) }}</td>
-                  <td><span class="instructor-chip font-bold">👤 {{ l.instructor_name || '-' }}</span></td>
-                  <td><span class="car-chip font-bold">🚘 {{ l.car_name || '-' }}</span></td>
+                  <td><span class="instructor-chip font-bold link-value" @click="goTeacher(l.instructor)">👤 {{ l.instructor_name || '-' }}</span></td>
+                  <td><span class="car-chip font-bold link-value" @click="goCar(l.car)">🚘 {{ l.car_name || '-' }}</span></td>
                   <td><span class="pay-status-badge pstatus-accepted">✓ Tasdiqlangan</span></td>
                   <td class="td-notes">{{ l.notes || '-' }}</td>
                 </tr>
@@ -418,12 +484,22 @@
             </span>
             <h2 class="card-title">Avtodrom</h2>
             <span style="font-size: 12px; color: #6B7280; margin-right: 10px;">Qolgan: {{ autodromeHoursRemaining }} / {{ autodromeMaxHours }} soat</span>
-            <button class="btn-add-payment btn-add-lesson" v-if="canAddLesson && autodromeHoursRemaining > 0" @click="openAutodromeModal">
+            <span v-if="autodromeAvailableDate" style="font-size: 12px; color: #6B7280; margin-right: 10px;">
+              Mavjud bo'ladigan sana: <strong>{{ formatDate(autodromeAvailableDate) }}</strong>
+            </span>
+            <button class="btn-add-payment btn-add-lesson" v-if="canAddAutodrome" @click="openAutodromeModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
               Avtodrom tasdiqlash
+            </button>
+            <button class="btn-add-payment btn-add-lesson" v-if="authStore.isAdminOrSuperuser && (autodromeHoursRemaining === 0 || group?.status === 'finished')" @click="openGrantModal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Qayta kirish imkoniyati berish
             </button>
           </div>
 
@@ -447,6 +523,7 @@
                 <tr>
                   <th>Sana</th>
                   <th>Soat</th>
+                  <th>Instruktor</th>
                   <th>Holat</th>
                   <th>Izoh</th>
                 </tr>
@@ -455,6 +532,7 @@
                 <tr v-for="l in autodromeLessons" :key="l.id" class="pay-row">
                   <td class="td-date font-bold">📅 {{ formatDateTime(l.lesson_date) }}</td>
                   <td><span class="instructor-chip font-bold">{{ l.hours }} soat</span></td>
+                  <td><span class="instructor-chip font-bold link-value" @click="goTeacher(l.instructor)">👤 {{ l.instructor_name || '-' }}</span></td>
                   <td><span class="pay-status-badge pstatus-accepted">✓ Tasdiqlangan</span></td>
                   <td class="td-notes">{{ l.notes || '-' }}</td>
                 </tr>
@@ -482,20 +560,21 @@
             <div class="form-group"><label class="form-label">JSHSHR</label><input v-model="editForm.jshshr" type="text" maxlength="14" class="form-input mono" placeholder="14 ta raqam"/></div>
             <div class="form-group"><label class="form-label">Pasport Seriyasi</label><input v-model="editForm.passport_serie" type="text" maxlength="2" class="form-input text-upper" placeholder="AA"/></div>
             <div class="form-group"><label class="form-label">Pasport Raqami</label><input v-model="editForm.passport_number" type="text" maxlength="7" class="form-input mono" placeholder="1234567"/></div>
+            <div class="form-group"><label class="form-label">Tug'ilgan sana</label><input v-model="editForm.birth_date" type="date" class="form-input"/></div>
             <div class="form-group"><label class="form-label">Sertifikat Seriyasi</label><input v-model="editForm.certificate_series" type="text" maxlength="2" class="form-input text-upper" placeholder="AB"/></div>
             <div class="form-group"><label class="form-label">Sertifikat Raqami</label><input v-model="editForm.certificate_number" type="text" maxlength="9" class="form-input mono" placeholder="9 ta raqam"/></div>
             <div class="form-group">
               <label class="form-label">O'quvchi Rasmi (Foto)</label>
               <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
                 <img v-if="editForm.existingImage" :src="editForm.existingImage" alt="Photo" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-                <input type="file" accept="image/*" class="form-input" style="width: 100%;" @change="onEditStudentPhotoChange" />
+                <FileSelectInput ref="editStudentPhotoInputRef" accept="image/*" @change="onEditStudentPhotoChange" />
               </div>
             </div>
             <div class="form-group">
               <label class="form-label">Pasport Rasmi / Nusxasi</label>
               <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
                 <img v-if="editForm.existingPassImg" :src="editForm.existingPassImg" alt="Passport" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-                <input type="file" accept="image/*,.pdf" class="form-input" style="width: 100%;" @change="onEditPassportPhotoChange" />
+                <FileSelectInput ref="editPassportPhotoInputRef" accept="image/*,.pdf" @change="onEditPassportPhotoChange" />
               </div>
             </div>
           </div>
@@ -556,12 +635,9 @@
                 <svg class="sel-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
               </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">To'lov holati</label>
-              <div class="select-wrap">
-                <select v-model="payForm.status" class="form-input form-select"><option value="accepted">Qabul qilingan</option><option value="paid">To'langan</option><option value="bank">Bank</option></select>
-                <svg class="sel-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-              </div>
+            <div class="form-group fg-full" v-if="payForm.method === 'click'">
+              <label class="form-label">Click cheki rasmi (ixtiyoriy)</label>
+              <FileSelectInput ref="payCheckFileInputRef" accept="image/*" @change="onPayCheckFileChange" />
             </div>
             <div class="form-group fg-full"><label class="form-label">Eslatma</label><input v-model="payForm.notes" type="text" class="form-input" placeholder="Ixtiyoriy..."/></div>
           </div>
@@ -692,6 +768,39 @@
       </form>
     </dialog>
 
+    <!-- AVTODROM EXTRA ACCESS GRANT MODAL -->
+    <dialog ref="grantModal" class="modal-dialog modal-sm" closedby="any">
+      <form class="modal-form" @submit.prevent="submitGrant">
+        <div class="modal-head">
+          <h3 class="modal-title">Avtodromga qayta kirish imkoniyati berish</h3>
+          <button type="button" class="btn-close" @click="grantModal?.close()">✕</button>
+        </div>
+        <div v-if="grantError" class="modal-error">{{ grantError }}</div>
+
+        <div class="form-section">
+          <div class="form-group">
+            <label class="form-label">Necha marta borishga ruxsat <span class="req">*</span></label>
+            <input v-model.number="grantForm.visits" type="number" min="1" class="form-input" placeholder="Masalan: 6" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Boshlanish sanasi <span class="req">*</span></label>
+            <input v-model="grantForm.start_date" type="date" class="form-input" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tugash sanasi <span class="req">*</span></label>
+            <input v-model="grantForm.end_date" type="date" class="form-input" required/>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="grantModal?.close()">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="grantSaving">
+            <span v-if="grantSaving" class="btn-spinner"></span>{{ grantSaving ? 'Saqlanmoqda...' : 'Ruxsat berish' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- LEAVE REVIEW MODAL -->
     <dialog ref="reviewModal" class="modal-dialog modal-sm" closedby="any">
       <form class="modal-form" @submit.prevent="submitReview">
@@ -742,7 +851,7 @@
         <div class="form-section">
           <div class="form-group">
             <label class="form-label">Rasm <span class="req">*</span></label>
-            <input type="file" accept="image/*" class="form-input" @change="onCertFileChange" required />
+            <FileSelectInput ref="certFileInputRef" accept="image/*" required @change="onCertFileChange" />
           </div>
 
           <div class="form-group">
@@ -772,7 +881,7 @@
         <div class="form-section">
           <div class="form-group">
             <label class="form-label">Pasport rasmi / nusxasi <span class="req">*</span></label>
-            <input type="file" accept="image/*,.pdf" class="form-input" @change="onPassportUploadFileChange" required />
+            <FileSelectInput ref="passportUploadFileInputRef" accept="image/*,.pdf" required @change="onPassportUploadFileChange" />
           </div>
         </div>
 
@@ -814,14 +923,84 @@
       </form>
     </dialog>
 
+    <!-- Student Photo Upload Modal (dedicated — just the file field) -->
+    <dialog ref="studentPhotoModal" class="modal-dialog modal-sm" closedby="any">
+      <form class="modal-form" @submit.prevent="submitStudentPhoto">
+        <div class="modal-head">
+          <h3 class="modal-title">O'quvchi Rasmini Yuklash</h3>
+          <button type="button" class="btn-close" @click="studentPhotoModal?.close()">✕</button>
+        </div>
+        <div v-if="studentPhotoError" class="modal-error">{{ studentPhotoError }}</div>
+
+        <div class="form-section">
+          <div class="form-group">
+            <label class="form-label">O'quvchi rasmi <span class="req">*</span></label>
+            <FileSelectInput ref="studentPhotoInputRef" accept="image/*" required @change="onStudentPhotoFileChange" />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="studentPhotoModal?.close()">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="studentPhotoSaving || !studentPhotoFile">
+            <span v-if="studentPhotoSaving" class="btn-spinner"></span>{{ studentPhotoSaving ? 'Yuklanmoqda...' : 'Yuklash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Instructor / Coordinator Assign Modal (search-select) -->
+    <dialog ref="assignModal" class="modal-dialog modal-sm" closedby="any">
+      <form class="modal-form" @submit.prevent="submitAssign">
+        <div class="modal-head">
+          <h3 class="modal-title">{{ assignRole === 'instructor' ? 'Instruktor biriktirish' : "O'qituvchi biriktirish" }}</h3>
+          <button type="button" class="btn-close" @click="assignModal?.close()">✕</button>
+        </div>
+        <div v-if="assignError" class="modal-error">{{ assignError }}</div>
+
+        <div class="form-section">
+          <div class="form-group">
+            <label class="form-label">Qidirish</label>
+            <input v-model="assignSearch" type="text" class="form-input" placeholder="Ism yoki telefon bo'yicha qidirish..." />
+          </div>
+          <div class="assign-options-list">
+            <div v-if="assignOptions.length === 0" class="assign-empty">Topilmadi.</div>
+            <button
+              v-for="o in assignOptions"
+              :key="o.id"
+              type="button"
+              class="assign-option"
+              :class="{ selected: assignSelectedId === o.id }"
+              @click="assignSelectedId = o.id"
+            >
+              <img :src="o.image || '/default_photo.png'" alt="" class="assign-option-avatar" />
+              <span class="assign-option-name">{{ o.full_name || o.phone }}</span>
+              <span v-if="assignSelectedId === o.id" class="assign-option-check">✓</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" @click="assignModal?.close()">Bekor qilish</button>
+          <button type="submit" class="btn-save" :disabled="assignSaving || !assignSelectedId">
+            <span v-if="assignSaving" class="btn-spinner"></span>{{ assignSaving ? 'Saqlanmoqda...' : 'Biriktirish' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- PAY TEACHER BONUS MODAL -->
     <dialog ref="bonusModal" class="modal-dialog modal-sm" closedby="any">
       <form class="modal-form" @submit.prevent="submitCertBonus">
         <div class="modal-head">
-          <h3 class="modal-title">Instruktorga bonus to'lash</h3>
+          <h3 class="modal-title">O'qituvchiga bonus to'lash</h3>
           <button type="button" class="btn-close" @click="bonusModal?.close()">✕</button>
         </div>
         <div v-if="bonusError" class="modal-error">{{ bonusError }}</div>
+
+        <div v-if="bonusTarget" class="pay-info-summary">
+          <p>O'qituvchi: <strong>{{ bonusTarget.bonus_payment_user_name || '-' }}</strong></p>
+          <p>O'quvchi: <strong>{{ bonusTarget.student_name }}</strong></p>
+        </div>
 
         <div class="form-section">
           <div class="form-group">
@@ -850,6 +1029,34 @@
       </form>
     </dialog>
 
+    <!-- Kelmagan kunlar (Absence detail) Modal -->
+    <dialog ref="absenceModal" class="modal-dialog modal-sm absence-modal-dialog" closedby="any">
+      <div class="modal-form">
+        <div class="modal-head">
+          <h3 class="modal-title">Kelmagan kunlar</h3>
+          <button type="button" class="btn-close" @click="absenceModal?.close()">✕</button>
+        </div>
+        <div class="absence-modal-body">
+          <div v-if="absentRecordsSorted.length === 0" class="mini-state">
+            <span>Kelmagan kunlar yo'q.</span>
+          </div>
+          <div v-else class="pay-table-wrap">
+            <table class="pay-table">
+              <thead>
+                <tr><th>Sana</th><th>Yo'qlama qilgan odam</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="a in absentRecordsSorted" :key="a.id">
+                  <td class="td-date">{{ formatDate(a.date) }}</td>
+                  <td>{{ a.marked_by_name || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
     <!-- Image Zoom Modal -->
     <dialog ref="imageZoomModal" class="image-zoom-dialog" @click="imageZoomModal?.close()">
       <div class="image-zoom-content" @click.stop>
@@ -865,6 +1072,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -896,6 +1104,63 @@ const teacherRatings = ref({})
 const teacherCars = ref({})
 const loadingTeacherCars = ref(false)
 
+// ── Davomat hisoboti (attendance report) ──────────────────────
+const attendanceRecords = ref([])
+const loadingAttendanceSummary = ref(false)
+const absenceModal = ref(null)
+
+function openAbsenceModal() {
+  absenceModal.value?.showModal()
+}
+
+// No explicit "kelmadi" action exists — a day with no attendance record is
+// absence by default (same rule as the teacher's davomat table).
+const ABSENT_STATUSES = ['kelmadi', 'unknown']
+
+// Day-by-day history from the student's own date_joined through today,
+// same source and calculation as the teacher detail page's "Davomat
+// hisoboti" column (management/views.py AttendanceViewSet.history) —
+// every calendar day, not the group's working-day count or a
+// started_at-derived estimate.
+const attendanceHistoryDays = ref([])
+
+const visitedDaysCount = computed(() => attendanceHistoryDays.value.filter(d => d.status === 'keldi').length)
+const unvisitedDaysCount = computed(() => attendanceHistoryDays.value.filter(d => ABSENT_STATUSES.includes(d.status)).length)
+// Secondary total: visited + unvisited (excludes today's still-undecided day).
+const totalDaysCount = computed(() => visitedDaysCount.value + unvisitedDaysCount.value)
+
+// Kelmagan kunlar modal: every unvisited day from the history above, with
+// the marking person's name where an explicit record exists (implicit/
+// "unknown" absences were never marked by anyone).
+const absentRecordsSorted = computed(() => {
+  const markedByDate = new Map(attendanceRecords.value.filter(a => a.is_absent).map(a => [a.date, a.marked_by_name]))
+  return attendanceHistoryDays.value
+    .filter(d => ABSENT_STATUSES.includes(d.status))
+    .map(d => ({ id: d.date, date: d.date, marked_by_name: markedByDate.get(d.date) || null }))
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+})
+
+async function fetchAttendanceSummary() {
+  if (!enrollment.value) {
+    attendanceRecords.value = []
+    attendanceHistoryDays.value = []
+    return
+  }
+  loadingAttendanceSummary.value = true
+  try {
+    const [rawRes, historyRes] = await Promise.all([
+      api.get('/attendance/', { params: { enrollment: enrollment.value.id, page_size: 1000 } }),
+      api.get('/attendance/history/', { params: { enrollment: enrollment.value.id } }),
+    ])
+    attendanceRecords.value = rawRes.data.results || rawRes.data || []
+    attendanceHistoryDays.value = historyRes.data?.[String(enrollment.value.id)] || []
+  } catch (err) {
+    console.error("Davomat hisobotini yuklashda xatolik:", err)
+  } finally {
+    loadingAttendanceSummary.value = false
+  }
+}
+
 const teacherCards = computed(() => {
   const arr = []
   if (instructorInfo.value) arr.push({ role: 'instructor', roleLabel: 'Instruktor', info: instructorInfo.value })
@@ -908,19 +1173,25 @@ const canLeaveReview = computed(() => !!(
   authStore.canLeaveReviews && student.value && authStore.user?.id === student.value.id
 ))
 
-// Certificates are uploaded by instructors (and admins/superusers) — never by
-// the student whose page this is.
+// Exam-pass certificate uploads are restricted to the teacher (coordinator)
+// role, plus superuser — never the student whose page this is.
 const canUploadCertificate = computed(() => !!(
-  authStore.canUploadCertificates && student.value && authStore.user?.id !== student.value.id
+  (authStore.user?.role === 'coordinator' || authStore.isSuperuser) &&
+  student.value && authStore.user?.id !== student.value.id
 ))
 
 // Taking/recording payments is admin/superuser business, but teaching staff
 // (instructors/coordinators) can see a student's payment info read-only, and
-// the student sees their own.
+// the student sees their own — unless their enrollment's can_view_payments
+// flag has been turned off, which only ever hides it from the student
+// themselves, never from staff.
 const canSeePaymentInfo = computed(() => !!(
   authStore.canManageFinances ||
   authStore.isTeachingStaff ||
-  (authStore.isStudent && student.value && authStore.user?.id === student.value.id)
+  (
+    authStore.isStudent && student.value && authStore.user?.id === student.value.id &&
+    enrollment.value?.can_view_payments !== false
+  )
 ))
 
 // Taking a payment is admin/superuser only.
@@ -928,10 +1199,31 @@ const canTakePayment = computed(() => !!(
   authStore.canManageFinances && !enrollment.value?.enrolled_free && !isFullyPaid.value
 ))
 
+const togglingCanViewPayments = ref(false)
+async function toggleCanViewPayments() {
+  if (!enrollment.value) return
+  const newValue = enrollment.value.can_view_payments === false
+  togglingCanViewPayments.value = true
+  try {
+    const res = await api.patch(`/enrollments/${enrollment.value.id}/`, { can_view_payments: newValue })
+    enrollment.value = res.data
+  } catch (err) {
+    console.error("can_view_payments ni yangilashda xatolik:", err)
+  } finally {
+    togglingCanViewPayments.value = false
+  }
+}
+
 // Students log their own practical-driving history; admins/superusers may too.
+// Once the enrolment or its group is finished or canceled, no more
+// lessons/autodrome hours can be logged.
 const canAddLesson = computed(() => !!(
   authStore.canAddDrivingLesson &&
-  (!authStore.isStudent || (student.value && authStore.user?.id === student.value.id))
+  (!authStore.isStudent || (student.value && authStore.user?.id === student.value.id)) &&
+  group.value?.status !== 'finished' &&
+  group.value?.status !== 'canceled' &&
+  enrollment.value?.status !== 'finished' &&
+  enrollment.value?.status !== 'canceled'
 ))
 
 // Students may open their teachers' profiles (to leave a review). Instructors
@@ -945,6 +1237,11 @@ function goTeacher(id) {
 function goCar(id) {
   if (!id || authStore.isStudent) return
   router.push(`/vehicles/${id}`)
+}
+
+function goGroup(id) {
+  if (!id || authStore.isStudent) return
+  router.push(`/groups/${id}`)
 }
 
 function goAgent(id) {
@@ -1067,6 +1364,7 @@ async function submitReview() {
 }
 
 const certModal = ref(null)
+const certFileInputRef = ref(null)
 const selectedCertFile = ref(null)
 const certNotes = ref('')
 const certUploading = ref(false)
@@ -1074,6 +1372,7 @@ const certUploadError = ref('')
 
 function openCertModal() {
   selectedCertFile.value = null
+  certFileInputRef.value?.reset()
   certNotes.value = ''
   certUploadError.value = ''
   certModal.value?.showModal()
@@ -1118,12 +1417,14 @@ async function uploadCertificate() {
 // Passport photo upload — dedicated modal, only the file field (not the
 // full edit-student form).
 const passportUploadModal = ref(null)
+const passportUploadFileInputRef = ref(null)
 const passportUploadFile = ref(null)
 const passportUploadSaving = ref(false)
 const passportUploadError = ref('')
 
 function openPassportUploadModal() {
   passportUploadFile.value = null
+  passportUploadFileInputRef.value?.reset()
   passportUploadError.value = ''
   passportUploadModal.value?.showModal()
 }
@@ -1150,6 +1451,99 @@ async function submitPassportUpload() {
   }
 }
 
+// Student profile photo — dedicated upload modal, shown via the small "+"
+// badge on the header avatar when no photo is set yet.
+const studentPhotoModal = ref(null)
+const studentPhotoInputRef = ref(null)
+const studentPhotoFile = ref(null)
+const studentPhotoSaving = ref(false)
+const studentPhotoError = ref('')
+
+function openStudentPhotoModal() {
+  studentPhotoFile.value = null
+  studentPhotoInputRef.value?.reset()
+  studentPhotoError.value = ''
+  studentPhotoModal.value?.showModal()
+}
+
+function onStudentPhotoFileChange(e) {
+  studentPhotoFile.value = e.target.files?.[0] || null
+}
+
+async function submitStudentPhoto() {
+  if (!studentPhotoFile.value || !student.value) return
+  studentPhotoSaving.value = true
+  studentPhotoError.value = ''
+  try {
+    const formData = new FormData()
+    formData.append('image', studentPhotoFile.value)
+    const res = await api.patch(`/students/${student.value.id}/`, formData)
+    student.value = res.data
+    studentPhotoModal.value?.close()
+  } catch (err) {
+    console.error(err)
+    studentPhotoError.value = err.response?.data?.detail || "Yuklashda xatolik yuz berdi."
+  } finally {
+    studentPhotoSaving.value = false
+  }
+}
+
+// Instructor / coordinator assignment — shown via the small "Biriktirish"
+// button next to those fields when the enrollment doesn't have one yet.
+const assignModal = ref(null)
+const assignRole = ref('instructor') // 'instructor' | 'coordinator'
+const assignSearch = ref('')
+const assignSelectedId = ref(null)
+const assignSaving = ref(false)
+const assignError = ref('')
+const allInstructors = ref([])
+const allCoordinators = ref([])
+
+async function fetchAssignableStaff() {
+  try {
+    const [iRes, cRes] = await Promise.all([
+      api.get('/users/', { params: { role: 'instructor', page_size: 1000 } }),
+      api.get('/users/', { params: { role: 'coordinator', page_size: 1000 } }),
+    ])
+    allInstructors.value = iRes.data.results || iRes.data || []
+    allCoordinators.value = cRes.data.results || cRes.data || []
+  } catch (err) {
+    console.error("Instruktor/o'qituvchilar ro'yxatini yuklashda xatolik:", err)
+  }
+}
+
+const assignOptions = computed(() => {
+  const list = assignRole.value === 'instructor' ? allInstructors.value : allCoordinators.value
+  const q = assignSearch.value.trim().toLowerCase()
+  if (!q) return list
+  return list.filter(o => (o.full_name || '').toLowerCase().includes(q) || (o.phone || '').includes(q))
+})
+
+function openAssignModal(role) {
+  assignRole.value = role
+  assignSearch.value = ''
+  assignSelectedId.value = null
+  assignError.value = ''
+  assignModal.value?.showModal()
+}
+
+async function submitAssign() {
+  if (!assignSelectedId.value || !enrollment.value) return
+  assignSaving.value = true
+  assignError.value = ''
+  try {
+    const field = assignRole.value === 'instructor' ? 'instructor' : 'coordinator'
+    const res = await api.patch(`/enrollments/${enrollment.value.id}/`, { [field]: assignSelectedId.value })
+    enrollment.value = res.data
+    assignModal.value?.close()
+  } catch (err) {
+    console.error(err)
+    assignError.value = err.response?.data?.detail || "Biriktirishda xatolik yuz berdi."
+  } finally {
+    assignSaving.value = false
+  }
+}
+
 // Course-completion certificate — dedicated modal, only series/number (not
 // the full edit-student form).
 const certAddModal = ref(null)
@@ -1158,7 +1552,7 @@ const certAddSaving = ref(false)
 const certAddError = ref('')
 
 function openCertAddModal() {
-  certAddForm.value = { certificate_series: '', certificate_number: '' }
+  certAddForm.value = { certificate_series: 'SA', certificate_number: '' }
   certAddError.value = ''
   certAddModal.value?.showModal()
 }
@@ -1175,7 +1569,6 @@ async function submitCertAdd() {
     const res = await api.patch(`/students/${student.value.id}/`, {
       certificate_series: series,
       certificate_number: number,
-      certificate_added_date: new Date().toISOString(),
     })
     student.value = res.data
     certAddModal.value?.close()
@@ -1193,8 +1586,16 @@ const bonusForm = ref({ amountFormatted: '', amount: 0, method: 'cash' })
 const bonusSaving = ref(false)
 const bonusError = ref('')
 
-function openBonusModal(cert) {
-  bonusTarget.value = cert
+// Re-checks the certificate's paid status right before opening the modal —
+// the certs list can go stale between page load and the click (e.g.
+// another admin/tab paid it in the meantime), which previously let the
+// button stay clickable and the submit fail with "already paid".
+async function openBonusModal(cert) {
+  if (!cert) return
+  await fetchCertificates()
+  const fresh = certificates.value.find(c => c.id === cert.id) || cert
+  if (fresh.bonus_paid) return
+  bonusTarget.value = fresh
   bonusForm.value = { amountFormatted: '', amount: 0, method: 'cash' }
   bonusError.value = ''
   bonusModal.value?.showModal()
@@ -1216,7 +1617,7 @@ async function submitCertBonus() {
   bonusSaving.value = true
   bonusError.value = ''
   try {
-    await api.post(`/payments/${bonusTarget.value.bonus_payment}/pay-bonus/`, {
+    await api.post(`/student-certificates/${bonusTarget.value.id}/pay-bonus/`, {
       amount: bonusForm.value.amount,
       method: bonusForm.value.method,
     })
@@ -1225,6 +1626,7 @@ async function submitCertBonus() {
   } catch (err) {
     console.error(err)
     bonusError.value = err.response?.data?.detail || "Bonus to'lashda xatolik yuz berdi."
+    await fetchCertificates()
   } finally {
     bonusSaving.value = false
   }
@@ -1247,7 +1649,7 @@ const lessonSaving = ref(false)
 const instructorCar = ref(null)
 const lessonForm    = ref({ car: '', notes: '' })
 
-const editForm = ref({ full_name: '', phone: '', phone2: '', jshshr: '', passport_serie: '', passport_number: '', certificate_series: '', certificate_number: '', status: 'enrolled', notes: '', learning_time: '', learning_days: [] })
+const editForm = ref({ full_name: '', phone: '', phone2: '', jshshr: '', passport_serie: '', passport_number: '', birth_date: '', certificate_series: '', certificate_number: '', status: 'enrolled', notes: '', learning_time: '', learning_days: [] })
 const weekdayOptions = [
   { value: 0, label: 'Dush' },
   { value: 1, label: 'Sesh' },
@@ -1256,7 +1658,12 @@ const weekdayOptions = [
   { value: 4, label: 'Juma' },
   { value: 5, label: 'Shan' },
 ]
-const payForm  = ref({ amountFormatted: '', amount: 0, method: 'cash', status: 'accepted', notes: '' })
+const payForm  = ref({ amountFormatted: '', amount: 0, method: 'cash', notes: '' })
+const payCheckFile = ref(null)
+const payCheckFileInputRef = ref(null)
+function onPayCheckFileChange(e) {
+  payCheckFile.value = e.target.files?.[0] || null
+}
 
 const todayDateFormatted = computed(() => {
   const d = new Date()
@@ -1298,15 +1705,14 @@ const submitLessonConfirmation = async () => {
   lessonSuccess.value = ''
 
   try {
-    const nowISO = new Date().toISOString()
     const carName = instructorCar.value ? instructorCar.value.car_name : 'Avtomobil'
 
-    // 1. Create DrivingLessons record
+    // 1. Create DrivingLessons record — lesson_date is stamped server-side
+    // (Tashkent time), never sent by the client.
     await api.post('/driving-lessons/', {
       student: student.value.id,
       instructor: enrollment.value.instructor,
       car: lessonForm.value.car,
-      lesson_date: nowISO,
       notes: lessonForm.value.notes || ''
     })
 
@@ -1320,9 +1726,7 @@ const submitLessonConfirmation = async () => {
 
     await fetchDrivingLessons()
     lessonSuccess.value = "Amaliy dars muvaffaqiyatli tasdiqlandi va adminlarga bildirishnoma yuborildi!"
-    setTimeout(() => {
-      lessonModal.value?.close()
-    }, 1500)
+    lessonModal.value?.close()
   } catch (err) {
     console.error("Darsni tasdiqlashda xatolik:", err)
     lessonError.value = err.response?.data?.detail || "Darsni tasdiqlashda xatolik yuz berdi."
@@ -1349,11 +1753,20 @@ const activeStatus = computed(() => {
   return enrollment.value?.status || student.value?.status || 'new'
 })
 
+// Scoped to the student's current active enrollment only — `payments` holds
+// the student's full history across every enrollment they've ever had, so
+// netting accepted/returned globally would let an old, fully-refunded
+// enrollment wipe out a brand new enrollment's fresh payments.
+const currentEnrollmentPayments = computed(() => {
+  const enrollmentId = enrollment.value?.id
+  if (!enrollmentId) return []
+  return payments.value.filter(p => (p.enrollment === enrollmentId || p.enrollment_id === enrollmentId))
+})
 const acceptedAmount = computed(() =>
-  payments.value.filter(p => p.is_active && p.status === 'accepted').reduce((s, p) => s + (p.amount || 0), 0)
+  currentEnrollmentPayments.value.filter(p => p.is_active && p.status === 'accepted').reduce((s, p) => s + (p.amount || 0), 0)
 )
 const returnedAmount = computed(() =>
-  payments.value.filter(p => p.is_active && p.status === 'returned').reduce((s, p) => s + (p.amount || 0), 0)
+  currentEnrollmentPayments.value.filter(p => p.is_active && p.status === 'returned').reduce((s, p) => s + (p.amount || 0), 0)
 )
 const netAcceptedAmount = computed(() =>
   acceptedAmount.value - returnedAmount.value
@@ -1398,10 +1811,86 @@ const fetchDrivingLessons = async () => {
 const drivingLessonsOnly = computed(() => drivingLessons.value.filter(l => l.lesson_type !== 'autodrome'))
 const autodromeLessons = computed(() => drivingLessons.value.filter(l => l.lesson_type === 'autodrome'))
 
-const autodromeMaxHours = 6
+const AUTODROME_BASE_HOURS = 6
+const autodromeGrants = ref([])
+// Extra visits an admin/superuser granted this student, only counted while
+// today falls within the grant's own start/end date range.
+const activeAutodromeExtra = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+  return autodromeGrants.value
+    .filter(g => g.is_active !== false && g.start_date <= today && g.end_date >= today)
+    .reduce((sum, g) => sum + (g.visits || 0), 0)
+})
+const autodromeMaxHours = computed(() => AUTODROME_BASE_HOURS + activeAutodromeExtra.value)
+// Avtodrom (track practice) opens up once the student's classroom/practical
+// group finishes — surfaced here so staff know when a student becomes
+// eligible without having to cross-reference the group's own page.
+const autodromeAvailableDate = computed(() => group.value?.ends_at || null)
 const autodromeHoursUsed = computed(() => autodromeLessons.value.reduce((sum, l) => sum + (l.hours || 0), 0))
-const autodromeHoursRemaining = computed(() => Math.max(0, autodromeMaxHours - autodromeHoursUsed.value))
+const autodromeHoursRemaining = computed(() => Math.max(0, autodromeMaxHours.value - autodromeHoursUsed.value))
 const autodromeHourOptions = computed(() => Array.from({ length: autodromeHoursRemaining.value }, (_, i) => i + 1))
+
+// Confirming an autodrome session is normally blocked once the group/
+// enrollment is finished or canceled — but an active extra-access grant
+// (see openGrantModal) explicitly re-opens that window for its date range.
+const canAddAutodrome = computed(() => !!(
+  authStore.canAddDrivingLesson &&
+  (!authStore.isStudent || (student.value && authStore.user?.id === student.value.id)) &&
+  autodromeHoursRemaining.value > 0 &&
+  (
+    (
+      group.value?.status !== 'finished' && group.value?.status !== 'canceled' &&
+      enrollment.value?.status !== 'finished' && enrollment.value?.status !== 'canceled'
+    ) || activeAutodromeExtra.value > 0
+  )
+))
+
+async function fetchAutodromeGrants() {
+  if (!student.value) return
+  try {
+    const res = await api.get('/autodrome-grants/', { params: { student: student.value.id, page_size: 100 } })
+    autodromeGrants.value = res.data.results || res.data || []
+  } catch (err) {
+    console.error("Avtodrom ruxsatlarini yuklashda xatolik:", err)
+  }
+}
+
+const grantModal = ref(null)
+const grantForm = ref({ visits: 6, start_date: '', end_date: '' })
+const grantSaving = ref(false)
+const grantError = ref('')
+
+function openGrantModal() {
+  const today = new Date().toISOString().slice(0, 10)
+  const inOneWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  grantForm.value = { visits: 6, start_date: today, end_date: inOneWeek }
+  grantError.value = ''
+  grantModal.value?.showModal()
+}
+
+async function submitGrant() {
+  if (!student.value || !grantForm.value.visits || !grantForm.value.start_date || !grantForm.value.end_date) {
+    grantError.value = "Barcha maydonlarni to'ldiring."
+    return
+  }
+  grantSaving.value = true
+  grantError.value = ''
+  try {
+    await api.post('/autodrome-grants/', {
+      student: student.value.id,
+      visits: grantForm.value.visits,
+      start_date: grantForm.value.start_date,
+      end_date: grantForm.value.end_date,
+    })
+    grantModal.value?.close()
+    await fetchAutodromeGrants()
+  } catch (err) {
+    console.error("Ruxsat berishda xatolik:", err)
+    grantError.value = err.response?.data?.detail || err.response?.data?.end_date?.[0] || "Ruxsat berishda xatolik yuz berdi."
+  } finally {
+    grantSaving.value = false
+  }
+}
 
 const autodromeModal = ref(null)
 const autodromeForm = ref({ hours: 1, notes: '' })
@@ -1430,14 +1919,12 @@ const submitAutodromeConfirmation = async () => {
   autodromeSuccess.value = ''
 
   try {
-    const nowISO = new Date().toISOString()
-
+    // lesson_date is stamped server-side (Tashkent time), never sent by the client.
     await api.post('/driving-lessons/', {
       student: student.value.id,
       instructor: enrollment.value.instructor,
       lesson_type: 'autodrome',
       hours: autodromeForm.value.hours,
-      lesson_date: nowISO,
       notes: autodromeForm.value.notes || ''
     })
 
@@ -1450,9 +1937,7 @@ const submitAutodromeConfirmation = async () => {
 
     await fetchDrivingLessons()
     autodromeSuccess.value = "Avtodrom mashg'uloti muvaffaqiyatli tasdiqlandi!"
-    setTimeout(() => {
-      autodromeModal.value?.close()
-    }, 1500)
+    autodromeModal.value?.close()
   } catch (err) {
     console.error("Avtodromni tasdiqlashda xatolik:", err)
     autodromeError.value = err.response?.data?.hours?.[0] || err.response?.data?.detail || "Tasdiqlashda xatolik yuz berdi."
@@ -1484,6 +1969,8 @@ const fetchAll = async () => {
       fetchTeacherInfo(),
       fetchReviews(),
       fetchCertificates(),
+      fetchAutodromeGrants(),
+      fetchAttendanceSummary(),
     ])
     // Depend on teacherCards, which is only populated once fetchTeacherInfo above resolves.
     await Promise.all([fetchTeacherRatings(), fetchTeacherCars()])
@@ -1514,6 +2001,8 @@ const fetchPayments = async () => {
 
 const selectedStudentPhoto = ref(null)
 const selectedPassportPhoto = ref(null)
+const editStudentPhotoInputRef = ref(null)
+const editPassportPhotoInputRef = ref(null)
 
 function onEditStudentPhotoChange(e) {
   selectedStudentPhoto.value = e.target.files?.[0] || null
@@ -1526,6 +2015,8 @@ const openEditModal = () => {
   const s = student.value
   selectedStudentPhoto.value = null
   selectedPassportPhoto.value = null
+  editStudentPhotoInputRef.value?.reset()
+  editPassportPhotoInputRef.value?.reset()
   editForm.value = {
     full_name: s.full_name || '',
     phone: formatPhone(s.phone),
@@ -1533,6 +2024,7 @@ const openEditModal = () => {
     jshshr: s.jshshr ? String(s.jshshr) : '',
     passport_serie: s.passport_serie || '',
     passport_number: s.passport_number ? String(s.passport_number) : '',
+    birth_date: s.birth_date || '',
     certificate_series: s.certificate_series || '',
     certificate_number: s.certificate_number || '',
     status: activeStatus.value,
@@ -1581,7 +2073,6 @@ const saveStudent = async () => {
   const certNumber = f.certificate_number ? f.certificate_number.trim() : null
   if (certSeries && !/^[A-Z]{2}$/.test(certSeries)) { editError.value = "Sertifikat seriyasi 2 ta harfdan iborat bo'lishi kerak (masalan: AB)."; return }
   if (certNumber && !/^\d{9}$/.test(certNumber)) { editError.value = "Sertifikat raqami 9 ta raqamdan iborat bo'lishi kerak."; return }
-  const certChanged = certSeries !== (student.value.certificate_series || null) || certNumber !== (student.value.certificate_number || null)
   editSaving.value = true
   try {
     const payload = {
@@ -1591,15 +2082,13 @@ const saveStudent = async () => {
       jshshr: f.jshshr ? parseInt(f.jshshr, 10) : null,
       passport_serie: f.passport_serie ? f.passport_serie.trim().toUpperCase() : null,
       passport_number: f.passport_number ? parseInt(f.passport_number, 10) : null,
+      birth_date: f.birth_date || null,
       certificate_series: certSeries,
       certificate_number: certNumber,
       status: f.status,
       notes: f.notes || '',
       learning_time: f.learning_time || '',
       learning_days: f.learning_days || [],
-    }
-    if (certChanged) {
-      payload.certificate_added_date = (certSeries || certNumber) ? new Date().toISOString() : null
     }
 
     if (selectedStudentPhoto.value || selectedPassportPhoto.value) {
@@ -1639,8 +2128,32 @@ const saveStudent = async () => {
   }
 }
 
+// ── Shartnomani yuklash (contract PDF) ──────────────────────
+const downloadingContract = ref(false)
+async function downloadContract() {
+  if (!enrollment.value || downloadingContract.value) return
+  downloadingContract.value = true
+  try {
+    const res = await api.get(`/enrollments/${enrollment.value.id}/export-contract/`, { responseType: 'blob' })
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${student.value?.full_name || 'shartnoma'} - shartnoma.pdf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error("Shartnomani yuklashda xatolik:", err)
+  } finally {
+    downloadingContract.value = false
+  }
+}
+
 const openPaymentModal = () => {
-  payForm.value = { amountFormatted: '', amount: 0, method: 'cash', status: 'accepted', notes: '' }
+  payForm.value = { amountFormatted: '', amount: 0, method: 'cash', notes: '' }
+  payCheckFile.value = null
+  payCheckFileInputRef.value?.reset()
   payError.value = ''; paymentModal.value?.showModal()
 }
 
@@ -1656,11 +2169,23 @@ const savePayment = async () => {
   if (!enrollment.value) { payError.value = "O'quvchining aktiv qabuli mavjud emas."; return }
   paySaving.value = true
   try {
-    await api.post('/payments/', {
-      enrollment: enrollment.value.id, user: authStore.user?.id,
-      amount: payForm.value.amount, method: payForm.value.method,
-      status: payForm.value.status, notes: payForm.value.notes || null,
-    })
+    if (payCheckFile.value) {
+      const formData = new FormData()
+      formData.append('enrollment', enrollment.value.id)
+      formData.append('user', authStore.user?.id)
+      formData.append('amount', payForm.value.amount)
+      formData.append('method', payForm.value.method)
+      formData.append('status', 'accepted')
+      if (payForm.value.notes) formData.append('notes', payForm.value.notes)
+      formData.append('click_check_image', payCheckFile.value)
+      await api.post('/payments/', formData)
+    } else {
+      await api.post('/payments/', {
+        enrollment: enrollment.value.id, user: authStore.user?.id,
+        amount: payForm.value.amount, method: payForm.value.method,
+        status: 'accepted', notes: payForm.value.notes || null,
+      })
+    }
     paymentModal.value?.close(); await fetchPayments()
   } catch (err) { console.error(err); payError.value = "To'lovni saqlashda xatolik yuz berdi." }
   finally { paySaving.value = false }
@@ -1719,9 +2244,14 @@ const methodText = (m) => ({ cash: 'Naqd', card: 'Karta', qr_code: 'QR code', cl
 onMounted(async () => {
   if (!authStore.user) await authStore.fetchCurrentUser()
   await fetchAll()
+  if (authStore.isAdminOrSuperuser) fetchAssignableStaff()
 
   // Setup light dismiss for dialogs
-  const dialogs = [editModal.value, paymentModal.value, reviewModal.value, bonusModal.value]
+  const dialogs = [
+    editModal.value, paymentModal.value, reviewModal.value, bonusModal.value, grantModal.value, absenceModal.value,
+    lessonModal.value, autodromeModal.value, certModal.value, passportUploadModal.value, certAddModal.value,
+    studentPhotoModal.value, assignModal.value,
+  ]
   dialogs.forEach(dialog => {
     if (dialog && !('closedBy' in HTMLDialogElement.prototype)) {
       dialog.addEventListener('click', (event) => {
@@ -1749,7 +2279,9 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 
 .detail-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
 .header-info{display:flex;align-items:center;gap:16px;flex:1}
-.header-avatar{width:72px;height:72px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,0.08);border:2.5px solid #E5E7EB;overflow:hidden;cursor:pointer;transition:transform 0.15s ease}
+.header-avatar{position:relative;width:72px;height:72px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,0.08);border:2.5px solid #E5E7EB;cursor:pointer;transition:transform 0.15s ease}
+.avatar-add-btn{position:absolute;bottom:-2px;right:-2px;width:24px;height:24px;border-radius:50%;background:#2D6A4F;color:white;border:2px solid white;font-size:15px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.2);transition:background 0.15s}
+.avatar-add-btn:hover{background:#245C43}
 .header-avatar:hover{transform:scale(1.04);border-color:#2D6A4F}
 .user-avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 
@@ -1808,14 +2340,12 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 
 .btn-edit-main{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:8px;font-size:13.5px;font-weight:600;color:#374151;background:white;border:1px solid #E5E7EB;transition:background 0.15s,border-color 0.15s}
 .btn-edit-main:hover{background:#F9FAFB;border-color:#D1D5DB}
-.btn-payment{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:8px;font-size:13.5px;font-weight:600;color:white;background:#2D6A4F;transition:background 0.15s;box-shadow:0 2px 8px rgba(45,106,79,0.25)}
-.btn-payment:hover{background:#1B4332}
-
 .btn-save{display:inline-flex;align-items:center;gap:6px;padding:10px 22px;border-radius:8px;font-size:13.5px;font-weight:600;color:white;background:#2D6A4F;transition:background 0.15s;box-shadow:0 2px 6px rgba(45,106,79,0.25)}
 .btn-save:hover{background:#1B4332}
 
-.btn-confirm-lesson { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: white; background: linear-gradient(135deg, #10B981, #059669); border: none; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); }
-.btn-confirm-lesson:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35); }
+.btn-contract-header{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:8px;font-size:13.5px;font-weight:600;color:white;background:#2563EB;border:none;cursor:pointer;transition:background 0.15s;box-shadow:0 2px 8px rgba(37,99,235,0.25)}
+.btn-contract-header:hover:not(:disabled){background:#1D4ED8}
+.btn-contract-header:disabled{opacity:0.7;cursor:not-allowed}
 
 .disabled-input { background: #E2E8F0 !important; color: #475569 !important; font-weight: 600; cursor: not-allowed; }
 .alert-success-box { margin: 12px 24px 0; padding: 12px 16px; background: #DCFCE7; border-left: 4px solid #10B981; color: #15803D; font-size: 13px; font-weight: 600; border-radius: 8px; }
@@ -1833,20 +2363,30 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .state-error{color:#EF4444}
 .btn-retry{padding:8px 16px;border-radius:8px;background:#EF4444;color:white;font-size:13.5px;font-weight:600;cursor:pointer}
 
-.content-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.content-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
 @media(max-width:900px){.content-grid{grid-template-columns:1fr}}
-.col-left,.col-right{display:flex;flex-direction:column;gap:20px}
+.col-left,.col-right{display:flex;flex-direction:column;gap:20px;min-width:0}
 
-.detail-card{background:white;border-radius:14px;border:1px solid #E5E7EB;box-shadow:0 1px 4px rgba(0,0,0,0.05);overflow:hidden}
+.detail-card{background:white;border-radius:14px;border:1px solid #E5E7EB;box-shadow:0 1px 4px rgba(0,0,0,0.05);overflow:hidden;min-width:0}
 .card-header{display:flex;align-items:center;gap:10px;padding:16px 20px 14px;border-bottom:1px solid #F3F4F6}
 .card-icon{width:30px;height:30px;border-radius:8px;background:#ECFDF5;color:#2D6A4F;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .card-icon-blue{background:#EFF6FF;color:#3B82F6}
 .card-icon-green{background:#ECFDF5;color:#2D6A4F}
 .card-icon-purple{background:#F5F3FF;color:#7C3AED}
 .card-icon-orange{background:#FFF7ED;color:#EA580C}
+.card-icon-red{background:#FEF2F2;color:#DC2626}
 .card-title{font-size:14px;font-weight:700;color:#111827;flex:1}
 .btn-add-payment{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:6px;font-size:12.5px;font-weight:600;color:#2D6A4F;background:#ECFDF5;border:1px solid #A7F3D0;transition:background 0.15s}
 .btn-add-payment:hover{background:#D1FAE5}
+
+.btn-toggle-payments{display:inline-flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:20px;border:1px solid #E5E7EB;background:#F9FAFB;cursor:pointer;transition:background 0.15s}
+.btn-toggle-payments:hover{background:#F3F4F6}
+.btn-toggle-payments:disabled{opacity:0.6;cursor:not-allowed}
+.btn-toggle-payments .toggle-track{position:relative;width:32px;height:18px;border-radius:10px;background:#D1D5DB;transition:background 0.15s;flex-shrink:0}
+.btn-toggle-payments.on .toggle-track{background:#2D6A4F}
+.btn-toggle-payments .toggle-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:white;transition:left 0.15s;box-shadow:0 1px 2px rgba(0,0,0,0.2)}
+.btn-toggle-payments.on .toggle-thumb{left:16px}
+.btn-toggle-payments .toggle-label{font-size:11.5px;font-weight:600;color:#4B5563}
 
 .info-grid{padding:4px 0 8px}
 .info-row{display:flex;align-items:flex-start;gap:12px;padding:10px 20px;border-bottom:1px solid #F9FAFB}
@@ -1855,7 +2395,19 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .info-value{font-size:13.5px;color:#1F2937;flex:1;line-height:1.5}
 .info-value.fw{font-weight:600}
 .info-value.mono{font-family:monospace}
-.info-value.link-value{cursor:pointer;color:#2D6A4F}
+.link-value{cursor:pointer;color:#2563EB;text-decoration:underline}
+
+.btn-assign-small{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#F0FDF4;color:#2D6A4F;border:1px solid #BBF7D0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s}
+.btn-assign-small:hover{background:#DCFCE7}
+
+.assign-options-list{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:8px;border:1px solid #E5E7EB;border-radius:10px;padding:6px}
+.assign-empty{text-align:center;padding:20px;color:#9CA3AF;font-size:13px}
+.assign-option{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;background:white;text-align:left;cursor:pointer;transition:background 0.15s}
+.assign-option:hover{background:#F9FAFB}
+.assign-option.selected{background:#F0FDF4;border:1px solid #BBF7D0}
+.assign-option-avatar{width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid #E5E7EB}
+.assign-option-name{flex:1;font-size:13.5px;font-weight:600;color:#111827}
+.assign-option-check{color:#2D6A4F;font-weight:700}
 .info-value.link-value:hover{text-decoration:underline}
 
 .status-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.02em}
@@ -1866,13 +2418,27 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .badge-notstarted{background:#F3F4F6;color:#6B7280}
 .badge-free{background:#D1FAE5;color:#065F46;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
 .cat-badge{display:inline-block;padding:3px 10px;background:#1B2430;color:white;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.04em}
+.lesson-count-badge{font-size:12px;font-weight:700;color:#2D6A4F;background:#E8F5E9;padding:3px 10px;border-radius:20px;margin-right:8px}
 
 .payment-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#F3F4F6;border-bottom:1px solid #F3F4F6}
+.payment-stats.cols-4{grid-template-columns:repeat(4,1fr)}
+.payment-stats.cols-2{grid-template-columns:repeat(2,1fr)}
 .pay-stat{background:white;padding:16px 18px;text-align:center}
 .pay-stat-label{font-size:11.5px;color:#9CA3AF;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
 .pay-stat-value{font-size:16px;font-weight:700;color:#111827}
 .pay-stat-value.green{color:#2D6A4F}
 .pay-stat-value.red{color:#EF4444}
+.pay-stat-value.gray{color:#6B7280}
+.pay-stat-clickable{cursor:pointer;transition:background 0.15s}
+.pay-stat-clickable:hover{background:#FEF2F2}
+
+/* max-height only — deliberately not setting `display` on the <dialog>
+   element itself. Every other modal in this file leaves that to the native
+   showModal()/[open] toggle and only flexes the inner .modal-form; forcing
+   `display` directly on <dialog> fights that native open/closed state. */
+.absence-modal-dialog{max-height:80vh}
+.absence-modal-dialog .modal-form{height:100%;min-height:0}
+.absence-modal-body{overflow-y:auto;flex:1;min-height:0;padding:16px 24px 24px}
 .progress-wrap{display:flex;align-items:center;gap:10px;padding:14px 20px}
 .progress-bar{flex:1;height:8px;background:#F3F4F6;border-radius:99px;overflow:hidden}
 .progress-fill{height:100%;background:linear-gradient(90deg,#52B788,#2D6A4F);border-radius:99px;transition:width 0.5s ease}
@@ -1889,6 +2455,8 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .td-amount{font-weight:700;color:#2D6A4F;white-space:nowrap}
 .td-notes{color:#6B7280;font-size:12.5px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .method-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11.5px;font-weight:600;background:#F3F4F6;color:#374151}
+.btn-check-preview{display:inline-flex;align-items:center;justify-content:center;margin-left:4px;padding:1px 5px;border-radius:4px;font-size:12px;background:#EFF6FF;border:1px solid #BFDBFE;cursor:pointer}
+.btn-check-preview:hover{background:#DBEAFE}
 .pay-status-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600}
 .pstatus-accepted{background:#D1FAE5;color:#065F46}
 .pstatus-paid{background:#DBEAFE;color:#1D4ED8}
@@ -1923,6 +2491,9 @@ button{cursor:pointer;background:none;border:none;font-family:inherit}
 .btn-close{width:30px;height:30px;border-radius:50%;background:#F3F4F6;color:#6B7280;font-size:13px;display:flex;align-items:center;justify-content:center;transition:background 0.15s}
 .btn-close:hover{background:#E5E7EB}
 .modal-error{margin:12px 24px 0;padding:10px 14px;background:#FEE2E2;border-radius:8px;color:#991B1B;font-size:13px;font-weight:500}
+.pay-info-summary{margin:16px 24px 0;padding:14px 16px;background:#F3F4F6;border-radius:10px;font-size:13.5px;display:flex;flex-direction:column;gap:8px}
+.pay-info-summary p{margin:0;color:#4B5563}
+.pay-info-summary strong{color:#111827}
 .form-section{padding:18px 24px 4px}
 .section-tag{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#2D6A4F;display:flex;align-items:center;gap:8px;margin-bottom:14px}
 .section-tag::after{content:'';flex:1;height:1px;background:#E5E7EB}
@@ -2069,6 +2640,7 @@ textarea.form-input{resize:vertical;min-height:80px}
 .cert-image { width: 100%; height: 110px; object-fit: cover; cursor: pointer; display: block; }
 .cert-meta { padding: 8px 10px; }
 .cert-uploader { font-size: 12px; font-weight: 700; color: #111827; }
+.cert-uploader.link-value { color: #2563EB; }
 .cert-date { font-size: 11px; color: #9CA3AF; margin-top: 1px; }
 .cert-notes { font-size: 11.5px; color: #6B7280; margin-top: 4px; }
 .cert-bonus-row { padding: 0 10px 10px; }

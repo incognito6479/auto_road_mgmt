@@ -3,7 +3,7 @@
 
     <div class="page-top">
       <div>
-        <h2 class="page-main-title">To'lovlar (Status: To'langan / Paid)</h2>
+        <h2 class="page-main-title">To'langan To'lovlar</h2>
         <p class="page-sub-title">To'liq yakunlangan va rasmiylashtirilgan to'lovlar ro'yxati</p>
       </div>
 
@@ -12,7 +12,7 @@
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-        <span>Yangi to'lov yozish</span>
+        <span>Xarajat qo'shish</span>
       </button>
     </div>
 
@@ -64,16 +64,36 @@
           <thead>
             <tr>
               <th>Tafsilotlar / Izoh</th>
-              <th>To'langan Summa</th>
+              <th>Chiqim summasi</th>
               <th>Usul</th>
               <th>Sana & Vaqt</th>
+              <th>To'lovni kiritgan</th>
               <th style="width: 110px; text-align: right;">Amallar</th>
             </tr>
             <tr class="col-filter-row">
               <th>
                 <input v-model="filterNotes" class="col-filter-input" type="text" placeholder="Izoh bo'yicha qidirish..." />
               </th>
-              <th></th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'asc' }" title="O'sish tartibida" @click="setAmountSort('asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: amountSort === 'desc' }" title="Kamayish tartibida" @click="setAmountSort('desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                </div>
+              </th>
               <th>
                 <div class="select-wrap-relative">
                   <select v-model="filterMethod" class="col-filter-select">
@@ -104,6 +124,19 @@
                       <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                     </svg>
                   </button>
+                  <button v-if="dateFrom || dateTo" type="button" class="btn-clear-date" @click="dateFrom = ''; dateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="dateFrom" type="date" class="col-date-input" title="Sana (dan)" />
+                  <input v-model="dateTo" type="date" class="col-date-input" title="Sana (gacha)" />
+                </div>
+              </th>
+              <th>
+                <div class="select-wrap-relative">
+                  <select v-model="filterCashierId" class="col-filter-select">
+                    <option value="">Barchasi</option>
+                    <option v-for="c in distinctCashiers" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
                 </div>
               </th>
               <th></th>
@@ -111,7 +144,7 @@
           </thead>
           <tbody>
             <tr v-if="displayedPayments.length === 0">
-              <td colspan="5" class="no-data">To'langan statusdagi to'lovlar topilmadi</td>
+              <td colspan="6" class="no-data">To'langan statusdagi to'lovlar topilmadi</td>
             </tr>
             <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
               <td class="td-name">
@@ -124,6 +157,10 @@
               </td>
               <td><span class="method-chip">{{ methodText(p.method) }}</span></td>
               <td class="td-date">{{ formatDateTime(p.created_at) }}</td>
+              <td>
+                <span v-if="p.created_by" class="link-value" @click="goUser(p.created_by)">{{ p.created_by_name || '-' }}</span>
+                <span v-else>{{ p.created_by_name || '-' }}</span>
+              </td>
               <td style="text-align: right;">
                 <div class="row-actions">
                   <template v-if="authStore.isSuperuser">
@@ -151,12 +188,21 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
-          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
-          <span class="page-num">Sahifa {{ currentPage }} / {{ totalPages }}</span>
-          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="paid-page-size">Ko'rsatish:</label>
+          <div class="select-wrap-relative">
+            <select id="paid-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -242,7 +288,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
@@ -258,29 +304,50 @@ function goStudent(id) {
   if (!id) return
   router.push(`/students/${id}`)
 }
+function goUser(id) {
+  if (!id) return
+  router.push(`/users/${id}`)
+}
 const branchStore = useBranchStore()
 
 const payments = ref([])
 const loading = ref(true)
-const totalCount = ref(0)
 
+// ── Row-fetch-count selector ──────────────────────────────────
+// fetchPayments always pulls the entire status=paid scope (see
+// page_size: 100000 below) so every filter below sees every row, not just
+// whatever page happened to be loaded. pageSizeOption instead controls how
+// many of the *filtered* rows show per page (see displayedPayments/
+// changePage below).
+const pageSizeOption = ref('50')
 const currentPage = ref(1)
-const pageSize = 50
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
-
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
-  fetchPayments()
-}
 
 const filterNotes = ref('')
 const filterMethod = ref('')
+const filterCashierId = ref('')
 const dateSort = ref('') // '', 'asc', 'desc'
+const amountSort = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
 
 function setDateSort(direction) {
+  amountSort.value = ''
   dateSort.value = dateSort.value === direction ? '' : direction
 }
+function setAmountSort(direction) {
+  dateSort.value = ''
+  amountSort.value = amountSort.value === direction ? '' : direction
+}
+
+// Distinct admins/superusers who recorded this status's payments, for the
+// "To'lovni kiritgan" filter select.
+const distinctCashiers = computed(() => {
+  const map = {}
+  payments.value.forEach(p => {
+    if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
+  })
+  return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
+})
 
 const showModal = ref(false)
 const isEditing = ref(false)
@@ -290,75 +357,80 @@ const modalError = ref(null)
 
 const form = ref({ amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
-const displayedPayments = computed(() => {
-  return payments.value.filter(p => branchStore.isBranchMatch(p))
+// All header filters (notes, method, cashier, date range) and sorting run
+// entirely on the client against the already-fetched `payments` list — no
+// per-keystroke or per-filter network round trip, AND they see every row
+// matching status=paid, not just whatever page happened to be fetched.
+const filteredPayments = computed(() => {
+  let list = payments.value.filter(p => branchStore.isBranchMatch(p))
+
+  if (filterNotes.value.trim()) {
+    const q = filterNotes.value.trim().toLowerCase()
+    list = list.filter(p => (p.notes || p.student_name || '').toLowerCase().includes(q))
+  }
+  if (filterMethod.value) list = list.filter(p => p.method === filterMethod.value)
+  if (filterCashierId.value) list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
+  if (dateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= dateFrom.value)
+  if (dateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= dateTo.value)
+
+  if (dateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.created_at || '').localeCompare(b.created_at || '')
+      return dateSort.value === 'desc' ? -d : d
+    })
+  } else if (amountSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (Number(a.amount) || 0) - (Number(b.amount) || 0)
+      return amountSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
 })
 
-// Unpaginated but filtered the same way as the table (minus pagination/
-// ordering) — feeds the metrics cards, so they reflect the currently
-// applied notes/method filters instead of always summing everything.
-const allPayments = ref([])
-const displayedAllPayments = computed(() => allPayments.value.filter(p => branchStore.isBranchMatch(p)))
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here so it self-corrects the moment a
+// filter shrinks the result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
+})
+const displayedPayments = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredPayments.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredPayments.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
+// Metrics reflect the full filtered set (matching status=paid + any active
+// column filters), not just the current page's slice.
 const metrics = computed(() => {
-  const cash = displayedAllPayments.value.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
-  const card = displayedAllPayments.value.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
-  const transfer = displayedAllPayments.value.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
-  const total = displayedAllPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
+  const cash = filteredPayments.value.filter(p => p.method === 'cash').reduce((s, p) => s + (p.amount || 0), 0)
+  const card = filteredPayments.value.filter(p => p.method === 'card').reduce((s, p) => s + (p.amount || 0), 0)
+  const transfer = filteredPayments.value.filter(p => p.method === 'transfer').reduce((s, p) => s + (p.amount || 0), 0)
+  const total = filteredPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
   return { cash, card, transfer, total }
 })
-
-async function fetchAllPaymentsMetrics() {
-  try {
-    const params = { status: 'paid', page_size: 1000 }
-    if (filterMethod.value) params.method = filterMethod.value
-    if (filterNotes.value) params.student_name = filterNotes.value.trim()
-
-    const res = await api.get('/payments/', { params })
-    allPayments.value = res.data.results || res.data
-  } catch (err) { console.error(err) }
-}
 
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'paid', page: currentPage.value, page_size: pageSize }
-    if (filterMethod.value) params.method = filterMethod.value
-    if (filterNotes.value) params.student_name = filterNotes.value.trim()
-    if (dateSort.value) params.ordering = (dateSort.value === 'desc' ? '-' : '') + 'created_at'
-
-    const res = await api.get('/payments/', { params })
+    const res = await api.get('/payments/', { params: { status: 'paid', page: 1, page_size: 100000 } })
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     payments.value = rawList
-    totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
   finally { loading.value = false }
 }
 
-// Text-input filter waits for the user to pause typing (1.2s) before
-// re-fetching, so each keystroke doesn't trigger its own request.
-let searchDebounceTimer = null
-watch(filterNotes, () => {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    currentPage.value = 1
-    fetchPayments()
-    fetchAllPaymentsMetrics()
-  }, 1200)
-})
-
-// Method select and sort toggle apply immediately. Sorting doesn't change
-// which rows match, so it only needs to re-fetch the table, not the cards.
-watch(filterMethod, () => {
-  clearTimeout(searchDebounceTimer)
+// pageSizeOption no longer needs a backend round trip — it only controls
+// how many of the filtered rows show per page, so just reset to page 1.
+watch(pageSizeOption, () => {
   currentPage.value = 1
-  fetchPayments()
-  fetchAllPaymentsMetrics()
-})
-
-watch(dateSort, () => {
-  currentPage.value = 1
-  fetchPayments()
 })
 
 function methodText(m) {
@@ -416,7 +488,6 @@ async function savePayment() {
     }
     closeModal()
     fetchPayments()
-    fetchAllPaymentsMetrics()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
 }
@@ -440,7 +511,6 @@ async function performDelete() {
     await api.delete(`/payments/${deletingPayment.value.id}/`)
     deleteModal.value?.close()
     fetchPayments()
-    fetchAllPaymentsMetrics()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -450,9 +520,7 @@ async function performDelete() {
 
 onMounted(() => {
   fetchPayments()
-  fetchAllPaymentsMetrics()
 })
-onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 </script>
 
 <style scoped>
@@ -534,6 +602,20 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 .pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
 .pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
 .pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 .page-num { display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px; }
 .btn-page {
   padding: 6px 14px;
@@ -550,8 +632,8 @@ onUnmounted(() => { clearTimeout(searchDebounceTimer) })
 .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .student-name { font-weight: 700; color: #111827; }
-.link-value { cursor: pointer; }
-.link-value:hover { text-decoration: underline; }
+.link-value { cursor: pointer; color: #2563EB !important; font-weight: 700 !important; text-decoration: underline; }
+.link-value:hover { color: #1D4ED8 !important; }
 .group-sub { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 .method-chip { padding: 4px 12px; background: #F3F4F6; color: #374151; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }

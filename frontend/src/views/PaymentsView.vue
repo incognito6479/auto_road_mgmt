@@ -134,7 +134,13 @@
                 <th>JSHSHR</th>
                 <th>Kategoriya</th>
                 <th>Agent</th>
-                <th>Sana</th>
+                <th class="th-sortable">
+                  Sana
+                  <span class="th-sort-btns">
+                    <button type="button" class="th-sort-btn" :class="{ active: dateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setDateSort('asc')">▲</button>
+                    <button type="button" class="th-sort-btn" :class="{ active: dateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setDateSort('desc')">▼</button>
+                  </span>
+                </th>
                 <th class="th-cashier">Kassir (Tel)</th>
                 <th>Summa</th>
                 <th>To'lov turi</th>
@@ -144,10 +150,10 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-if="payments.length === 0">
+              <tr v-if="displayedPayments.length === 0">
                 <td :colspan="authStore.isSuperuser ? 12 : 11" class="td-empty">To'lovlar topilmadi.</td>
               </tr>
-              <tr v-for="p in payments" :key="p.id">
+              <tr v-for="p in displayedPayments" :key="p.id">
                 <td class="td-id">#{{ p.id }}</td>
                 <td class="td-student">{{ p.student_name || '-' }}</td>
                 <td class="td-jshshr" style="font-family: monospace; font-size: 12px;">{{ p.student_jshshr || '-' }}</td>
@@ -175,21 +181,24 @@
             </tbody>
           </table>
 
-          <!-- Pagination controls -->
-          <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
-            <span class="pagination-info" style="font-size: 13.5px; color: #6B7280; font-weight: 500;">
-              Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+          <!-- Row-fetch-count / pagination controls -->
+          <div class="pagination-bar">
+            <span class="pagination-info">
+              Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
             </span>
-            <div class="pagination-actions" style="display: flex; gap: 8px;">
-              <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
-                Oldingi
-              </button>
-              <span class="page-num" style="display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px;">
-                Sahifa {{ currentPage }} / {{ totalPages }}
-              </span>
-              <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
-                Keyingi
-              </button>
+            <div class="pagination-actions">
+              <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+              <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+              <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+              <label class="page-size-label" for="payments-page-size">Ko'rsatish:</label>
+              <div class="select-wrap">
+                <select id="payments-page-size" v-model="pageSizeOption" class="page-size-select">
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="all">Barchasi</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -284,6 +293,11 @@ const payments = ref([])
 const loading = ref(false)
 const error = ref('')
 
+const dateSort = ref('') // '', 'asc', 'desc'
+function setDateSort(direction) {
+  dateSort.value = dateSort.value === direction ? '' : direction
+}
+
 // Filter states
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
@@ -298,11 +312,16 @@ const filterStudentName = ref('')
 const filterJshshr = ref('')
 const filterAgent = ref('')
 
-// Pagination state
-const currentPage = ref(1)
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: fetch always pulls every payment
+// (see fetchPayments below) — this view has no scope-narrowing tabs, so
+// there's nothing for the backend query to narrow. Filtering runs
+// client-side against the full set (filteredPayments), and pageSizeOption
+// instead controls how many of the *filtered* results are shown per page
+// (see displayedPayments/changePage below).
+const pageSizeOption = ref('50')
 const totalCount = ref(0)
-const pageSize = 50
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
+const currentPage = ref(1)
 
 // Edit state
 const editPaymentModal = ref(null)
@@ -338,27 +357,14 @@ const fetchPayments = async () => {
   loading.value = true
   error.value = ''
   try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize
-    }
-    if (filterDateFrom.value) params.date_from = filterDateFrom.value
-    if (filterDateTo.value) params.date_to = filterDateTo.value
-    if (filterMethod.value) params.method = filterMethod.value
-    if (filterCategory.value) params.category = filterCategory.value
-    if (filterStudentName.value) params.student_name = filterStudentName.value.trim()
-    if (filterJshshr.value) params.jshshr = filterJshshr.value.trim()
-
-    if (filterAgent.value) {
-      params.agent = filterAgent.value
-      params.status = 'bonus'
-    } else if (filterStatus.value) {
-      params.status = filterStatus.value
-    }
+    // Always the full dataset — filtering/sorting/pagination below all
+    // need to see every row, not just one page of them.
+    const params = { page: 1, page_size: 100000 }
 
     const response = await api.get('/payments/', { params })
-    payments.value = response.data.results || response.data
-    totalCount.value = response.data.count || payments.value.length
+    const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
+    payments.value = rawList
+    totalCount.value = response.data.count ?? rawList.length
   } catch (err) {
     console.error(err)
     error.value = "To'lovlar ro'yxatini yuklashda xatolik yuz berdi."
@@ -367,24 +373,82 @@ const fetchPayments = async () => {
   }
 }
 
+// Selecting an agent narrows the view to that agent's bonus payments —
+// still purely a client-side filter, see displayedPayments below.
 watch(filterAgent, (newVal) => {
   if (newVal) {
     filterStatus.value = 'bonus'
   }
 })
 
-watch(
-  [filterDateFrom, filterDateTo, filterMethod, filterStatus, filterCategory, filterStudentName, filterJshshr, filterAgent],
-  () => {
-    currentPage.value = 1
-    fetchPayments()
-  }
-)
+// This view has no scope-narrowing tabs, so nothing ever needs a refetch
+// after the initial load — the row-fetch-count selector only resets the
+// display page.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
 
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
+// All header filters (name, jshshr, category, status, method, agent, date
+// range) run entirely on the client against the already-fetched `payments`
+// list — no per-keystroke network round trip.
+const filteredPayments = computed(() => {
+  let list = payments.value
+
+  if (filterStudentName.value.trim()) {
+    const q = filterStudentName.value.trim().toLowerCase()
+    list = list.filter(p => (p.student_name || '').toLowerCase().includes(q))
+  }
+  if (filterJshshr.value.trim()) {
+    const q = filterJshshr.value.trim().toLowerCase()
+    list = list.filter(p => (p.student_jshshr || '').toLowerCase().includes(q))
+  }
+  if (filterCategory.value) {
+    list = list.filter(p => p.category_name === filterCategory.value)
+  }
+  if (filterMethod.value) {
+    list = list.filter(p => p.method === filterMethod.value)
+  }
+  if (filterAgent.value) {
+    list = list.filter(p => String(p.agent) === String(filterAgent.value))
+  }
+  if (filterStatus.value) {
+    list = list.filter(p => p.status === filterStatus.value)
+  }
+  if (filterDateFrom.value) {
+    list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= filterDateFrom.value)
+  }
+  if (filterDateTo.value) {
+    list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= filterDateTo.value)
+  }
+
+  if (dateSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.created_at || '').localeCompare(b.created_at || '')
+      return dateSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
+})
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
+})
+const displayedPayments = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredPayments.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredPayments.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
-  fetchPayments()
 }
 
 const fetchCategories = async () => {
@@ -693,6 +757,21 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.th-sortable { white-space: nowrap; }
+.th-sort-btns { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
+.th-sort-btn {
+  border: none;
+  background: transparent;
+  color: #9CA3AF;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.th-sort-btn:hover { color: #6B7280; background: #F3F4F6; }
+.th-sort-btn.active { color: #2D6A4F; }
+
 /* Strict phone column width */
 .th-cashier, .td-cashier {
   width: 175px !important;
@@ -937,7 +1016,39 @@ onMounted(async () => {
   min-height: 80px;
 }
 
-/* Pagination styles */
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding: 12px 16px;
+  background: #F9FAFB;
+  border-top: 1px solid #E5E7EB;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+.pagination-info {
+  font-size: 13.5px;
+  color: #6B7280;
+  font-weight: 500;
+}
+.pagination-note {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #9CA3AF;
+  font-weight: 400;
+}
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-size-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4B5563;
+}
 .btn-page {
   padding: 6px 14px;
   background: white;
@@ -949,12 +1060,28 @@ onMounted(async () => {
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.btn-page:hover:not(:disabled) {
-  background: #F3F4F6;
-  border-color: #D1D5DB;
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
 }
-.btn-page:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 </style>

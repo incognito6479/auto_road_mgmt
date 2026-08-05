@@ -82,7 +82,7 @@
           </div>
           <div>
             <span class="metric-label">Jalb Etilgan O'quvchilar</span>
-            <h4 class="metric-value">{{ enrollments.length }} ta qabul</h4>
+            <h4 class="metric-value">{{ filteredEnrollmentsWithBonus.length }} ta qabul</h4>
           </div>
         </div>
 
@@ -123,67 +123,12 @@
             <h4 class="metric-value font-bold text-amber">{{ formatMoney(totalBonusSum) }}</h4>
           </div>
         </div>
-
-        <div class="metric-card">
-          <div class="metric-icon green">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-              <line x1="12" y1="1" x2="12" y2="23"></line>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-            </svg>
-          </div>
-          <div>
-            <span class="metric-label">O'quvchilar To'lagan Jami Summa</span>
-            <h4 class="metric-value font-bold" style="color: #2D6A4F;">{{ formatMoney(totalStudentsPaid) }}</h4>
-          </div>
-        </div>
       </div>
 
       <!-- Section heading + count, above the filters -->
       <div class="section-title-wrap">
         <h3 class="section-title">👥 Jalb Qilingan O'quvchilar va Bonus To'lovlari</h3>
         <span class="section-badge">{{ filteredEnrollmentsWithBonus.length }} ta qabul</span>
-      </div>
-
-      <!-- Filters Toolbar -->
-      <div class="filters-toolbar">
-        <div class="filter-item">
-          <label class="flabel-inline">Holati (to'lov):</label>
-          <div class="select-wrap-relative">
-            <select v-model="filterStatus" class="fselect-field">
-              <option value="">Barchasi</option>
-              <option value="paid">Bonus to'langan</option>
-              <option value="pending">Bonus kutilmoqda</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="filter-item">
-          <label class="flabel-inline">Kategoriya:</label>
-          <div class="select-wrap-relative">
-            <select v-model="filterCategory" class="fselect-field">
-              <option value="">Barchasi</option>
-              <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="filter-item">
-          <label class="flabel-inline">Saralash (to'lov):</label>
-          <div class="select-wrap-relative">
-            <select v-model="filterEnrolledAmount" class="fselect-field">
-              <option value="">Barchasi</option>
-              <option v-for="amt in distinctEnrolledAmounts" :key="amt" :value="amt">{{ formatMoney(amt) }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="filter-item date-range-group">
-          <label class="flabel-inline">Bonus sanasi:</label>
-          <input v-model="filterDateFrom" type="date" class="fselect-field" />
-          <span class="date-range-sep">—</span>
-          <input v-model="filterDateTo" type="date" class="fselect-field" />
-          <button v-if="filterDateFrom || filterDateTo" type="button" class="btn-clear-date" @click="filterDateFrom = ''; filterDateTo = ''" title="Tozalash">✕</button>
-        </div>
       </div>
 
       <!-- ATTRACTED STUDENTS & BONUS PAYMENTS TABLE -->
@@ -194,7 +139,7 @@
           <p class="state-text">O'quvchilar ro'yxati va bonus to'lovlari yuklanmoqda...</p>
         </div>
 
-        <div v-else-if="filteredEnrollmentsWithBonus.length === 0" class="empty-state">
+        <div v-else-if="enrollmentsWithBonus.length === 0" class="empty-state">
           <div class="empty-icon-wrap">
             <svg viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" width="36" height="36">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -211,33 +156,200 @@
               <thead>
                 <tr>
                   <th>O'quvchi F.I.SH.</th>
-                  <th>Telefon & JSHSHR</th>
-                  <th>Kategoriya & Guruh</th>
+                  <th>Kategoriya</th>
+                  <th>Guruh</th>
+                  <th>Guruh boshlanishi</th>
+                  <th>Guruh tugashi</th>
+                  <th>Ro'yxatdan o'tgan</th>
                   <th>Shartnoma Summasi</th>
-                  <th>To'langan Summa</th>
-                  <th style="min-width: 240px;">Bonus Holati & To'lov</th>
+                  <th>O'quvchi to'lagan summa</th>
+                  <th>Holati</th>
+                  <th>Izoh</th>
+                  <th>To'lov Turi</th>
+                  <th>Bonus summasi</th>
+                  <th>Bonus to'langan sana</th>
+                  <th>Bonus Holati</th>
+                  <th style="width: 140px;">Amallar</th>
+                </tr>
+                <tr class="col-filter-row">
+                  <th>
+                    <input v-model="filterStudentName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
+                  </th>
+                  <th>
+                    <div class="select-wrap-relative">
+                      <select v-model="filterCategory" class="col-filter-select">
+                        <option value="">Barchasi</option>
+                        <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                      </select>
+                    </div>
+                  </th>
+                  <th>
+                    <input v-model="filterGroupName" class="col-filter-input" type="text" placeholder="Guruh nomi..." />
+                  </th>
+                  <th>
+                    <div class="col-sort-group">
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupStart', 'asc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 20V4"></path>
+                          <path d="M3 8l3-4 3 4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: groupStartSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupStart', 'desc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 4v16"></path>
+                          <path d="M3 16l3 4 3-4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button v-if="groupStartFrom || groupStartTo" type="button" class="btn-clear-date" @click="groupStartFrom = ''; groupStartTo = ''" title="Tozalash">✕</button>
+                    </div>
+                    <div class="col-date-range">
+                      <input v-model="groupStartFrom" type="date" class="col-date-input" title="Guruh boshlanishi (dan)" />
+                      <input v-model="groupStartTo" type="date" class="col-date-input" title="Guruh boshlanishi (gacha)" />
+                    </div>
+                  </th>
+                  <th>
+                    <div class="col-sort-group">
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('groupEnd', 'asc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 20V4"></path>
+                          <path d="M3 8l3-4 3 4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: groupEndSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('groupEnd', 'desc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 4v16"></path>
+                          <path d="M3 16l3 4 3-4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button v-if="groupEndFrom || groupEndTo" type="button" class="btn-clear-date" @click="groupEndFrom = ''; groupEndTo = ''" title="Tozalash">✕</button>
+                    </div>
+                    <div class="col-date-range">
+                      <input v-model="groupEndFrom" type="date" class="col-date-input" title="Guruh tugashi (dan)" />
+                      <input v-model="groupEndTo" type="date" class="col-date-input" title="Guruh tugashi (gacha)" />
+                    </div>
+                  </th>
+                  <th>
+                    <div class="col-sort-group">
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: enrolledDateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('enrolledDate', 'asc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 20V4"></path>
+                          <path d="M3 8l3-4 3 4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: enrolledDateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('enrolledDate', 'desc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 4v16"></path>
+                          <path d="M3 16l3 4 3-4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button v-if="enrolledDateFrom || enrolledDateTo" type="button" class="btn-clear-date" @click="enrolledDateFrom = ''; enrolledDateTo = ''" title="Tozalash">✕</button>
+                    </div>
+                    <div class="col-date-range">
+                      <input v-model="enrolledDateFrom" type="date" class="col-date-input" title="Ro'yxatdan o'tgan sana (dan)" />
+                      <input v-model="enrolledDateTo" type="date" class="col-date-input" title="Ro'yxatdan o'tgan sana (gacha)" />
+                    </div>
+                  </th>
+                  <th></th>
+                  <th>
+                    <div class="select-wrap-relative">
+                      <select v-model="filterPaidAmount" class="col-filter-select">
+                        <option value="">Barchasi</option>
+                        <option v-for="amt in distinctPaidAmounts" :key="amt" :value="amt">{{ formatMoney(amt) }}</option>
+                      </select>
+                    </div>
+                  </th>
+                  <th>
+                    <div class="select-wrap-relative">
+                      <select v-model="filterEnrollmentStatus" class="col-filter-select">
+                        <option value="">Barchasi</option>
+                        <option value="new">Yangi</option>
+                        <option value="enrolled">Faol</option>
+                        <option value="finished">Tugatgan</option>
+                        <option value="canceled">Bekor qilingan</option>
+                      </select>
+                    </div>
+                  </th>
+                  <th></th>
+                  <th>
+                    <div class="select-wrap-relative">
+                      <select v-model="filterBonusMethod" class="col-filter-select">
+                        <option value="">Barchasi</option>
+                        <option value="cash">Naqd</option>
+                        <option value="card">Karta</option>
+                        <option value="qr_code">QR code</option>
+                        <option value="click">Click</option>
+                        <option value="transfer">O'tkazma</option>
+                      </select>
+                    </div>
+                  </th>
+                  <th></th>
+                  <th>
+                    <div class="col-sort-group">
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: bonusPaidDateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setSort('bonusPaidDate', 'asc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 20V4"></path>
+                          <path d="M3 8l3-4 3 4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button type="button" class="col-sort-icon-btn" :class="{ active: bonusPaidDateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setSort('bonusPaidDate', 'desc')">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M6 4v16"></path>
+                          <path d="M3 16l3 4 3-4"></path>
+                          <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                          <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                        </svg>
+                      </button>
+                      <button v-if="bonusPaidDateFrom || bonusPaidDateTo" type="button" class="btn-clear-date" @click="bonusPaidDateFrom = ''; bonusPaidDateTo = ''" title="Tozalash">✕</button>
+                    </div>
+                    <div class="col-date-range">
+                      <input v-model="bonusPaidDateFrom" type="date" class="col-date-input" title="Bonus to'langan sana (dan)" />
+                      <input v-model="bonusPaidDateTo" type="date" class="col-date-input" title="Bonus to'langan sana (gacha)" />
+                    </div>
+                  </th>
+                  <th>
+                    <div class="select-wrap-relative">
+                      <select v-model="filterBonusStatus" class="col-filter-select">
+                        <option value="">Barchasi</option>
+                        <option value="paid">Bonus to'langan</option>
+                        <option value="pending">Bonus to'lanmagan</option>
+                      </select>
+                    </div>
+                  </th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in filteredEnrollmentsWithBonus" :key="item.id" class="table-row">
+                <tr v-if="paginatedEnrollmentsWithBonus.length === 0">
+                  <td colspan="15" class="td-empty">Filtrlarga mos o'quvchi topilmadi</td>
+                </tr>
+                <tr v-for="item in paginatedEnrollmentsWithBonus" :key="item.id" class="table-row">
                   <td class="td-name">
                     <router-link :to="`/students/${item.student}`" class="student-link">
                       {{ item.student_name || 'Noma\'lum' }}
                     </router-link>
                   </td>
-                  <td class="td-contact">
-                    <div class="phone-val">{{ formatPhone(item.student_phone) }}</div>
-                    <div v-if="item.student_jshshr" class="jshshr-val">JSHSHR: {{ item.student_jshshr }}</div>
+                  <td><span class="cat-badge">{{ item.category_name || '-' }}</span></td>
+                  <td>
+                    <span v-if="item.group" class="link-value" @click="goGroup(item.group)">{{ item.group_name || '-' }}</span>
+                    <span v-else>{{ item.group_name || '-' }}</span>
                   </td>
-                  <td class="td-cat">
-                    <div class="cat-pill-wrap">
-                      <span class="cat-badge">{{ item.category_name || '-' }}</span>
-                      <span v-if="item.group_name" class="group-pill">{{ item.group_name }}</span>
-                    </div>
-                    <div v-if="groupsById[item.group]" class="group-dates">
-                      {{ formatDate(groupsById[item.group].started_at) }} — {{ formatDate(groupsById[item.group].ends_at) }}
-                    </div>
-                  </td>
+                  <td class="td-date">{{ groupsById[item.group] ? formatDate(groupsById[item.group].started_at) : '-' }}</td>
+                  <td class="td-date">{{ groupsById[item.group] ? formatDate(groupsById[item.group].ends_at) : '-' }}</td>
+                  <td class="td-date">{{ formatDate(item.created_at) }}</td>
                   <td class="td-amount">
                     <span v-if="item.enrolled_free" class="grant-pill">Bepul (Grant)</span>
                     <span v-else class="amount-val">{{ formatMoney(item.enrolled_amount) }}</span>
@@ -245,43 +357,51 @@
                   <td class="td-amount">
                     <span class="amount-val" style="color: #2D6A4F;">{{ formatMoney(item.paid_amount) }}</span>
                   </td>
-
-                  <!-- BONUS PAYMENT STATUS & ACTION -->
-                  <td class="td-bonus-action">
-                    <!-- IF BONUS PAYMENT EXISTS -->
-                    <div v-if="item.bonusPayment" class="bonus-paid-box">
-                      <div class="bonus-badge-paid">
-                        <span class="bonus-icon">🎁</span>
-                        <span class="bonus-amount-text">{{ formatMoney(item.bonusPayment.amount) }}</span>
-                        <span class="bonus-chip-tag">Bonus to'langan</span>
-                      </div>
-                      <div class="bonus-meta">
-                        <span>{{ methodText(item.bonusPayment.method) }}</span>
-                        <span>•</span>
-                        <span>{{ formatDate(item.bonusPayment.created_at) }}</span>
-                        <span v-if="item.bonusPayment.cashier_name">• {{ item.bonusPayment.cashier_name }}</span>
-                      </div>
-                    </div>
-
-                    <!-- IF NO BONUS PAYMENT EXISTS -->
-                    <div v-else class="bonus-pending-box">
-                      <span class="bonus-chip-unpaid">Bonus to'lanmagan</span>
-                      <button 
-                        v-if="authStore.isStaff"
-                        class="btn-pay-bonus" 
-                        @click="openPayBonusModal(item)"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span>To'lov qilish</span>
-                      </button>
-                    </div>
+                  <td>
+                    <span class="status-chip" :class="item.status">{{ statusText(item.status) }}</span>
+                  </td>
+                  <td>{{ item.notes || '-' }}</td>
+                  <td>{{ item.bonusPayment ? methodText(item.bonusPayment.method) : '-' }}</td>
+                  <td>{{ item.bonusPayment ? formatMoney(item.bonusPayment.amount) : '-' }}</td>
+                  <td class="td-date">{{ item.bonusPayment?.created_at ? formatDate(item.bonusPayment.created_at) : '-' }}</td>
+                  <td>
+                    <span class="bonus-chip-tag" v-if="item.bonusPayment">Bonus to'langan</span>
+                    <span class="bonus-chip-unpaid" v-else>Bonus to'lanmagan</span>
+                  </td>
+                  <td>
+                    <button
+                      v-if="!item.bonusPayment && authStore.isStaff"
+                      class="btn-pay-bonus"
+                      @click="openPayBonusModal(item)"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                      <span>To'lov qilish</span>
+                    </button>
+                    <span v-else>-</span>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div class="pagination-bar">
+            <span class="pagination-info">
+              Jami: <strong>{{ filteredEnrollmentsWithBonus.length }}</strong> tadan <strong>{{ paginatedEnrollmentsWithBonus.length }}</strong> ko'rsatilmoqda
+            </span>
+            <div class="pagination-actions">
+              <label class="page-size-label" for="agent-page-size">Ko'rsatish:</label>
+              <div class="select-wrap-relative">
+                <select id="agent-page-size" v-model="pageSizeOption" class="page-size-select">
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="all">Barchasi</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -452,7 +572,7 @@
                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                     </svg>
                   </div>
-                  <input v-model="editForm.phone" type="text" class="field-input input-has-icon" placeholder="+998 90 123 45 67" required />
+                  <input v-model="editForm.phone" type="text" class="field-input input-has-icon" placeholder="+998 90 123 45 67" required @input="handlePhoneInput($event, 'phone')" />
                 </div>
               </div>
 
@@ -464,7 +584,7 @@
                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                     </svg>
                   </div>
-                  <input v-model="editForm.phone2" type="text" class="field-input input-has-icon" placeholder="+998 90 987 65 43" />
+                  <input v-model="editForm.phone2" type="text" class="field-input input-has-icon" placeholder="+998 90 987 65 43" @input="handlePhoneInput($event, 'phone2')" />
                 </div>
               </div>
             </div>
@@ -490,7 +610,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
@@ -555,21 +675,54 @@ const agentInitials = computed(() => {
   return agent.value.full_name.slice(0, 2).toUpperCase()
 })
 
+// Cards reflect the currently filtered table rows, not the agent's whole
+// history — so applying a header filter narrows the summary cards too.
 const totalBonusSum = computed(() => {
-  return bonusPayments.value.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+  return filteredEnrollmentsWithBonus.value.reduce((acc, e) => acc + (e.bonusPayment ? Number(e.bonusPayment.amount) || 0 : 0), 0)
 })
 
-const totalStudentsPaid = computed(() => {
-  return enrollments.value.reduce((acc, e) => acc + (Number(e.paid_amount) || 0), 0)
-})
-
-// Filters toolbar state
+// Header-column filters
 const categories = ref([])
-const filterStatus = ref('')
+const filterStudentName = ref('')
 const filterCategory = ref('')
-const filterEnrolledAmount = ref('')
-const filterDateFrom = ref('')
-const filterDateTo = ref('')
+const filterGroupName = ref('')
+const filterPaidAmount = ref('')
+const filterEnrollmentStatus = ref('')
+const filterBonusStatus = ref('')
+const filterBonusMethod = ref('')
+const groupStartSort = ref('')
+const groupEndSort = ref('')
+const groupStartFrom = ref('')
+const groupStartTo = ref('')
+const groupEndFrom = ref('')
+const groupEndTo = ref('')
+const enrolledDateSort = ref('')
+const bonusPaidDateSort = ref('')
+const enrolledDateFrom = ref('')
+const enrolledDateTo = ref('')
+const bonusPaidDateFrom = ref('')
+const bonusPaidDateTo = ref('')
+
+const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, enrolledDate: enrolledDateSort, bonusPaidDate: bonusPaidDateSort }
+function setSort(field, dir) {
+  const target = sortRefs[field]
+  Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
+  target.value = target.value === dir ? '' : dir
+}
+
+function statusText(st) {
+  switch (st) {
+    case 'new': return 'Yangi'
+    case 'enrolled': return 'Faol'
+    case 'finished': return 'Tugatgan'
+    case 'canceled': return 'Bekor qilingan'
+    default: return st
+  }
+}
+
+function goGroup(id) {
+  if (id) router.push(`/groups/${id}`)
+}
 
 async function fetchCategories() {
   try {
@@ -594,46 +747,97 @@ const enrollmentsWithBonus = computed(() => {
 })
 
 const bonusPaidCount = computed(() => {
-  return enrollmentsWithBonus.value.filter(e => e.bonusPayment != null).length
+  return filteredEnrollmentsWithBonus.value.filter(e => e.bonusPayment != null).length
 })
 
 const bonusPendingCount = computed(() => {
-  return enrollmentsWithBonus.value.filter(e => e.bonusPayment == null).length
+  return filteredEnrollmentsWithBonus.value.filter(e => e.bonusPayment == null).length
 })
 
-// Deduped, sorted list of contract (enrolled) amounts among this agent's
-// students, for the "Saralash (to'lov)" select — free/no-amount enrollments
-// don't get an entry since there's nothing to filter by.
-const distinctEnrolledAmounts = computed(() => {
+// Deduped, sorted list of paid amounts among this agent's students, for
+// the "To'langan Summa" filter select.
+const distinctPaidAmounts = computed(() => {
   const amounts = new Set()
   enrollments.value.forEach(e => {
-    if (!e.enrolled_free && e.enrolled_amount) amounts.add(Number(e.enrolled_amount))
+    if (e.paid_amount) amounts.add(Number(e.paid_amount))
   })
   return [...amounts].sort((a, b) => a - b)
 })
 
 const filteredEnrollmentsWithBonus = computed(() => {
-  let list = enrollmentsWithBonus.value
+  const name = filterStudentName.value.trim().toLowerCase()
+  const group = filterGroupName.value.trim().toLowerCase()
 
-  if (filterStatus.value === 'paid') {
-    list = list.filter(e => e.bonusPayment != null)
-  } else if (filterStatus.value === 'pending') {
-    list = list.filter(e => e.bonusPayment == null)
-  }
-  if (filterCategory.value) {
-    list = list.filter(e => String(e.category) === String(filterCategory.value))
-  }
-  if (filterEnrolledAmount.value) {
-    list = list.filter(e => Number(e.enrolled_amount) === Number(filterEnrolledAmount.value))
-  }
-  if (filterDateFrom.value) {
-    list = list.filter(e => e.bonusPayment?.created_at && e.bonusPayment.created_at.slice(0, 10) >= filterDateFrom.value)
-  }
-  if (filterDateTo.value) {
-    list = list.filter(e => e.bonusPayment?.created_at && e.bonusPayment.created_at.slice(0, 10) <= filterDateTo.value)
+  let list = enrollmentsWithBonus.value.filter(e => {
+    if (filterBonusStatus.value === 'paid' && e.bonusPayment == null) return false
+    if (filterBonusStatus.value === 'pending' && e.bonusPayment != null) return false
+    if (filterBonusMethod.value && e.bonusPayment?.method !== filterBonusMethod.value) return false
+    if (filterCategory.value && String(e.category) !== String(filterCategory.value)) return false
+    if (filterPaidAmount.value && Number(e.paid_amount) !== Number(filterPaidAmount.value)) return false
+    if (filterEnrollmentStatus.value && e.status !== filterEnrollmentStatus.value) return false
+    if (name && !(e.student_name || '').toLowerCase().includes(name)) return false
+    if (group && !(e.group_name || '').toLowerCase().includes(group)) return false
+    const g = groupsById.value[e.group]
+    if (groupStartFrom.value && !(g?.started_at && g.started_at >= groupStartFrom.value)) return false
+    if (groupStartTo.value && !(g?.started_at && g.started_at <= groupStartTo.value)) return false
+    if (groupEndFrom.value && !(g?.ends_at && g.ends_at >= groupEndFrom.value)) return false
+    if (groupEndTo.value && !(g?.ends_at && g.ends_at <= groupEndTo.value)) return false
+    // created_at is a full timestamp, not a bare date — slice before
+    // comparing to the plain YYYY-MM-DD filter value, otherwise every
+    // record on the selected "to" day (any time after 00:00:00) sorts as
+    // greater than the bare date and gets wrongly excluded.
+    if (enrolledDateFrom.value && !(e.created_at && e.created_at.slice(0, 10) >= enrolledDateFrom.value)) return false
+    if (enrolledDateTo.value && !(e.created_at && e.created_at.slice(0, 10) <= enrolledDateTo.value)) return false
+    if (bonusPaidDateFrom.value && !(e.bonusPayment?.created_at && e.bonusPayment.created_at.slice(0, 10) >= bonusPaidDateFrom.value)) return false
+    if (bonusPaidDateTo.value && !(e.bonusPayment?.created_at && e.bonusPayment.created_at.slice(0, 10) <= bonusPaidDateTo.value)) return false
+    return true
+  })
+
+  const field = groupStartSort.value ? 'started_at' : (groupEndSort.value ? 'ends_at' : null)
+  if (field) {
+    const dir = (groupStartSort.value || groupEndSort.value) === 'asc' ? 1 : -1
+    list = list.slice().sort((a, b) => {
+      const ga = groupsById.value[a.group]
+      const gb = groupsById.value[b.group]
+      const ta = ga && ga[field] ? new Date(ga[field]).getTime() : null
+      const tb = gb && gb[field] ? new Date(gb[field]).getTime() : null
+      if (ta === null && tb === null) return 0
+      if (ta === null) return 1
+      if (tb === null) return -1
+      return (ta - tb) * dir
+    })
+  } else if (enrolledDateSort.value) {
+    const dir = enrolledDateSort.value === 'asc' ? 1 : -1
+    list = list.slice().sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : null
+      const tb = b.created_at ? new Date(b.created_at).getTime() : null
+      if (ta === null && tb === null) return 0
+      if (ta === null) return 1
+      if (tb === null) return -1
+      return (ta - tb) * dir
+    })
+  } else if (bonusPaidDateSort.value) {
+    const dir = bonusPaidDateSort.value === 'asc' ? 1 : -1
+    list = list.slice().sort((a, b) => {
+      const ta = a.bonusPayment?.created_at ? new Date(a.bonusPayment.created_at).getTime() : null
+      const tb = b.bonusPayment?.created_at ? new Date(b.bonusPayment.created_at).getTime() : null
+      if (ta === null && tb === null) return 0
+      if (ta === null) return 1
+      if (tb === null) return -1
+      return (ta - tb) * dir
+    })
   }
 
   return list
+})
+
+// Row-fetch-count selector: how many of the filtered rows to display,
+// replacing classic next/prev pagination (all data is already loaded
+// client-side, so this is purely a display cap).
+const pageSizeOption = ref('50')
+const paginatedEnrollmentsWithBonus = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredEnrollmentsWithBonus.value
+  return filteredEnrollmentsWithBonus.value.slice(0, Number(pageSizeOption.value))
 })
 
 function goBack() {
@@ -658,9 +862,16 @@ async function fetchAll() {
 async function fetchAgentEnrollmentsAndPayments() {
   loadingEnrollments.value = true
   try {
+    // fetchGroups() runs alongside the enrollment/payment fetches (rather
+    // than as its own unawaited call in onMounted) so the table only
+    // reveals itself once groupsById has what it needs — otherwise the
+    // table renders as soon as enrollments arrive, group start/end read
+    // '-' from the still-empty groups list, and the dates visibly pop in
+    // a moment later once the separate /groups/ request finishes.
     const [eRes, pRes] = await Promise.all([
-      api.get('/enrollments/', { params: { agent: route.params.id, page_size: 200 } }),
-      api.get('/payments/', { params: { agent: route.params.id, status: 'bonus', page_size: 200 } })
+      api.get('/enrollments/', { params: { agent: route.params.id, page_size: 5000 } }),
+      api.get('/payments/', { params: { agent: route.params.id, status: 'bonus', page_size: 5000 } }),
+      fetchGroups(),
     ])
     enrollments.value = eRes.data.results ? eRes.data.results : eRes.data
     bonusPayments.value = pRes.data.results ? pRes.data.results : pRes.data
@@ -743,12 +954,38 @@ async function submitBonusPayment() {
   }
 }
 
+// Digits-only stored phone -> "+998 90 900 90 90" for display/editing.
+function formatPhoneDisplay(p) {
+  if (!p) return ''
+  let digits = p.replace(/\D/g, '')
+  if (!digits) return p
+  if (!digits.startsWith('998') && digits.length <= 9) {
+    digits = '998' + digits
+  }
+  digits = digits.substring(0, 12)
+  let formatted = '+' + digits.substring(0, 3)
+  if (digits.length > 3) formatted += ' ' + digits.substring(3, 5)
+  if (digits.length > 5) formatted += ' ' + digits.substring(5, 8)
+  if (digits.length > 8) formatted += ' ' + digits.substring(8, 10)
+  if (digits.length > 10) formatted += ' ' + digits.substring(10, 12)
+  return formatted
+}
+
+function handlePhoneInput(event, key) {
+  const val = event.target.value
+  if (!val) {
+    editForm.value[key] = ''
+    return
+  }
+  editForm.value[key] = formatPhoneDisplay(val)
+}
+
 function openEditAgentModal() {
   editModalError.value = null
   editForm.value = {
     full_name: agent.value.full_name || '',
-    phone: agent.value.phone || '',
-    phone2: agent.value.phone2 || '',
+    phone: agent.value.phone ? formatPhoneDisplay(agent.value.phone) : '',
+    phone2: agent.value.phone2 ? formatPhoneDisplay(agent.value.phone2) : '',
     notes: agent.value.notes || ''
   }
   showEditModal.value = true
@@ -767,7 +1004,13 @@ async function saveAgent() {
   editSaving.value = true
   editModalError.value = null
   try {
-    const res = await api.patch(`/agents/${agent.value.id}/`, editForm.value)
+    const payload = {
+      full_name: editForm.value.full_name.trim(),
+      phone: editForm.value.phone.replace(/\D/g, ''),
+      phone2: editForm.value.phone2 ? editForm.value.phone2.replace(/\D/g, '') : '',
+      notes: editForm.value.notes,
+    }
+    const res = await api.patch(`/agents/${agent.value.id}/`, payload)
     agent.value = res.data
     closeEditAgentModal()
   } catch (err) {
@@ -783,7 +1026,6 @@ onMounted(async () => {
   }
   fetchAll()
   fetchCategories()
-  fetchGroups()
 })
 </script>
 
@@ -1008,28 +1250,7 @@ onMounted(async () => {
   &.text-amber { color: #B45309; }
 }
 
-/* Filters Toolbar */
-.filters-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 14px;
-  padding: 14px 18px;
-}
-.filter-item { display: flex; align-items: center; gap: 8px; }
-.date-range-sep { color: #9CA3AF; font-size: 13px; }
-.btn-clear-date {
-  width: 26px; height: 26px; border-radius: 8px; border: 1px solid #E5E7EB;
-  background: #F9FAFB; color: #6B7280; font-size: 12px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
-.btn-clear-date:hover { background: #F3F4F6; color: #111827; }
-.flabel-inline { font-size: 13px; font-weight: 600; color: #4B5563; }
-.select-wrap-relative { position: relative; display: inline-block; }
-.fselect-field { appearance: none; background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 9px 14px; font-size: 13px; font-weight: 600; color: #374151; outline: none; cursor: pointer; }
+.select-wrap-relative { position: relative; width: 100%; }
 
 /* Table Section */
 .section-container {
@@ -1067,8 +1288,13 @@ onMounted(async () => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) sticks to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
 .table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 600px;
 }
 
 .data-table {
@@ -1083,6 +1309,7 @@ onMounted(async () => {
     color: #4B5563;
     text-align: left;
     border-bottom: 1px solid #E5E7EB;
+    white-space: nowrap;
   }
 
   td {
@@ -1096,7 +1323,124 @@ onMounted(async () => {
   tr:last-child td {
     border-bottom: none;
   }
+
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+
+  thead tr.col-filter-row th {
+    padding: 8px 10px;
+    background: #FAFAFB;
+  }
 }
+
+.td-date { white-space: nowrap; }
+.td-empty { text-align: center; padding: 32px; color: #9CA3AF; }
+
+.col-filter-input, .col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus, .col-filter-select:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
+
+.link-value { cursor: pointer; color: #2563EB; font-weight: 600; text-decoration: underline; }
+.link-value:hover { color: #1D4ED8; text-decoration: underline; }
+
+.status-chip { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11.5px; font-weight: 600; }
+.status-chip.new { background: #E0F2FE; color: #0369A1; }
+.status-chip.enrolled { background: #DCFCE7; color: #15803D; }
+.status-chip.finished { background: #F3F4F6; color: #4B5563; }
+.status-chip.canceled { background: #FEE2E2; color: #B91C1C; }
+
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-num { display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
+.btn-page {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+  background: white;
+  color: #374151;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .student-link {
   color: #2D6A4F;
@@ -1104,15 +1448,6 @@ onMounted(async () => {
   text-decoration: none;
 
   &:hover { text-decoration: underline; }
-}
-
-.phone-val { font-size: 13.5px; font-weight: 600; color: #374151; }
-.jshshr-val { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
-
-.cat-pill-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .cat-badge {
@@ -1133,14 +1468,6 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.group-dates {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  margin-top: 4px;
-  white-space: nowrap;
-}
-
 .grant-pill {
   padding: 3px 8px;
   background: #F3E8FF;
@@ -1152,64 +1479,9 @@ onMounted(async () => {
 
 .amount-val { font-weight: 600; color: #111827; }
 
-/* Bonus Status Action Column */
-.bonus-paid-box {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.bonus-badge-paid {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: #FEF3C7;
-  border: 1px solid #FDE68A;
-  padding: 6px 12px;
-  border-radius: 10px;
-}
-
-.bonus-icon { font-size: 15px; }
-
-.bonus-amount-text {
-  font-weight: 800;
-  color: #92400E;
-  font-size: 14px;
-}
-
-.bonus-chip-tag {
-  font-size: 11px;
-  font-weight: 700;
-  color: #B45309;
-  background: white;
-  padding: 2px 6px;
-  border-radius: 6px;
-}
-
-.bonus-meta {
-  font-size: 11.5px;
-  color: #78350F;
-  display: flex;
-  gap: 6px;
-  margin-left: 2px;
-}
-
-.bonus-pending-box {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.bonus-chip-unpaid {
-  display: inline-block;
-  padding: 4px 10px;
-  background: #FFF7ED;
-  color: #C2410C;
-  border: 1px dashed #FDBA74;
-  border-radius: 20px;
-  font-size: 11.5px;
-  font-weight: 600;
-}
+/* Bonus status — plain text, no badge/box styling */
+.bonus-chip-tag { font-size: 12.5px; font-weight: 700; color: #15803D; }
+.bonus-chip-unpaid { font-size: 12.5px; font-weight: 600; color: #C2410C; }
 
 .btn-pay-bonus {
   display: inline-flex;

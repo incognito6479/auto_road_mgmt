@@ -16,25 +16,6 @@
       </button>
     </div>
 
-    <!-- Filter Card -->
-    <div class="filter-card">
-      <div class="filter-field">
-        <label class="filter-label">O'quv joyi nomi bo'yicha qidirish</label>
-        <div class="search-input-wrap">
-          <input
-            v-model="filterSearch"
-            type="text"
-            placeholder="Qidiruv..."
-            class="filter-input"
-          />
-          <svg class="search-ico" viewBox="0 0 20 20" fill="none" stroke="#9CA3AF" stroke-width="2" width="14" height="14">
-            <circle cx="8.5" cy="8.5" r="5.5"/>
-            <line x1="12.5" y1="12.5" x2="16" y2="16"/>
-          </svg>
-        </div>
-      </div>
-    </div>
-
     <!-- Table Container -->
     <div class="table-card">
       <div v-if="loading" class="state-container">
@@ -51,18 +32,47 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 60px;">ID</th>
               <th>O'quv joyi nomi</th>
               <th>Yaratilgan sana</th>
               <th v-if="authStore.isAdminOrSuperuser" style="text-align: center; width: 100px;">Amallar</th>
             </tr>
+            <tr class="col-filter-row">
+              <th>
+                <input v-model="filterName" class="col-filter-input" type="text" placeholder="Nomi bo'yicha qidirish..." />
+              </th>
+              <th>
+                <div class="col-sort-group">
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: dateSort === 'asc' }" title="O'sish tartibida (eskidan yangiga)" @click="setDateSort('asc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 20V4"></path>
+                      <path d="M3 8l3-4 3 4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button type="button" class="col-sort-icon-btn" :class="{ active: dateSort === 'desc' }" title="Kamayish tartibida (yangidan eskiga)" @click="setDateSort('desc')">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M6 4v16"></path>
+                      <path d="M3 16l3 4 3-4"></path>
+                      <text x="12" y="10" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">9</text>
+                      <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
+                    </svg>
+                  </button>
+                  <button v-if="dateFrom || dateTo" type="button" class="btn-clear-date" @click="dateFrom = ''; dateTo = ''" title="Tozalash">✕</button>
+                </div>
+                <div class="col-date-range">
+                  <input v-model="dateFrom" type="date" class="col-date-input" title="Yaratilgan sana (dan)" />
+                  <input v-model="dateTo" type="date" class="col-date-input" title="Yaratilgan sana (gacha)" />
+                </div>
+              </th>
+              <th v-if="authStore.isAdminOrSuperuser"></th>
+            </tr>
           </thead>
           <tbody>
-            <tr v-if="filteredPlaces.length === 0">
-              <td :colspan="authStore.isAdminOrSuperuser ? 4 : 3" class="td-empty">O'quv joylari topilmadi.</td>
+            <tr v-if="displayedPlaces.length === 0">
+              <td :colspan="authStore.isAdminOrSuperuser ? 3 : 2" class="td-empty">O'quv joylari topilmadi.</td>
             </tr>
-            <tr v-for="p in filteredPlaces" :key="p.id" class="table-row clickable-row" @click="goToPlaceDetail(p.id)">
-              <td class="td-id">#{{ p.id }}</td>
+            <tr v-for="p in displayedPlaces" :key="p.id" class="table-row clickable-row" @click="goToPlaceDetail(p.id)">
               <td class="td-name">
                 <div class="place-name-text">{{ p.place_name }}</div>
               </td>
@@ -87,10 +97,30 @@
           </tbody>
         </table>
       </div>
+
+      <div v-if="filteredPlaces.length > 0" class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ filteredPlaces.length }}</strong> tadan <strong>{{ displayedPlaces.length }}</strong> ko'rsatilmoqda
+        </span>
+        <div class="pagination-actions">
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="places-page-size">Ko'rsatish:</label>
+          <div class="select-wrap">
+            <select id="places-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Create / Edit Modal Dialog -->
-    <dialog ref="placeModal" class="modal-dialog">
+    <dialog ref="placeModal" class="modal-dialog" @click="onPlaceModalClick">
       <div class="modal-header">
         <div class="header-badge-wrap">
           <div class="header-badge-icon">
@@ -170,7 +200,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
@@ -187,7 +217,24 @@ const goToPlaceDetail = (id) => {
 const places = ref([])
 const loading = ref(false)
 const error = ref('')
-const filterSearch = ref('')
+const filterName = ref('')
+const dateSort = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
+
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: fetch always pulls every learning
+// place (see fetchPlaces below), filtering runs client-side against the
+// full set (filteredPlaces), and pageSizeOption instead controls how many
+// of the *filtered* results are shown per page (see
+// displayedPlaces/changePage below).
+const pageSizeOption = ref('50')
+const totalCount = ref(0)
+const currentPage = ref(1)
+
+function setDateSort(dir) {
+  dateSort.value = dateSort.value === dir ? '' : dir
+}
 
 // Modal state
 const placeModal = ref(null)
@@ -209,8 +256,11 @@ const fetchPlaces = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get('/learning-places/?page_size=1000')
+    // Always the full dataset — filtering/sorting/pagination below all
+    // need to see every row, not just one page of them.
+    const response = await api.get('/learning-places/', { params: { page: 1, page_size: 100000 } })
     places.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
+    totalCount.value = response.data.count ?? places.value.length
   } catch (err) {
     console.error(err)
     error.value = "O'quv joylarini yuklashda xatolik yuz berdi."
@@ -220,11 +270,48 @@ const fetchPlaces = async () => {
 }
 
 const filteredPlaces = computed(() => {
-  return places.value.filter(p => {
-    const q = filterSearch.value.toLowerCase().trim()
+  let list = places.value.filter(p => {
+    const q = filterName.value.toLowerCase().trim()
     const matchSearch = !q || p.place_name.toLowerCase().includes(q)
     return matchSearch && branchStore.isBranchMatch(p)
   })
+  if (dateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= dateFrom.value)
+  if (dateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= dateTo.value)
+  if (dateSort.value) {
+    list.sort((a, b) => {
+      const da = new Date(a.created_at).getTime()
+      const db = new Date(b.created_at).getTime()
+      return dateSort.value === 'asc' ? da - db : db - da
+    })
+  }
+  return list
+})
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredPlaces.value.length / displayPageSize.value))
+})
+const displayedPlaces = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredPlaces.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredPlaces.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
+
+// This view has no scope-narrowing tabs, so nothing ever needs a refetch
+// after the initial load — the row-fetch-count selector only resets the
+// display page.
+watch(pageSizeOption, () => {
+  currentPage.value = 1
 })
 
 const formatDate = (dateStr) => {
@@ -258,6 +345,17 @@ const openEditModal = (p) => {
 
 const closePlaceModal = () => {
   if (placeModal.value) placeModal.value.close()
+}
+
+// A click on the <dialog> element itself (rather than on its content) means
+// the click landed on the backdrop, since the dialog box is sized to its
+// content — checking bounding coordinates is more reliable cross-browser
+// than comparing event.target.
+const onPlaceModalClick = (e) => {
+  if (!placeModal.value) return
+  const rect = placeModal.value.getBoundingClientRect()
+  const clickedOutside = e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom
+  if (clickedOutside) closePlaceModal()
 }
 
 const savePlace = async () => {
@@ -355,62 +453,24 @@ onMounted(async () => {
 }
 .btn-add:hover { background: #1B4332; }
 
-.filter-card {
-  display: flex;
-  background: white;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  border: 1px solid #E5E7EB;
-}
-.filter-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-}
-.filter-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-}
-.search-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.filter-input {
-  width: 100%;
-  padding: 9px 12px;
-  font-size: 13.5px;
-  border: 1px solid #D1D5DB;
-  border-radius: 8px;
-  outline: none;
-  background: #F9FAFB;
-}
-.filter-input:focus {
-  border-color: #2D6A4F;
-  background: white;
-}
-.search-ico {
-  position: absolute;
-  right: 12px;
-  pointer-events: none;
-}
-
 .table-card {
   background: white;
   border-radius: 12px;
   border: 1px solid #E5E7EB;
   overflow: hidden;
 }
-.table-wrap { overflow-x: auto; }
+/* Bounded, independently-scrolling table body so the header (both the
+   label row and the column-filter row) sticks to the top of this
+   container as rows scroll underneath, instead of scrolling away with
+   the page. */
+.table-wrap { overflow: auto; max-height: 600px; }
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 13.5px;
 }
+.data-table thead { position: sticky; top: 0; z-index: 3; }
 .data-table th {
   background: #F9FAFB;
   color: #4B5563;
@@ -426,9 +486,76 @@ onMounted(async () => {
 }
 .table-row:hover { background: #F9FAFB; }
 .clickable-row { cursor: pointer; }
-.td-id { color: #6B7280; font-size: 12.5px; font-weight: 600; }
 .place-name-text { font-weight: 600; color: #111827; }
 .td-empty { text-align: center; padding: 32px; color: #6B7280; }
+
+/* ── Column-head filters ─────────────────────────────────── */
+.data-table thead tr.col-filter-row th {
+  padding: 8px 10px;
+  background: #FAFAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+.col-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  transition: border-color 0.15s;
+}
+.col-filter-input:focus { border-color: #2D6A4F; }
+.col-filter-input::placeholder { color: #9CA3AF; }
+
+.col-sort-group { display: flex; gap: 4px; }
+.col-sort-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #6B7280;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
+.col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
+
+.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+.btn-clear-date {
+  border: none;
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.btn-clear-date:hover { background: #E5E7EB; color: #111827; }
 
 .action-btn-group {
   display: flex;
@@ -509,12 +636,14 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  box-sizing: border-box;
 }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; width: 100%; box-sizing: border-box; }
 .form-label { font-size: 12.5px; font-weight: 600; color: #374151; }
 .req { color: #DC2626; }
 .form-input {
   width: 100%;
+  box-sizing: border-box;
   padding: 10px 14px;
   font-size: 13.5px;
   border: 1px solid #D1D5DB;
@@ -571,6 +700,48 @@ onMounted(async () => {
 
 .delete-warning-icon { display: flex; justify-content: center; margin-bottom: 12px; }
 .delete-confirm-text { text-align: center; font-size: 15px; color: #111827; }
+
+.pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; }
+.pagination-info { font-size: 13.5px; color: #6B7280; font-weight: 500; }
+.pagination-note { margin-left: 8px; font-size: 12px; color: #9CA3AF; font-weight: 400; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; }
+.page-size-label { font-size: 13px; font-weight: 600; color: #4B5563; }
+.btn-page {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.select-wrap { position: relative; }
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 
 .state-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; gap: 12px; }
 .spinner { width: 32px; height: 32px; border: 3px solid #E5E7EB; border-top-color: #2D6A4F; border-radius: 50%; animation: spin 0.8s linear infinite; }

@@ -27,31 +27,6 @@
       </button>
     </div>
 
-    <!-- Toolbar: date range filters -->
-    <div class="groups-toolbar">
-      <div class="date-ranges-row">
-        <div class="filter-group date-range-group">
-          <label class="filter-label">Boshlanish sanasi:</label>
-          <input v-model="startDateFrom" type="date" class="filter-date-input" />
-          <span class="date-range-sep">—</span>
-          <input v-model="startDateTo" type="date" class="filter-date-input" />
-          <button v-if="startDateFrom || startDateTo" type="button" class="btn-clear-date" @click="startDateFrom = ''; startDateTo = ''" title="Tozalash">✕</button>
-        </div>
-
-        <div class="filter-group date-range-group">
-          <label class="filter-label">Tugash sanasi:</label>
-          <input v-model="endDateFrom" type="date" class="filter-date-input" />
-          <span class="date-range-sep">—</span>
-          <input v-model="endDateTo" type="date" class="filter-date-input" />
-          <button v-if="endDateFrom || endDateTo" type="button" class="btn-clear-date" @click="endDateFrom = ''; endDateTo = ''" title="Tozalash">✕</button>
-        </div>
-      </div>
-
-      <div class="total-count">
-        Jami: <strong>{{ totalCount }}</strong> ta guruh
-      </div>
-    </div>
-
     <!-- Loading, error, or empty states -->
     <div v-if="loading" class="state-container">
       <div class="spinner"></div>
@@ -77,6 +52,7 @@
             <th>Dars kunlari</th>
             <th>Davomiyligi</th>
             <th>O'quvchilar soni</th>
+            <th>Izoh</th>
             <th>Holati</th>
             <th></th>
           </tr>
@@ -129,6 +105,11 @@
                     <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                   </svg>
                 </button>
+                <button v-if="startDateFrom || startDateTo" type="button" class="btn-clear-date" @click="startDateFrom = ''; startDateTo = ''" title="Tozalash">✕</button>
+              </div>
+              <div class="col-date-range">
+                <input v-model="startDateFrom" type="date" class="col-date-input" title="Boshlanish sanasi (dan)" />
+                <input v-model="startDateTo" type="date" class="col-date-input" title="Boshlanish sanasi (gacha)" />
               </div>
             </th>
             <th>
@@ -161,14 +142,19 @@
                     <text x="12" y="19" font-size="7.5" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">1</text>
                   </svg>
                 </button>
+                <button v-if="endDateFrom || endDateTo" type="button" class="btn-clear-date" @click="endDateFrom = ''; endDateTo = ''" title="Tozalash">✕</button>
+              </div>
+              <div class="col-date-range">
+                <input v-model="endDateFrom" type="date" class="col-date-input" title="Tugash sanasi (dan)" />
+                <input v-model="endDateTo" type="date" class="col-date-input" title="Tugash sanasi (gacha)" />
               </div>
             </th>
-            <th colspan="6"></th>
+            <th colspan="7"></th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="displayedGroups.length === 0">
-            <td colspan="10" class="no-data">Mos guruhlar topilmadi.</td>
+            <td colspan="11" class="no-data">Mos guruhlar topilmadi.</td>
           </tr>
           <tr v-for="g in displayedGroups" :key="g.id" class="clickable-row" @click="router.push({ name: 'group-detail', params: { id: g.id } })">
             <td class="font-semibold">
@@ -191,6 +177,7 @@
             <td>{{ weekdaysText(g) }}</td>
             <td class="highlight">{{ g.duration ? g.duration + ' oy' : '-' }}</td>
             <td>{{ g.student_count }} ta</td>
+            <td>{{ g.notes || '-' }}</td>
             <td>
               <span class="status-badge" :class="statusClass(g.status)">
                 {{ statusText(g.status) }}
@@ -215,20 +202,23 @@
       </div>
 
       <!-- Pagination controls -->
-      <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #F9FAFB; border-top: 1px solid #E5E7EB; border-bottom-left-radius: 14px; border-bottom-right-radius: 14px;">
-        <span class="pagination-info" style="font-size: 13.5px; color: #6B7280; font-weight: 500;">
-          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0 }} - {{ Math.min(currentPage * pageSize, totalCount) }}</strong> ko'rsatilmoqda
+      <div class="pagination-bar">
+        <span class="pagination-info">
+          Jami: <strong>{{ filteredGroups.length }}</strong> tadan <strong>{{ displayedGroups.length }}</strong> ko'rsatilmoqda
         </span>
-        <div class="pagination-actions" style="display: flex; gap: 8px;">
-          <button class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
-            Oldingi
-          </button>
-          <span class="page-num" style="display: inline-flex; align-items: center; padding: 0 12px; font-weight: 600; color: #374151; font-size: 14px;">
-            Sahifa {{ currentPage }} / {{ totalPages }}
-          </span>
-          <button class="btn-page" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
-            Keyingi
-          </button>
+        <div class="pagination-actions">
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
+          <span v-if="pageSizeOption !== 'all'" class="page-num">Sahifa {{ Math.min(currentPage, displayTotalPages) }} / {{ displayTotalPages }}</span>
+          <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === displayTotalPages" @click="changePage(currentPage + 1)">Keyingi</button>
+          <label class="page-size-label" for="groups-page-size">Ko'rsatish:</label>
+          <div class="select-wrap">
+            <select id="groups-page-size" v-model="pageSizeOption" class="page-size-select">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Barchasi</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -455,7 +445,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
@@ -485,11 +475,17 @@ const endDateTo = ref('')
 const loading = ref(false)
 const error = ref('')
 
-// ── Pagination state ──────────────────────────────────────────
+// ── Row-fetch-count selector ──────────────────────────────────
+// Replaces classic next/prev pagination: pick how many rows to pull from
+// the backend in one shot, then filter/sort them instantly on the client
+// (see displayedGroups below) instead of round-tripping per filter change.
+// Filtering has to see every row matching the active tab — not just
+// whatever page happened to be fetched — so the fetch itself always pulls
+// everything; pageSizeOption instead controls how many of the *filtered*
+// results are shown per page (see displayedGroups/changePage below).
+const pageSizeOption = ref('50')
+const totalCount = ref(0) // total rows matching the active status tab, per backend
 const currentPage = ref(1)
-const totalCount = ref(0)
-const pageSize = 50
-const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
 
 // ── Status tabs ─────────────────────────────────────────────
 const activeTab = ref('all')
@@ -557,15 +553,62 @@ const weekdayOptions = [
   { value: 5, label: 'Shan' },
 ]
 
-// Belt-and-suspenders branch filter on top of the server-side one, same
-// pattern as StudentsView.
-const displayedGroups = computed(() => groups.value.filter(g => branchStore.isBranchMatch(g)))
+// All header filters (name, category, date ranges, sort) run entirely on
+// the client against the already-fetched `groups` list — no per-keystroke
+// or per-filter network round trip, so there's no debounce delay and no
+// input re-render to steal focus/cursor position, AND they see every row
+// matching the active tab (fetchGroups always pulls all of them), not just
+// whatever page happened to be loaded. Only the status tab triggers a new
+// backend request (see watch below).
+const filteredGroups = computed(() => {
+  let list = groups.value.filter(g => branchStore.isBranchMatch(g))
 
-const orderingParam = computed(() => {
-  if (groupStartSort.value) return (groupStartSort.value === 'desc' ? '-' : '') + 'started_at'
-  if (groupEndSort.value) return (groupEndSort.value === 'desc' ? '-' : '') + 'ends_at'
-  return ''
+  if (filterGroupName.value.trim()) {
+    const q = filterGroupName.value.trim().toLowerCase()
+    list = list.filter(g => (g.name || '').toLowerCase().includes(q))
+  }
+  if (selectedCategory.value) {
+    list = list.filter(g => String(g.category) === String(selectedCategory.value) || String(g.category_id) === String(selectedCategory.value))
+  }
+  if (startDateFrom.value) list = list.filter(g => g.started_at && g.started_at >= startDateFrom.value)
+  if (startDateTo.value) list = list.filter(g => g.started_at && g.started_at <= startDateTo.value)
+  if (endDateFrom.value) list = list.filter(g => g.ends_at && g.ends_at >= endDateFrom.value)
+  if (endDateTo.value) list = list.filter(g => g.ends_at && g.ends_at <= endDateTo.value)
+
+  if (groupStartSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.started_at || '').localeCompare(b.started_at || '')
+      return groupStartSort.value === 'desc' ? -d : d
+    })
+  } else if (groupEndSort.value) {
+    list = list.slice().sort((a, b) => {
+      const d = (a.ends_at || '').localeCompare(b.ends_at || '')
+      return groupEndSort.value === 'desc' ? -d : d
+    })
+  }
+
+  return list
 })
+
+// pageSizeOption now purely controls how many of the *filtered* rows show
+// per page — currentPage is clamped here (not via a watcher enumerating
+// every filter ref) so it self-corrects the moment a filter shrinks the
+// result set out from under it.
+const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+const displayTotalPages = computed(() => {
+  if (pageSizeOption.value === 'all') return 1
+  return Math.max(1, Math.ceil(filteredGroups.value.length / displayPageSize.value))
+})
+const displayedGroups = computed(() => {
+  if (pageSizeOption.value === 'all') return filteredGroups.value
+  const page = Math.min(currentPage.value, displayTotalPages.value)
+  const start = (page - 1) * displayPageSize.value
+  return filteredGroups.value.slice(start, start + displayPageSize.value)
+})
+function changePage(page) {
+  if (page < 1 || page > displayTotalPages.value) return
+  currentPage.value = page
+}
 
 const fetchCategories = async () => {
   try {
@@ -580,15 +623,10 @@ const fetchGroups = async () => {
   loading.value = true
   error.value = ''
   try {
-    const params = { page: currentPage.value, page_size: pageSize }
+    // Always the full tab-scoped dataset — filtering/sorting/pagination
+    // above all need to see every row, not just one page of them.
+    const params = { page: 1, page_size: 100000 }
     if (activeTab.value !== 'all') params.status = activeTab.value
-    if (selectedCategory.value) params.category = selectedCategory.value
-    if (filterGroupName.value) params.name = filterGroupName.value.trim()
-    if (startDateFrom.value) params.started_at_from = startDateFrom.value
-    if (startDateTo.value) params.started_at_to = startDateTo.value
-    if (endDateFrom.value) params.ends_at_from = endDateFrom.value
-    if (endDateTo.value) params.ends_at_to = endDateTo.value
-    if (orderingParam.value) params.ordering = orderingParam.value
 
     const response = await api.get('/groups/', { params })
     const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
@@ -602,32 +640,14 @@ const fetchGroups = async () => {
   }
 }
 
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
+// Only the data scope (status tab) needs a backend round trip; every
+// filter/sort/page above is purely client-side.
+watch(activeTab, () => {
   fetchGroups()
-}
-
-// Text-input filter waits for the user to pause typing (1.2s) before
-// re-fetching, so each keystroke doesn't trigger its own request.
-let searchDebounceTimer = null
-watch(filterGroupName, () => {
-  clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    currentPage.value = 1
-    fetchGroups()
-  }, 1200)
 })
-
-// Tabs, category select, date filters, and sort toggles apply immediately.
-watch(
-  [activeTab, selectedCategory, startDateFrom, startDateTo, endDateFrom, endDateTo, groupStartSort, groupEndSort],
-  () => {
-    clearTimeout(searchDebounceTimer)
-    currentPage.value = 1
-    fetchGroups()
-  }
-)
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+})
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
@@ -872,9 +892,6 @@ onMounted(() => {
   }
 })
 
-onUnmounted(() => {
-  clearTimeout(searchDebounceTimer)
-})
 </script>
 
 <style scoped>
@@ -1031,6 +1048,58 @@ onUnmounted(() => {
   color: #6B7280;
 }
 
+/* ── Per-column date-range filters (under sort buttons) ────── */
+.col-date-range {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.col-date-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #374151;
+  background: white;
+  font-family: 'Inter', sans-serif;
+}
+.col-date-input:focus { border-color: #2D6A4F; outline: none; }
+
+/* ── Pagination / row-fetch-count bar ────────────────────────── */
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #F9FAFB;
+  border-top: 1px solid #E5E7EB;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+.pagination-info {
+  font-size: 13.5px;
+  color: #6B7280;
+  font-weight: 500;
+}
+.pagination-note {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #9CA3AF;
+  font-weight: 400;
+}
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-size-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4B5563;
+}
 .btn-page {
   padding: 6px 14px;
   background: white;
@@ -1042,14 +1111,30 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.btn-page:hover:not(:disabled) {
-  background: #F3F4F6;
-  border-color: #D1D5DB;
+.btn-page:hover:not(:disabled) { background: #F3F4F6; border-color: #D1D5DB; }
+.btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  white-space: nowrap;
 }
-.btn-page:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.page-size-select {
+  padding: 6px 26px 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
+.page-size-select:focus { border-color: #2D6A4F; outline: none; }
 
 /* ── States ─────────────────────────────────────────── */
 .state-container {

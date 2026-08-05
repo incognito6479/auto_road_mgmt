@@ -81,6 +81,14 @@
       <div class="table-card">
         <div class="table-card-header">
           <h3 class="section-title">A'zo o'quvchilar</h3>
+          <button v-if="!authStore.isMechanic" type="button" class="btn-export-excel" :disabled="exportingExcel" @click="exportPaymentsExcel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            {{ exportingExcel ? 'Yuklanmoqda...' : "Excelga yuklash" }}
+          </button>
         </div>
 
         <div class="table-container">
@@ -88,8 +96,7 @@
             <thead>
               <tr>
                 <th>O'quvchi F.I.SH.</th>
-                <th class="th-phone">Telefon</th>
-                <th>JSHSHR</th>
+                <th>Holati</th>
                 <th>Eslatmasi</th>
                 <th>O'quv Joyi</th>
                 <th>Dars Vaqti</th>
@@ -114,22 +121,94 @@
                   />
                 </th>
                 <th>
+                  <div class="select-wrap-relative">
+                    <select v-model="filterEnrollmentStatus" class="col-filter-select">
+                      <option value="">Barchasi</option>
+                      <option value="new">Yangi</option>
+                      <option value="enrolled">Faol</option>
+                      <option value="finished">Tugatgan</option>
+                      <option value="canceled">Bekor qilingan</option>
+                    </select>
+                  </div>
+                </th>
+                <th></th>
+                <th>
                   <input
-                    v-model="filterPhone"
+                    v-model="filterLearningPlace"
                     class="col-filter-input"
                     type="text"
-                    placeholder="Telefon bo'yicha qidirish..."
+                    placeholder="O'quv joyi..."
                   />
                 </th>
                 <th>
                   <input
-                    v-model="filterJshshr"
+                    v-model="filterLearningTime"
                     class="col-filter-input"
                     type="text"
-                    placeholder="JSHSHR"
+                    placeholder="Dars vaqti..."
                   />
                 </th>
-                <th :colspan="filterRowTrailingColspan"></th>
+                <th>
+                  <input
+                    v-model="filterLearningDays"
+                    class="col-filter-input"
+                    type="text"
+                    placeholder="Dars kunlari..."
+                  />
+                </th>
+                <th>
+                  <div class="select-wrap-relative">
+                    <select v-model="filterCourseCert" class="col-filter-select">
+                      <option value="">Barchasi</option>
+                      <option value="uploaded">Bor</option>
+                      <option value="not_uploaded">Yo'q</option>
+                    </select>
+                  </div>
+                </th>
+                <th>
+                  <div class="select-wrap-relative">
+                    <select v-model="filterExamCert" class="col-filter-select">
+                      <option value="">Barchasi</option>
+                      <option value="uploaded">Bor</option>
+                      <option value="not_uploaded">Yo'q</option>
+                    </select>
+                  </div>
+                </th>
+                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">
+                  <input
+                    v-model="filterTeacherName"
+                    class="col-filter-input"
+                    type="text"
+                    placeholder="O'qituvchi nomi..."
+                  />
+                </th>
+                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">
+                  <input
+                    v-model="filterInstructorName"
+                    class="col-filter-input"
+                    type="text"
+                    placeholder="Instruktor nomi..."
+                  />
+                </th>
+                <th v-if="authStore.isAdminOrSuperuser || authStore.isMechanic">
+                  <input
+                    v-model="filterAgentName"
+                    class="col-filter-input"
+                    type="text"
+                    placeholder="Agent nomi..."
+                  />
+                </th>
+                <th v-if="!authStore.isMechanic">
+                  <div class="select-wrap-relative">
+                    <select v-model="filterEnrolledAmount" class="col-filter-select">
+                      <option value="">Barchasi</option>
+                      <option v-for="amt in distinctEnrolledAmounts" :key="amt" :value="amt">{{ formatMoney(amt) }}</option>
+                    </select>
+                  </div>
+                </th>
+                <th v-if="!authStore.isMechanic" class="sticky-col sticky-col-1"></th>
+                <th v-if="!authStore.isMechanic" class="sticky-col sticky-col-2"></th>
+                <th v-if="!authStore.isMechanic" class="sticky-col sticky-col-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -137,14 +216,8 @@
                 <td :colspan="tableColspan" class="td-empty">Hech qanday o'quvchi topilmadi.</td>
               </tr>
               <tr v-for="e in filteredEnrollments" :key="e.id" class="stbl-row clickable-row" @click="goToStudentDetail(e.student)">
-                <td class="td-name">{{ e.student_name }}</td>
-                <td class="td-phone">
-                  <div>{{ formatPhone(e.student_phone) }}</div>
-                  <div v-if="e.student_phone2" style="font-size: 11.5px; color: #6B7280; margin-top: 2px;">
-                    Qo'shimcha: {{ formatPhone(e.student_phone2) }}
-                  </div>
-                </td>
-                <td class="td-jshshr">{{ e.student_jshshr }}</td>
+                <td class="td-name link-value">{{ e.student_name }}</td>
+                <td><span class="enroll-status-chip" :class="e.status">{{ enrollmentStatusText(e.status) }}</span></td>
                 <td class="td-notes">{{ e.notes || '-' }}</td>
 
                 <!-- Learning Place Column -->
@@ -206,7 +279,7 @@
                   <div class="assign-cell">
                     <template v-if="e.student_certificate_number">
                       <div class="assign-name-col">
-                        <span class="assign-name">{{ e.student_certificate_series || '' }} {{ e.student_certificate_number }}</span>
+                        <span class="cert-value">{{ e.student_certificate_series || '' }} {{ e.student_certificate_number }}</span>
                         <div v-if="e.student_certificate_added_date" class="cert-date-sub">{{ formatDate(e.student_certificate_added_date) }}</div>
                       </div>
                       <button v-if="authStore.isAdminOrSuperuser" class="btn-assign-edit" @click.stop="openCertModal(e)" title="Sertifikatni o'zgartirish">
@@ -225,19 +298,21 @@
 
                 <!-- Exam-Pass Certificate Image Column -->
                 <td class="td-assign" @click.stop>
-                  <button
-                    v-if="getStudentExamCert(e.student)"
-                    type="button"
-                    class="btn-view-cert"
-                    @click.stop="openExamCertPreview(getStudentExamCert(e.student))"
-                    title="Sertifikatni ko'rish"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                    Ko'rish
-                  </button>
+                  <div v-if="getStudentExamCert(e.student)" class="assign-name-col">
+                    <button
+                      type="button"
+                      class="btn-view-cert"
+                      @click.stop="openExamCertPreview(getStudentExamCert(e.student))"
+                      title="Sertifikatni ko'rish"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                      Ko'rish
+                    </button>
+                    <div v-if="getStudentExamCert(e.student).created_at" class="cert-date-sub">{{ formatDate(getStudentExamCert(e.student).created_at) }}</div>
+                  </div>
                   <button v-else-if="authStore.canUploadCertificates" type="button" class="btn-assign-plus" @click.stop="openExamCertModal(e)" title="Imtihon sertifikatini yuklash">+</button>
                   <span v-else>-</span>
                 </td>
@@ -295,13 +370,14 @@
                 </td>
                 <td v-if="!authStore.isMechanic" class="sticky-col sticky-col-2">
                   <span v-if="e.enrolled_free">-</span>
+                  <span v-else-if="e.excel_imported">{{ formatMoney(0) }}</span>
                   <span v-else :class="{'balance-warning': (e.enrolled_amount - e.paid_amount) > 0}">
                     {{ formatMoney(e.enrolled_amount - e.paid_amount) }}
                   </span>
                 </td>
                 <td v-if="!authStore.isMechanic" class="sticky-col sticky-col-3" style="text-align: center;" @click.stop>
                   <button
-                    v-if="authStore.isAdminOrSuperuser && !e.enrolled_free && e.paid_amount < e.enrolled_amount"
+                    v-if="authStore.isAdminOrSuperuser && !e.enrolled_free && (e.excel_imported || e.paid_amount < e.enrolled_amount)"
                     class="btn-pay"
                     @click.stop="openPayModal(e)"
                   >
@@ -334,7 +410,7 @@
           <p>O'quvchi: <strong>{{ activeEnrollment.student_name }}</strong></p>
           <p>Jami shartnoma: <strong>{{ formatMoney(activeEnrollment.enrolled_amount) }}</strong></p>
           <p>Shu vaqtgacha to'langan: <strong>{{ formatMoney(activeEnrollment.paid_amount) }}</strong></p>
-          <p>Qolgan qarzdorlik: <strong class="balance-warning">{{ formatMoney(activeEnrollment.enrolled_amount - activeEnrollment.paid_amount) }}</strong></p>
+          <p v-if="!activeEnrollment.excel_imported">Qolgan qarzdorlik: <strong class="balance-warning">{{ formatMoney(activeEnrollment.enrolled_amount - activeEnrollment.paid_amount) }}</strong></p>
         </div>
 
         <div class="form-group">
@@ -362,6 +438,11 @@
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
             </svg>
           </div>
+        </div>
+
+        <div class="form-group" v-if="paymentForm.method === 'click'">
+          <label class="form-label">Click cheki rasmi (ixtiyoriy)</label>
+          <FileSelectInput ref="payCheckFileInputRef" accept="image/*" @change="onPayCheckFileChange" />
         </div>
 
         <div class="form-group">
@@ -603,7 +684,7 @@
 
         <div class="form-group">
           <label class="form-label">Rasm</label>
-          <input type="file" accept="image/*" class="form-input" @change="onExamCertFileChange" required />
+          <FileSelectInput ref="examCertFileInputRef" accept="image/*" required @change="onExamCertFileChange" />
         </div>
 
         <div class="form-group">
@@ -645,6 +726,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
+import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatLearningDays } from '@/utils/formatters'
@@ -662,6 +744,27 @@ const goToStudentDetail = (studentId) => {
 
 function goUser(id) {
   if (id) router.push(`/users/${id}`)
+}
+
+const exportingExcel = ref(false)
+async function exportPaymentsExcel() {
+  if (exportingExcel.value) return
+  exportingExcel.value = true
+  try {
+    const res = await api.get(`/groups/${groupId}/export-payments/`, { responseType: 'blob' })
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${group.value?.name || 'guruh'} to'lovlar.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error("Excelga yuklashda xatolik:", err)
+  } finally {
+    exportingExcel.value = false
+  }
 }
 
 function goAgent(id) {
@@ -698,8 +801,26 @@ const weekdaysText = (g) => {
 
 // Column-head filter state
 const filterName = ref('')
-const filterPhone = ref('')
-const filterJshshr = ref('')
+const filterEnrollmentStatus = ref('')
+const filterLearningPlace = ref('')
+const filterCourseCert = ref('')
+const filterExamCert = ref('')
+const filterTeacherName = ref('')
+const filterInstructorName = ref('')
+const filterAgentName = ref('')
+const filterLearningTime = ref('')
+const filterLearningDays = ref('')
+const filterEnrolledAmount = ref('')
+
+// Deduped, sorted list of contract amounts among this group's current
+// students, for the "Shartnoma summasi" filter select.
+const distinctEnrolledAmounts = computed(() => {
+  const amounts = new Set()
+  ;(group.value?.enrollments || []).forEach(e => {
+    if (!e.enrolled_free && e.enrolled_amount) amounts.add(Number(e.enrolled_amount))
+  })
+  return [...amounts].sort((a, b) => a - b)
+})
 
 // Payment state
 const payModal = ref(null)
@@ -746,15 +867,11 @@ const weekdayOptions = [
 ]
 
 const tableColspan = computed(() => {
-  let count = 9 // Student Name, Phone, JSHSHR, Notes, Learning Place, Learning Time, Learning Days, Sertifikat, Imtihon sertifikati
+  let count = 8 // Student Name, Status, Notes, Learning Place, Learning Time, Learning Days, Sertifikat, Imtihon sertifikati
   if (authStore.isAdminOrSuperuser || authStore.isMechanic) count += 3 // Coordinator, Instructor, Agent
   if (!authStore.isMechanic) count += 4 // Shartnoma, Paid, Qoldiq, Amallar
   return count
 })
-
-// Name/Phone/JSHSHR each get their own column-head filter cell — the rest
-// of the header row is spanned by one trailing empty cell.
-const filterRowTrailingColspan = computed(() => tableColspan.value - 3)
 
 const assignUserOptions = computed(() => {
   return allUsers.value.filter(u => u.role === assignType.value)
@@ -785,7 +902,12 @@ const selectedAssignUserLabel = computed(() => {
 function pickAssignUser(id) {
   selectedAssignUserId.value = id
   assignDropdownOpen.value = false
-  assignSearchQuery.value = ''
+  if (id === null) {
+    assignSearchQuery.value = ''
+    return
+  }
+  const u = assignUserOptions.value.find(x => x.id === id)
+  assignSearchQuery.value = u ? (getUserName(u) || formatPhone(u.phone)) : ''
 }
 
 // Close the dropdown when the click lands outside the select. The input's own
@@ -829,7 +951,15 @@ const fetchGroupDetail = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await api.get(`/groups/${groupId}/`)
+    // Awaited alongside the exam-cert list so the table doesn't render (and
+    // read studentExamCerts) before that separate request finishes — else
+    // every row briefly shows "no certificate" until it pops in a moment
+    // later once fetchStudentExamCerts (fired in parallel in onMounted)
+    // resolves.
+    const [response] = await Promise.all([
+      api.get(`/groups/${groupId}/`),
+      fetchStudentExamCerts(),
+    ])
     group.value = response.data
   } catch (err) {
     console.error(err)
@@ -870,17 +1000,34 @@ const fetchLearningPlaces = async () => {
 
 const filteredEnrollments = computed(() => {
   if (!group.value?.enrollments) return []
+  const name = filterName.value.trim().toLowerCase()
+  const place = filterLearningPlace.value.trim().toLowerCase()
+  const teacher = filterTeacherName.value.trim().toLowerCase()
+  const instructor = filterInstructorName.value.trim().toLowerCase()
+  const agent = filterAgentName.value.trim().toLowerCase()
+  const time = filterLearningTime.value.trim().toLowerCase()
+  const days = filterLearningDays.value.trim().toLowerCase()
   return group.value.enrollments.filter(e => {
-    const name = filterName.value.trim().toLowerCase()
-    const matchName = !name || (e.student_name || '').toLowerCase().includes(name)
-    const phone = filterPhone.value.trim()
-    const matchPhone = !phone ||
-      (e.student_phone || '').includes(phone) ||
-      (e.student_phone2 && e.student_phone2.includes(phone))
-    const jshshr = filterJshshr.value.trim()
-    const matchJshshr = !jshshr ||
-      (e.student_jshshr && String(e.student_jshshr).includes(jshshr))
-    return matchName && matchPhone && matchJshshr
+    if (name && !(e.student_name || '').toLowerCase().includes(name)) return false
+    if (filterEnrollmentStatus.value && e.status !== filterEnrollmentStatus.value) return false
+    if (place && !(e.learning_place_name || '').toLowerCase().includes(place)) return false
+    if (teacher && !(e.coordinator_name || '').toLowerCase().includes(teacher)) return false
+    if (instructor && !(e.instructor_name || '').toLowerCase().includes(instructor)) return false
+    if (agent && !(e.agent_name || '').toLowerCase().includes(agent)) return false
+    if (time && !(e.learning_time || '').toLowerCase().includes(time)) return false
+    if (days && !formatLearningDays(e.learning_days || []).toLowerCase().includes(days)) return false
+    if (filterEnrolledAmount.value && Number(e.enrolled_amount) !== Number(filterEnrolledAmount.value)) return false
+    if (filterCourseCert.value) {
+      const hasCourseCert = !!e.student_certificate_number
+      if (filterCourseCert.value === 'uploaded' && !hasCourseCert) return false
+      if (filterCourseCert.value === 'not_uploaded' && hasCourseCert) return false
+    }
+    if (filterExamCert.value) {
+      const hasExamCert = !!getStudentExamCert(e.student)
+      if (filterExamCert.value === 'uploaded' && !hasExamCert) return false
+      if (filterExamCert.value === 'not_uploaded' && hasExamCert) return false
+    }
+    return true
   })
 })
 
@@ -917,6 +1064,19 @@ const statusClass = (status) => {
   }
 }
 
+// Enrollment.status (per-student) is a different set of choices than the
+// group's own status above (new/enrolled/finished/canceled vs
+// started/finished/canceled) — kept separate to avoid conflating the two.
+const enrollmentStatusText = (status) => {
+  switch (status) {
+    case 'new': return 'Yangi'
+    case 'enrolled': return 'Faol'
+    case 'finished': return 'Tugatgan'
+    case 'canceled': return 'Bekor qilingan'
+    default: return status || '-'
+  }
+}
+
 // Payment modal actions
 const openPayModal = (enrollment) => {
   if (!authStore.isAdminOrSuperuser) {
@@ -926,13 +1086,20 @@ const openPayModal = (enrollment) => {
   activeEnrollment.value = enrollment
   payError.value = ''
   paymentForm.value = {
-    amount: enrollment.enrolled_amount - enrollment.paid_amount,
+    amount: enrollment.excel_imported ? 0 : (enrollment.enrolled_amount - enrollment.paid_amount),
     method: 'cash',
     notes: '',
   }
+  payCheckFile.value = null
+  payCheckFileInputRef.value?.reset()
   if (payModal.value) {
     payModal.value.showModal()
   }
+}
+const payCheckFile = ref(null)
+const payCheckFileInputRef = ref(null)
+function onPayCheckFileChange(e) {
+  payCheckFile.value = e.target.files?.[0] || null
 }
 
 const closePayModal = () => {
@@ -957,20 +1124,39 @@ const submitPayment = async () => {
   payError.value = ''
   const enrollmentId = activeEnrollment.value.id
   try {
-    const payload = {
-      enrollment: enrollmentId,
-      amount: parseInt(paymentForm.value.amount, 10),
-      method: paymentForm.value.method,
-      notes: paymentForm.value.notes.trim() || null,
-      status: 'accepted'
+    if (payCheckFile.value) {
+      const formData = new FormData()
+      formData.append('enrollment', enrollmentId)
+      formData.append('user', authStore.user?.id)
+      formData.append('amount', parseInt(paymentForm.value.amount, 10))
+      formData.append('method', paymentForm.value.method)
+      if (paymentForm.value.notes.trim()) formData.append('notes', paymentForm.value.notes.trim())
+      formData.append('status', 'accepted')
+      formData.append('click_check_image', payCheckFile.value)
+      await api.post('/payments/', formData)
+    } else {
+      const payload = {
+        enrollment: enrollmentId,
+        user: authStore.user?.id,
+        amount: parseInt(paymentForm.value.amount, 10),
+        method: paymentForm.value.method,
+        notes: paymentForm.value.notes.trim() || null,
+        status: 'accepted'
+      }
+      await api.post('/payments/', payload)
     }
-    await api.post('/payments/', payload)
     closePayModal()
     await fetchGroupDetail()
     moveEnrollmentToTop(enrollmentId)
   } catch (err) {
     console.error(err)
-    payError.value = "To'lovni saqlashda xatolik yuz berdi. Qayta urinib ko'ring."
+    const data = err.response?.data
+    if (data && typeof data === 'object') {
+      const msgs = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+      payError.value = msgs.join(' | ') || "To'lovni saqlashda xatolik yuz berdi. Qayta urinib ko'ring."
+    } else {
+      payError.value = "To'lovni saqlashda xatolik yuz berdi. Qayta urinib ko'ring."
+    }
   } finally {
     paySaving.value = false
   }
@@ -1080,7 +1266,7 @@ const openCertModal = (enrollment) => {
   activeEnrollment.value = enrollment
   certError.value = ''
   certForm.value = {
-    certificate_series: enrollment.student_certificate_series || '',
+    certificate_series: enrollment.student_certificate_series || 'SA',
     certificate_number: enrollment.student_certificate_number || '',
   }
   if (certModal.value) {
@@ -1114,7 +1300,6 @@ const submitCertificate = async () => {
     await api.patch(`/students/${studentId}/`, {
       certificate_series: series || null,
       certificate_number: number || null,
-      certificate_added_date: new Date().toISOString(),
     })
     closeCertModal()
     await fetchGroupDetail()
@@ -1147,6 +1332,7 @@ async function fetchStudentExamCerts() {
 
 const examCertModal = ref(null)
 const examCertFile = ref(null)
+const examCertFileInputRef = ref(null)
 const examCertNotes = ref('')
 const examCertUploading = ref(false)
 const examCertError = ref('')
@@ -1154,6 +1340,7 @@ const examCertError = ref('')
 function openExamCertModal(enrollment) {
   activeEnrollment.value = enrollment
   examCertFile.value = null
+  examCertFileInputRef.value?.reset()
   examCertNotes.value = ''
   examCertError.value = ''
   examCertModal.value?.showModal()
@@ -1206,7 +1393,6 @@ onMounted(async () => {
   fetchGroupDetail()
   fetchUsers()
   fetchLearningPlaces()
-  fetchStudentExamCerts()
   document.addEventListener('click', handleAssignOutsideClick)
 
   const dialogs = [payModal.value, assignModal.value, scheduleModal.value, certModal.value, examCertModal.value, examCertPreviewModal.value]
@@ -1351,6 +1537,18 @@ onUnmounted(() => {
   color: #991B1B;
 }
 
+.enroll-status-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.enroll-status-chip.new { background: #E0F2FE; color: #0369A1; }
+.enroll-status-chip.enrolled { background: #DCFCE7; color: #15803D; }
+.enroll-status-chip.finished { background: #F3F4F6; color: #4B5563; }
+.enroll-status-chip.canceled { background: #FEE2E2; color: #991B1B; }
+
 .notes-block {
   margin-top: 16px;
   padding-top: 14px;
@@ -1386,6 +1584,23 @@ onUnmounted(() => {
   color: #111827;
 }
 
+.btn-export-excel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #F0FDF4;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-export-excel:hover:not(:disabled) { background: #DCFCE7; }
+.btn-export-excel:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Table */
 .table-container {
   overflow-x: auto;
@@ -1407,6 +1622,14 @@ onUnmounted(() => {
   color: #374151;
   border-bottom: 1px solid #E5E7EB;
   white-space: nowrap;
+}
+
+/* Sticky is applied to <thead> itself, not to individual <th> cells — that
+   keeps both header rows (labels + filters) moving as a single pinned unit. */
+.students-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 /* ── Column-head filters ─────────────────────────────────── */
@@ -1434,6 +1657,22 @@ onUnmounted(() => {
 }
 .col-filter-input:focus { border-color: #2D6A4F; }
 .col-filter-input::placeholder { color: #9CA3AF; }
+
+.select-wrap-relative { position: relative; width: 100%; }
+.col-filter-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: white;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s;
+}
+.col-filter-select:focus { border-color: #2D6A4F; }
 
 .students-table td {
   padding: 14px 16px;
@@ -1475,18 +1714,6 @@ onUnmounted(() => {
   color: #111827;
 }
 
-.th-phone, .td-phone {
-  min-width: 175px;
-  white-space: normal;
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.td-jshshr {
-  font-family: monospace;
-  font-size: 12px;
-}
-
 .td-notes {
   max-width: 180px;
   overflow: hidden;
@@ -1518,15 +1745,21 @@ onUnmounted(() => {
 .assign-name-col {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+}
+.cert-value {
+  font-weight: 500;
+  color: #111827;
+  font-size: 13px;
 }
 .cert-date-sub {
-  font-size: 11px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 700;
   color: #6B7280;
-  margin-top: 2px;
+  margin-top: 3px;
 }
-.link-value { cursor: pointer; }
-.link-value:hover { text-decoration: underline; }
+.link-value { cursor: pointer; color: #2563EB !important; font-weight: 700 !important; text-decoration: underline; }
+.link-value:hover { color: #1D4ED8 !important; }
 .btn-assign-plus {
   width: 26px;
   height: 26px;
