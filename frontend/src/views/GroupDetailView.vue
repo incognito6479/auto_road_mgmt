@@ -957,7 +957,7 @@ const fetchGroupDetail = async () => {
     // later once fetchStudentExamCerts (fired in parallel in onMounted)
     // resolves.
     const [response] = await Promise.all([
-      api.get(`/groups/${groupId}/`),
+      api.get(`/groups/${groupId}/`, { params: { with_enrollments: 1 } }),
       fetchStudentExamCerts(),
     ])
     group.value = response.data

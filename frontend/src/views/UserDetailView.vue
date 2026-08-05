@@ -1447,7 +1447,7 @@
     </dialog>
 
     <!-- Pay Certificate Bonus Modal -->
-    <dialog ref="bonusModal" class="modal-dialog modal-sm" closedby="any">
+    <dialog ref="bonusModal" class="modal-dialog modal-sm" closedby="any" @click="onDialogBackdropClick($event, bonusModal)">
       <form class="user-modal-form" @submit.prevent="submitCertBonus">
         <div class="user-modal-header">
           <div class="header-badge-wrap">
@@ -1491,7 +1491,7 @@
     </dialog>
 
     <!-- Certificate Upload Modal (for a specific linked student) -->
-    <dialog ref="certUploadModal" class="modal-dialog modal-sm" closedby="any">
+    <dialog ref="certUploadModal" class="modal-dialog modal-sm" closedby="any" @click="onDialogBackdropClick($event, certUploadModal)">
       <form class="user-modal-form" @submit.prevent="submitCertUpload">
         <div class="user-modal-header">
           <div class="header-badge-wrap">
@@ -1524,7 +1524,7 @@
     </dialog>
 
     <!-- Course-Completion Certificate Modal (series/number — dedicated, not the full edit modal) -->
-    <dialog ref="courseCertModal" class="modal-dialog modal-sm" closedby="any">
+    <dialog ref="courseCertModal" class="modal-dialog modal-sm" closedby="any" @click="onDialogBackdropClick($event, courseCertModal)">
       <form class="user-modal-form" @submit.prevent="submitCourseCert">
         <div class="user-modal-header">
           <div class="header-badge-wrap">
@@ -2728,13 +2728,21 @@ function setAttendanceSort(column, direction) {
   }
 }
 
+// Finished/canceled students have nothing left to attend, and their group
+// may already be locked from further attendance changes (backend rejects
+// marking either case) — showing them in Yo'qlama jadvali would just be a
+// row of dead buttons, so they're excluded from this table entirely.
+const INACTIVE_STATUSES = ['finished', 'canceled']
+
 const filteredAttendanceEnrollments = computed(() => {
   const q = attendanceTableSearch.value.trim().toLowerCase()
   const groupQ = attendanceTableGroupFilter.value.trim().toLowerCase()
   return enrollments.value.filter(e => {
+    if (INACTIVE_STATUSES.includes(e.status)) return false
+    const g = groupsById.value[e.group]
+    if (g && INACTIVE_STATUSES.includes(g.status)) return false
     if (groupQ && !(e.group_name || '').toLowerCase().includes(groupQ)) return false
     if (q && !(e.student_name || '').toLowerCase().includes(q)) return false
-    const g = groupsById.value[e.group]
     if (attendanceGroupStartFrom.value && !(g?.started_at && g.started_at >= attendanceGroupStartFrom.value)) return false
     if (attendanceGroupStartTo.value && !(g?.started_at && g.started_at <= attendanceGroupStartTo.value)) return false
     if (attendanceGroupEndFrom.value && !(g?.ends_at && g.ends_at >= attendanceGroupEndFrom.value)) return false

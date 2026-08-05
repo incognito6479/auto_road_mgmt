@@ -56,6 +56,15 @@
           </svg>
           Shartnomani yuklash
         </button>
+        <button class="btn-contract-header" v-if="enrollment" :disabled="downloadingLessonBook" @click="downloadLessonBook">
+          <div v-if="downloadingLessonBook" class="spinner spinner-sm"></div>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Amaliy mashq daftarchasi
+        </button>
         <button class="btn-edit-main" v-if="authStore.isAdminOrSuperuser" @click="openEditModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -2147,6 +2156,28 @@ async function downloadContract() {
     console.error("Shartnomani yuklashda xatolik:", err)
   } finally {
     downloadingContract.value = false
+  }
+}
+
+// ── Amaliy mashq daftarchasi (lesson book PDF) ──────────────
+const downloadingLessonBook = ref(false)
+async function downloadLessonBook() {
+  if (!enrollment.value || downloadingLessonBook.value) return
+  downloadingLessonBook.value = true
+  try {
+    const res = await api.get(`/enrollments/${enrollment.value.id}/export-lesson-book/`, { responseType: 'blob' })
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${student.value?.full_name || 'amaliy_mashq'} - amaliy mashq daftarchasi.pdf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error("Amaliy mashq daftarchasini yuklashda xatolik:", err)
+  } finally {
+    downloadingLessonBook.value = false
   }
 }
 

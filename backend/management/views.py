@@ -17,6 +17,7 @@ from django.db.models import Q, OuterRef, Subquery, F, Sum, Prefetch, IntegerFie
 from django.db.models.functions import TruncMonth, Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
@@ -28,6 +29,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from management.contract import generate_contract_pdf
+from management.dispatch_log import generate_dispatch_log_excel
+from management.lesson_book import generate_lesson_book_pdf
 from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, CarWash, DrivingLessons, AutodromeAccessGrant, Notification, TeacherReview, StudentCertificate, Attendance
 from management.serializers import (
     BranchSerializer,
@@ -581,6 +584,23 @@ class StudentViewSet(SoftDeleteModelViewSet):
                 group_ends_at=Subquery(active_enrollment.values("group__ends_at")[:1]),
             ).order_by(self.GROUP_ORDERING_FIELDS[ordering], "-updated_at", "-date_joined")
 
+        # StudentSerializer's 17 SerializerMethodFields all resolve to a
+        # single get_current_student_enrollment(student) call each — without
+        # this, every one of those independently re-queries the student's
+        # enrollments (get_current_student_enrollment now caches its result
+        # per student instance, but that cache is only warm if something has
+        # already populated it). Prefetching each student's active
+        # enrollments here means the very first call finds the answer
+        # already in memory instead of hitting the DB, which is what turned
+        # a full StudentsView load (up to page_size=100000 rows) into tens
+        # of thousands of queries and made the page hang.
+        current_enrollments_qs = Enrollment.objects.filter(is_active=True).select_related(
+            "category", "instructor", "coordinator", "agent", "group"
+        ).order_by("-created_at", "-id")
+        queryset = queryset.prefetch_related(
+            Prefetch("enrollments", queryset=current_enrollments_qs, to_attr="current_enrollment_list")
+        )
+
         return queryset
 
 
@@ -673,18 +693,13 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
-    @action(detail=True, methods=["get"], url_path="export-contract")
-    def export_contract(self, request, pk=None):
-        """
-        PDF of this enrollment's "shartnoma" (student agreement), same
-        access rule as the payment/contract-amount info on the student
-        detail page (canSeePaymentInfo in the frontend auth store) — the
-        document carries passport and contract-price details, not just an
-        admin-only editing action.
-        """
-        enrollment = self.get_object()
-        user = request.user
-        allowed = (
+    # Shared by export-contract and export-lesson-book: same access rule as
+    # the payment/contract-amount info on the student detail page
+    # (canSeePaymentInfo in the frontend auth store) — both documents carry
+    # enrollment details that go beyond an admin-only editing action.
+    @staticmethod
+    def _can_view_documents(user, enrollment):
+        return bool(
             is_admin_or_superuser(user)
             or (user and user.is_authenticated and user.role in (User.Role.INSTRUCTOR, User.Role.COORDINATOR))
             or (
@@ -692,13 +707,32 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
                 and user.id == enrollment.student_id and enrollment.can_view_payments is not False
             )
         )
-        if not allowed:
+
+    @action(detail=True, methods=["get"], url_path="export-contract")
+    def export_contract(self, request, pk=None):
+        """PDF of this enrollment's "shartnoma" (student agreement)."""
+        enrollment = self.get_object()
+        if not self._can_view_documents(request.user, enrollment):
             return Response({"detail": "Ruxsat yo'q."}, status=status.HTTP_403_FORBIDDEN)
 
         pdf_bytes = generate_contract_pdf(enrollment)
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         safe_name = re.sub(r'[\\/*?:"<>|]', "", enrollment.student.full_name or "shartnoma").strip() or "shartnoma"
         filename = f"{safe_name} - shartnoma.pdf"
+        response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response
+
+    @action(detail=True, methods=["get"], url_path="export-lesson-book")
+    def export_lesson_book(self, request, pk=None):
+        """PDF of this enrollment's "Amaliy mashq bajarish varaqasi" (practical driving-lesson exercise booklet)."""
+        enrollment = self.get_object()
+        if not self._can_view_documents(request.user, enrollment):
+            return Response({"detail": "Ruxsat yo'q."}, status=status.HTTP_403_FORBIDDEN)
+
+        pdf_bytes = generate_lesson_book_pdf(enrollment)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        safe_name = re.sub(r'[\\/*?:"<>|]', "", enrollment.student.full_name or "amaliy_mashq").strip() or "amaliy_mashq"
+        filename = f"{safe_name} - amaliy mashq daftarchasi.pdf"
         response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
         return response
 
@@ -1001,14 +1035,13 @@ class GroupViewSet(SoftDeleteModelViewSet):
         # (EnrollmentSerializer(many=True)) — without this prefetch, that
         # nested list re-triggers the exact same N+1 pattern per group (see
         # annotate_enrollment_paid_amount's docstring), which is what made
-        # GroupDetailView slow to load. Scoped to `retrieve` only — the far
-        # more common call pattern across the app is listing ~hundreds of
-        # groups (page_size=1000) purely to look up each one's started_at/
-        # ends_at by id, and eagerly prefetching every member's full
-        # enrollment row for every group in a list nobody asked for would
-        # turn that cheap lookup call into the same slow query it's meant
-        # to fix.
-        if self.action == "retrieve":
+        # GroupDetailView slow to load. Scoped to `retrieve` calls that
+        # explicitly ask for it via ?with_enrollments=1 — GroupDetailView is
+        # the only caller that needs the roster; every other single-group
+        # fetch across the app (e.g. StudentDetailView, just to read
+        # started_at/ends_at by id) was paying to prefetch and serialize a
+        # roster it never reads, same waste as the list case below.
+        if self.action == "retrieve" and self.request.query_params.get("with_enrollments"):
             enrollments_qs = annotate_enrollment_paid_amount(
                 Enrollment.objects.filter(is_active=True).select_related(*ENROLLMENT_SELECT_RELATED)
             )
@@ -1334,6 +1367,53 @@ class CarViewSet(SoftDeleteModelViewSet):
         car.save(update_fields=["last_washed_at", "updated_at"])
 
         return Response(CarWashSerializer(wash).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="export-dispatch-log")
+    def export_dispatch_log(self, request, pk=None):
+        """
+        Excel dispatch log ("Йўл варақаси"), one printable page per date in
+        [date_from, date_to] (inclusive). Same access rule as mark_washed —
+        the car's assigned instructor, any mechanic, or an admin/superuser.
+        """
+        car = self.get_object()
+        user = request.user
+
+        is_assigned_instructor = bool(
+            user and user.is_authenticated and car.instructor_id and user.id == car.instructor_id
+        )
+        is_mechanic = bool(user and user.is_authenticated and user.role == User.Role.MECHANIC)
+        if not (is_assigned_instructor or is_mechanic or is_admin_or_superuser(user)):
+            return Response(
+                {"detail": "Faqat ushbu avtomobilga biriktirilgan instruktor, mexanik yoki admin yo'l varaqasini yuklab olishi mumkin."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        date_from = parse_date(request.query_params.get("date_from") or "")
+        date_to = parse_date(request.query_params.get("date_to") or "")
+        if not date_from or not date_to:
+            return Response({"detail": "date_from va date_to sanalari kerak."}, status=status.HTTP_400_BAD_REQUEST)
+        if date_to < date_from:
+            return Response({"detail": "date_to date_from dan oldin bo'lishi mumkin emas."}, status=status.HTTP_400_BAD_REQUEST)
+
+        dates = []
+        cursor = date_from
+        while cursor <= date_to:
+            dates.append(cursor)
+            cursor += timedelta(days=1)
+
+        try:
+            excel_bytes = generate_dispatch_log_excel(car, dates)
+        except ValueError as err:
+            return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+
+        response = HttpResponse(
+            excel_bytes,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        safe_name = re.sub(r'[\\/*?:"<>|]', "", car.car_name or "yol varaqasi").strip() or "yol varaqasi"
+        filename = f"{safe_name} - yo'l varaqasi.xlsx"
+        response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response
 
 
 # ---------------------------------------------------------------------------
@@ -1786,7 +1866,6 @@ class AttendanceViewSet(SoftDeleteModelViewSet):
         enrollment = self.request.query_params.get("enrollment")
         enrollment_in = self.request.query_params.get("enrollment__in")
         student = self.request.query_params.get("student")
-        is_absent = self.request.query_params.get("is_absent")
         date_param = self.request.query_params.get("date")
         date_from = self.request.query_params.get("date_from")
         date_to = self.request.query_params.get("date_to")
@@ -1798,8 +1877,6 @@ class AttendanceViewSet(SoftDeleteModelViewSet):
             qs = qs.filter(enrollment_id__in=ids)
         if student:
             qs = qs.filter(enrollment__student_id=student)
-        if is_absent is not None:
-            qs = qs.filter(is_absent=is_absent.lower() in ("1", "true", "yes"))
         if date_param:
             qs = qs.filter(date=date_param)
         if date_from:
@@ -1884,6 +1961,12 @@ class AttendanceViewSet(SoftDeleteModelViewSet):
             return Response(
                 {"detail": "Faqat ushbu o'quvchiga biriktirilgan o'qituvchi/instruktor yoki admin davomatni belgilashi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
+            )
+
+        if enrollment.status in (Enrollment.Status.FINISHED, Enrollment.Status.CANCELED):
+            return Response(
+                {"detail": "O'quvchi tugatgan yoki bekor qilingan bo'lsa, davomat belgilab bo'lmaydi."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         if enrollment.group_id and enrollment.group.status in (Group.Status.FINISHED, Group.Status.CANCELED):

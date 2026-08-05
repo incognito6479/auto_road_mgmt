@@ -14,8 +14,16 @@
         <h2 class="page-main-title">{{ car?.car_name || 'Avtomobil Ma\'lumotlari' }}</h2>
       </div>
 
-      <div v-if="authStore.canEditCars && car" class="header-actions">
-        <button class="btn-edit-profile" @click="openEditModal">
+      <div v-if="car && (authStore.canEditCars || isAssignedInstructor)" class="header-actions">
+        <button class="btn-edit-profile" :disabled="downloadingDispatchLog" @click="openDispatchLogModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 6px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Yo'l varaqasi
+        </button>
+        <button v-if="authStore.canEditCars" class="btn-edit-profile" @click="openEditModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 6px;">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -82,11 +90,6 @@
               <div class="info-item">
                 <span class="item-label">Avtomobil nomi:</span>
                 <span class="item-value font-bold">{{ car.car_name }}</span>
-              </div>
-
-              <div class="info-item">
-                <span class="item-label">Davlat raqami:</span>
-                <span class="item-value font-mono font-bold">{{ car.plate_number }}</span>
               </div>
 
               <div class="info-item">
@@ -602,6 +605,49 @@
           <button type="button" class="btn-cancel" @click="closeQuickDateModal">Bekor qilish</button>
           <button type="submit" class="btn-submit" :disabled="quickDateSaving">
             {{ quickDateSaving ? 'Saqlanmoqda...' : 'Saqlash' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Dispatch Log (Йўл варақаси) Modal -->
+    <dialog ref="dispatchLogModal" class="modal-dialog modal-sm-fixed" closedby="any" @click="onDialogBackdropClick($event, dispatchLogModal)">
+      <div class="car-modal-header">
+        <div class="header-badge-wrap">
+          <div class="header-badge-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="2" width="20" height="20">
+              <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="car-modal-title">Yo'l varaqasi</h3>
+            <p class="car-modal-sub">Har bir sana uchun alohida sahifa yaratiladi</p>
+          </div>
+        </div>
+        <button class="car-btn-close" @click="closeDispatchLogModal" title="Yopish">✕</button>
+      </div>
+
+      <form @submit.prevent="downloadDispatchLog" class="car-modal-form">
+        <div v-if="dispatchLogError" class="modal-alert modal-alert-error">
+          <span>{{ dispatchLogError }}</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label required">Sana (dan) *</label>
+          <input v-model="dispatchLogFrom" type="date" class="form-input" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label required">Sana (gacha) *</label>
+          <input v-model="dispatchLogTo" type="date" class="form-input" required />
+        </div>
+
+        <div class="car-modal-footer">
+          <button type="button" class="btn-cancel" @click="closeDispatchLogModal">Bekor qilish</button>
+          <button type="submit" class="btn-submit" :disabled="downloadingDispatchLog">
+            {{ downloadingDispatchLog ? 'Yuklanmoqda...' : 'Yuklab olish' }}
           </button>
         </div>
       </form>
@@ -1146,6 +1192,61 @@ function goUser(id) {
 function goStudent(id) {
   if (!id) return
   router.push(`/students/${id}`)
+}
+
+const isAssignedInstructor = computed(() => !!(
+  authStore.isInstructor && car.value?.instructor && authStore.user?.id === car.value.instructor
+))
+
+// ── Dispatch log (Йўл варақаси) export ────────────────────────────
+const dispatchLogModal = ref(null)
+const dispatchLogFrom = ref('')
+const dispatchLogTo = ref('')
+const dispatchLogError = ref('')
+const downloadingDispatchLog = ref(false)
+
+function openDispatchLogModal() {
+  dispatchLogFrom.value = ''
+  dispatchLogTo.value = ''
+  dispatchLogError.value = ''
+  dispatchLogModal.value?.showModal()
+}
+
+function closeDispatchLogModal() {
+  dispatchLogModal.value?.close()
+}
+
+async function downloadDispatchLog() {
+  if (!dispatchLogFrom.value || !dispatchLogTo.value) {
+    dispatchLogError.value = "Sanalarni tanlang."
+    return
+  }
+  if (dispatchLogTo.value < dispatchLogFrom.value) {
+    dispatchLogError.value = "'Sana (gacha)' 'Sana (dan)'dan oldin bo'lishi mumkin emas."
+    return
+  }
+  downloadingDispatchLog.value = true
+  dispatchLogError.value = ''
+  try {
+    const res = await api.get(`/cars/${car.value.id}/export-dispatch-log/`, {
+      params: { date_from: dispatchLogFrom.value, date_to: dispatchLogTo.value },
+      responseType: 'blob',
+    })
+    const url = URL.createObjectURL(new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${car.value?.car_name || 'yol varaqasi'} - yo'l varaqasi.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    closeDispatchLogModal()
+  } catch (err) {
+    console.error("Yo'l varaqasini yuklashda xatolik:", err)
+    dispatchLogError.value = "Yo'l varaqasini yuklashda xatolik yuz berdi."
+  } finally {
+    downloadingDispatchLog.value = false
+  }
 }
 
 // ── Quick date change (policy_date / tech_inspection_date) ───────────

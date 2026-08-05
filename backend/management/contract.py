@@ -7,36 +7,16 @@ are reproduced from that template; only the fields called out below are
 filled in per enrollment.
 """
 
-import os
-
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
-FONTS_DIR = os.path.join(os.path.dirname(__file__), "fonts")
-_FONTS_REGISTERED = False
-
-
-def _ensure_fonts_registered():
-    """
-    The base14 PDF fonts (Helvetica etc.) don't cover the Uzbek apostrophe
-    letters or Cyrillic, so a bundled Unicode TTF (DejaVu Sans, permissively
-    licensed for embedding) is registered on first use instead.
-    """
-    global _FONTS_REGISTERED
-    if _FONTS_REGISTERED:
-        return
-    pdfmetrics.registerFont(TTFont("DejaVu", os.path.join(FONTS_DIR, "DejaVuSans.ttf")))
-    pdfmetrics.registerFont(TTFont("DejaVu-Bold", os.path.join(FONTS_DIR, "DejaVuSans-Bold.ttf")))
-    _FONTS_REGISTERED = True
-
+from management.pdf_fonts import ensure_fonts_registered
 
 # ---------------------------------------------------------------------------
 # Static organization details (the "O'quv muassasasi" side of every contract)
@@ -67,10 +47,9 @@ def _format_passport_plain(user):
     return f"{user.passport_serie} {user.passport_number}"
 
 
-def _format_passport_with_number_sign(user):
-    if not user.passport_serie or not user.passport_number:
-        return "—"
-    return f"{user.passport_serie} № {user.passport_number}"
+def _bu(text):
+    """Bold + underline wrapper for enrollment/student data filled in from the backend, so it stands out from the static contract boilerplate."""
+    return f"<b><u>{text}</u></b>"
 
 
 def _format_phone(phone):
@@ -86,14 +65,13 @@ def _format_money(amount):
 
 def generate_contract_pdf(enrollment):
     """Returns the contract PDF as bytes for the given Enrollment."""
-    _ensure_fonts_registered()
+    ensure_fonts_registered()
 
     student = enrollment.student
     category_name = enrollment.category.name if enrollment.category else "—"
     contract_number = str(enrollment.id)
     student_name = student.full_name or student.phone
     passport = _format_passport_plain(student)
-    passport_with_sign = _format_passport_with_number_sign(student)
     phone_display = _format_phone(student.phone)
     date_display = _format_date(enrollment.created_at.date() if enrollment.created_at else None)
 
@@ -112,26 +90,26 @@ def generate_contract_pdf(enrollment):
         "intro": ParagraphStyle("intro", fontName="DejaVu", fontSize=8.5, leading=11.5, alignment=TA_JUSTIFY, spaceBefore=6, spaceAfter=6),
         "section": ParagraphStyle("section", fontName="DejaVu-Bold", fontSize=9.5, leading=13, alignment=TA_CENTER, spaceBefore=8, spaceAfter=4),
         "body": ParagraphStyle("body", fontName="DejaVu", fontSize=8.3, leading=10.8, alignment=TA_JUSTIFY, spaceAfter=3),
-        "table_cell": ParagraphStyle("table_cell", fontName="DejaVu", fontSize=7.6, leading=9.6, alignment=TA_LEFT),
+        "table_cell": ParagraphStyle("table_cell", fontName="DejaVu-Bold", fontSize=7.6, leading=9.6, alignment=TA_LEFT),
         "table_header": ParagraphStyle("table_header", fontName="DejaVu-Bold", fontSize=7.6, leading=9.6, alignment=TA_CENTER),
         "table_data": ParagraphStyle("table_data", fontName="DejaVu", fontSize=7.8, leading=10, alignment=TA_CENTER),
     }
 
     story = []
 
-    story.append(Paragraph(f"Shartnoma raqami: <b>{contract_number}</b>", styles["small"]))
-    story.append(Paragraph(f"Pasport seria va raqam: <b>{passport}</b>", styles["small"]))
+    story.append(Paragraph(f"Shartnoma raqami: {_bu(contract_number)}", styles["small"]))
+    story.append(Paragraph(f"Pasport seria va raqam: {_bu(passport)}", styles["small"]))
     story.append(Paragraph(f"Tashkilot inn: <b>{ORG_INN}</b>", styles["small"]))
     story.append(Spacer(1, 8))
 
-    story.append(Paragraph(f"{contract_number} SONLI SHARTNOMA", styles["title"]))
+    story.append(Paragraph(f"{_bu(contract_number)} SONLI SHARTNOMA", styles["title"]))
 
     date_row = Table(
         [[
             Paragraph('"______"_______________', styles["date_line"]),
-            Paragraph(f"{date_display}-yil Samarqand viloyati", styles["date_line_r"]),
+            Paragraph(f"{_bu(date_display + '-yil')} Samarqand viloyati", styles["date_line_r"]),
         ]],
-        colWidths=[85 * mm, 85 * mm],
+        colWidths=[89 * mm, 89 * mm],
     )
     date_row.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -143,9 +121,9 @@ def generate_contract_pdf(enrollment):
     story.append(Spacer(1, 6))
 
     story.append(Paragraph(
-        f'{ORG_NAME} boshlig\'i {ORG_DIRECTOR} bundan keyingi matnlarda "O\'quv muassasasi" deb nomlanuvchi, '
+        f'<b>{ORG_NAME}</b> boshlig\'i {ORG_DIRECTOR} bundan keyingi matnlarda "O\'quv muassasasi" deb nomlanuvchi, '
         "O'zbekiston Respublikasi qonunchiligi va amaldagi Ustaviga asoslanib ish yurituvchi bir tomondan va fuqaro "
-        f'{student_name}, bundan keyingi matnlarda "Ta\'lim oluvchi" deb nomlanuvchi, amaldagi O\'zbekiston Respublikasi '
+        f'{_bu(student_name)}, bundan keyingi matnlarda "Ta\'lim oluvchi" deb nomlanuvchi, amaldagi O\'zbekiston Respublikasi '
         "qonunchiligi va amaldagi Fuqarolik kodeksi talablariga asoslanib ish yurituvchi ikkinchi tomondan mazkur "
         "shartnomani quyidagilar to'g'risida tuzdik:",
         styles["intro"],
@@ -153,7 +131,7 @@ def generate_contract_pdf(enrollment):
 
     story.append(Paragraph("1. SHARTNOMANING PREDMETI", styles["section"]))
     story.append(Paragraph(
-        f'1.1. "O\'quv muassasasi" mazkur shartnoma shartlariga asosan, «Ta\'lim oluvchini» {category_name} toifali '
+        f'1.1. "O\'quv muassasasi" mazkur shartnoma shartlariga asosan, «Ta\'lim oluvchini» {_bu(category_name)} toifali '
         "avtotransport vositalari haydovchilarini tayyorlash toifali avtotransport vositasi haydovchiligiga tayyorlaydi.",
         styles["body"],
     ))
@@ -194,7 +172,7 @@ def generate_contract_pdf(enrollment):
     for text in [
         "3.1. \"Ta'lim oluvchi\" O'zbekiston Respublikasi Vazirlar Mahkamasining Qarorlari, amaldagi rahbariy-me'yoriy "
         "xujjatlar talablariga asosan, o'qishga qabul qilish uchun tegishli xujjatlarni «O'quv muassasasi»ga taqdim etadi.",
-        f"3.2. O'quv mashg'ulotlari soatlari va xajmining, haydovchilarni «{category_name}» toifali avtotransport "
+        f"3.2. O'quv mashg'ulotlari soatlari va xajmining, haydovchilarni «{_bu(category_name)}» toifali avtotransport "
         "vositalari haydovchilarini tayyorlash toifali avtotransport vositasi haydovchiligiga tayyorlashdagi o'quv "
         "reja va dasturlarida belgilangan to'liq xajmda olib borilishini «O'quv muassasasi»dan talab qiladi.",
         "3.3. Avtotransport vositalari xaydovchilarini tegishli toifalarga sifatli tayyorlash va qayta tayyorlashga "
@@ -226,8 +204,8 @@ def generate_contract_pdf(enrollment):
             [
                 Paragraph("Nazariy va amaliy mashg'ulotlar", styles["table_data"]),
                 "", "", "",
-                Paragraph(study_period, styles["table_data"]),
-                Paragraph(price_display, styles["table_data"]),
+                Paragraph(_bu(study_period), styles["table_data"]),
+                Paragraph(_bu(price_display), styles["table_data"]),
             ],
         ],
         colWidths=[42 * mm, 20 * mm, 20 * mm, 25 * mm, 43 * mm, 25 * mm],
@@ -309,10 +287,10 @@ def generate_contract_pdf(enrollment):
 
     org_cell = Paragraph("<br/>".join(ORG_ADDRESS_LINES), styles["table_cell"])
     student_lines = [
-        student_name,
+        _bu(student_name),
         "Manzili: ",
-        f"Pasport seria va raqam: {passport_with_sign}",
-        f"Telefonlar: (uy) {phone_display}",
+        f"Pasport seria va raqam: {_bu(passport)}",
+        f"Telefonlar: (uy) {_bu(phone_display)}",
         "",
         "Imzo:_________________________________",
     ]

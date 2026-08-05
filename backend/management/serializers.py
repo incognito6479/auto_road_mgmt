@@ -14,6 +14,9 @@ from datetime import timedelta
 from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, CarAssignmentHistory, CarWash, DrivingLessons, AutodromeAccessGrant, Notification, TeacherReview, StudentCertificate, Attendance
 
 
+_NOT_CACHED = object()
+
+
 def get_current_student_enrollment(student):
     """
     The enrollment that represents a student's *current* state — always the
@@ -23,8 +26,32 @@ def get_current_student_enrollment(student):
     the latest risks showing a stale status/category/group/instructor that
     no longer reflects reality — and, worse, disagreeing with whichever
     enrollment a status-tab filter elsewhere matched on for the same student.
+
+    StudentSerializer calls this once per output field (17 separate
+    SerializerMethodFields) — without caching, listing every student
+    (page_size=100000, as StudentsView does) turned into tens of thousands
+    of near-duplicate queries and made the page hang indefinitely. The
+    result is cached on the student instance itself, so repeat calls for the
+    same row are free; this is safe because each request loads fresh model
+    instances from the DB, so there's no cross-request staleness.
+
+    If StudentViewSet.get_queryset already prefetched each student's active
+    enrollments (current_enrollment_list, newest first), the first call
+    resolves entirely from memory — no query at all. Otherwise (a single
+    student fetched some other way) it falls back to one indexed query.
     """
-    return student.enrollments.filter(is_active=True).order_by("-created_at", "-id").first()
+    cached = getattr(student, "_current_enrollment_cache", _NOT_CACHED)
+    if cached is not _NOT_CACHED:
+        return cached
+    prefetched = getattr(student, "current_enrollment_list", None)
+    if prefetched is not None:
+        enrollment = prefetched[0] if prefetched else None
+    else:
+        enrollment = student.enrollments.filter(is_active=True).select_related(
+            "category", "instructor", "coordinator", "agent", "group"
+        ).order_by("-created_at", "-id").first()
+    student._current_enrollment_cache = enrollment
+    return enrollment
 
 
 def ensure_phone_is_unique(value, instance=None):
@@ -469,7 +496,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 if category_id:
                     try:
                         category = Category.objects.get(id=category_id, is_active=True)
-                        Enrollment.objects.create(
+                        new_enrollment = Enrollment.objects.create(
                             student=student,
                             category=category,
                             branch_id=student.branch_id,
@@ -480,6 +507,11 @@ class StudentSerializer(serializers.ModelSerializer):
                             learning_time=learning_time or None,
                             learning_days=learning_days or [],
                         )
+                        # get_current_student_enrollment cached "no enrollment"
+                        # for this student a few lines up — refresh it so the
+                        # response this serializer builds next reflects the
+                        # enrollment just created instead of that stale miss.
+                        student._current_enrollment_cache = new_enrollment
                     except Category.DoesNotExist:
                         pass
         return student
@@ -881,13 +913,19 @@ class GroupSerializer(serializers.ModelSerializer):
     def get_enrollments(self, obj):
         # Every group's full member roster (each with its own several-FK
         # EnrollmentSerializer) is only actually used by GroupDetailView's
-        # single-group fetch. A *list* of groups — used all over this app
-        # purely to look up one group's started_at/ends_at by id — has no
-        # use for it, so skip serializing it there entirely rather than
-        # silently dragging along, in the worst case, page_size (up to
-        # 1000) groups' worth of full enrollment data on every such call.
+        # single-group fetch (?with_enrollments=1). Every other caller across
+        # the app — list calls looking up started_at/ends_at by id, and
+        # single-group fetches like StudentDetailView's that only read the
+        # group's own fields — has no use for it, so skip serializing it
+        # entirely rather than silently dragging along a full nested roster
+        # (in the list case, up to page_size=1000 groups' worth) on a call
+        # that never reads it.
         view = self.context.get("view")
-        if view is not None and getattr(view, "action", None) == "list":
+        action = getattr(view, "action", None) if view is not None else None
+        request = self.context.get("request")
+        if action == "list":
+            return []
+        if action == "retrieve" and not (request and request.query_params.get("with_enrollments")):
             return []
         return EnrollmentSerializer(obj.enrollments.all(), many=True, context=self.context).data
 
