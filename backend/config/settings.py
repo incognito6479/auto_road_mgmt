@@ -46,6 +46,10 @@ MIDDLEWARE = [
     "management.middleware.AppLanguageMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Serves STATIC_ROOT directly from gunicorn — without this, admin CSS/JS
+    # 404s in production (DEBUG=True's auto-served static files, via
+    # runserver, don't exist once gunicorn takes over).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -111,6 +115,18 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STORAGES = {
+    # STORAGES replaces Django's defaults outright rather than merging, so
+    # "default" (FileField/ImageField uploads — user photos, car images,
+    # media/) has to be restated here too, not just "staticfiles".
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"

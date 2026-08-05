@@ -20,6 +20,9 @@ if [ "$DJANGO_DEBUG" = "True" ]; then
   echo "Starting Django development server (DJANGO_DEBUG=True)..."
   exec python manage.py runserver 0.0.0.0:8000
 else
+  echo "Collecting static files..."
+  python manage.py collectstatic --noinput
+
   echo "Starting gunicorn..."
   exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \

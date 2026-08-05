@@ -15,7 +15,7 @@
       </div>
 
       <div v-if="car && (authStore.canEditCars || isAssignedInstructor)" class="header-actions">
-        <button class="btn-edit-profile" :disabled="downloadingDispatchLog" @click="openDispatchLogModal">
+        <button class="btn-edit-profile btn-dispatch-log" :disabled="downloadingDispatchLog" @click="openDispatchLogModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 6px;">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
@@ -1464,6 +1464,9 @@ onUnmounted(() => {
 }
 .btn-edit-profile:hover {
   background: #1B4332;
+}
+.btn-dispatch-log {
+  margin-left: 12px;
 }
 
 .state-container {
