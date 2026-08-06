@@ -1210,7 +1210,7 @@ const goToStudentDetail = (id) => {
 }
 
 // ── Filter state ─────────────────────────────────────────────
-const filterStatus = ref('')
+const filterStatus = ref('Faol')
 const filterCategory = ref('')
 const filterName = ref('')
 const filterPhone = ref('')
@@ -1244,9 +1244,12 @@ function setGroupSort(column, direction) {
 }
 
 // ── Enrollment status tabs ─────────────────────────────────────
-const activeTab = ref('all')
+// Defaults to "Faol" (active) rather than the full historical roster —
+// students stay in the table permanently after finishing, so "Barchasi"
+// only grows over time and was making the everyday page load slower every
+// month; the day-to-day case only needs currently-active students anyway.
+const activeTab = ref('Faol')
 const statusTabs = [
-  { key: 'all', label: 'Barchasi' },
   { key: 'Yangi', label: 'Yangi' },
   { key: 'Faol', label: 'Faol' },
   { key: 'Tugatgan', label: 'Tugatgan' },
@@ -1257,10 +1260,7 @@ const statusTabs = [
 
 function selectTab(key) {
   activeTab.value = key
-  if (key === 'all') {
-    filterStatus.value = ''
-    groupFilter.value = ''
-  } else if (key === 'has_group') {
+  if (key === 'has_group') {
     filterStatus.value = ''
     groupFilter.value = 'true'
   } else if (key === 'no_group') {
