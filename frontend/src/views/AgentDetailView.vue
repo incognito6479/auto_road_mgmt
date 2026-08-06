@@ -550,44 +550,95 @@
               <span>{{ editModalError }}</span>
             </div>
 
-            <div class="form-field-group">
-              <label class="field-label required">Agent F.I.SH.</label>
-              <div class="input-with-addon">
-                <div class="input-icon-left">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="2" width="18" height="18">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                </div>
-                <input v-model="editForm.full_name" type="text" class="field-input input-has-icon" placeholder="Masalan: Samandar Qodirov" required />
-              </div>
+            <div class="form-field-group checkbox-row">
+              <input
+                id="edit-ag-is-teacher"
+                v-model="editForm.is_teacher"
+                type="checkbox"
+                class="form-checkbox"
+                @change="onToggleEditIsTeacher"
+              />
+              <label for="edit-ag-is-teacher" class="form-checkbox-label">O'qituvchimi/Instruktormi?</label>
             </div>
 
-            <div class="form-two-cols">
+            <template v-if="!editForm.is_teacher">
               <div class="form-field-group">
-                <label class="field-label required">Telefon raqami</label>
+                <label class="field-label required">Agent F.I.SH.</label>
                 <div class="input-with-addon">
                   <div class="input-icon-left">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" width="18" height="18">
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#2D6A4F" stroke-width="2" width="18" height="18">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
                     </svg>
                   </div>
-                  <input v-model="editForm.phone" type="text" class="field-input input-has-icon" placeholder="+998 90 123 45 67" required @input="handlePhoneInput($event, 'phone')" />
+                  <input v-model="editForm.full_name" type="text" class="field-input input-has-icon" placeholder="Masalan: Samandar Qodirov" required />
                 </div>
               </div>
 
-              <div class="form-field-group">
-                <label class="field-label">Qo'shimcha telefon</label>
-                <div class="input-with-addon">
-                  <div class="input-icon-left">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" width="18" height="18">
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                    </svg>
+              <div class="form-two-cols">
+                <div class="form-field-group">
+                  <label class="field-label required">Telefon raqami</label>
+                  <div class="input-with-addon">
+                    <div class="input-icon-left">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" width="18" height="18">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                      </svg>
+                    </div>
+                    <input v-model="editForm.phone" type="text" class="field-input input-has-icon" placeholder="+998 90 123 45 67" required @input="handlePhoneInput($event, 'phone')" />
                   </div>
-                  <input v-model="editForm.phone2" type="text" class="field-input input-has-icon" placeholder="+998 90 987 65 43" @input="handlePhoneInput($event, 'phone2')" />
+                </div>
+
+                <div class="form-field-group">
+                  <label class="field-label">Qo'shimcha telefon</label>
+                  <div class="input-with-addon">
+                    <div class="input-icon-left">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" width="18" height="18">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                      </svg>
+                    </div>
+                    <input v-model="editForm.phone2" type="text" class="field-input input-has-icon" placeholder="+998 90 987 65 43" @input="handlePhoneInput($event, 'phone2')" />
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
+
+            <template v-else>
+              <div class="form-field-group">
+                <label class="field-label required">O'qituvchi / Instruktor</label>
+                <div class="teacher-searchable-select" @click.stop>
+                  <input
+                    type="text"
+                    class="field-input"
+                    :class="{ 'has-clear': editForm.user }"
+                    v-model="editTeacherSearchText"
+                    @focus="editTeacherDropdownOpen = true"
+                    @input="editTeacherDropdownOpen = true"
+                    placeholder="Ism yoki telefon bo'yicha qidirish..."
+                    autocomplete="off"
+                  />
+                  <button
+                    v-if="editForm.user"
+                    type="button"
+                    class="btn-clear-teacher"
+                    title="Tozalash"
+                    @mousedown.prevent="clearEditTeacher"
+                  >✕</button>
+                  <div v-if="editTeacherDropdownOpen" class="searchable-dropdown">
+                    <div
+                      v-for="t in filteredEditTeacherOptions"
+                      :key="t.id"
+                      class="searchable-option"
+                      :class="{ selected: editForm.user === t.id }"
+                      @mousedown.prevent="selectEditTeacher(t)"
+                    >
+                      {{ t.full_name || t.phone }}
+                      <span class="opt-role-tag">{{ t.role === 'instructor' ? 'Instruktor' : "O'qituvchi" }}</span>
+                    </div>
+                    <div v-if="filteredEditTeacherOptions.length === 0" class="searchable-empty">Topilmadi</div>
+                  </div>
+                </div>
+              </div>
+            </template>
 
             <div class="form-field-group">
               <label class="field-label">Izoh / Eslatma</label>
@@ -610,7 +661,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
@@ -665,8 +716,79 @@ const editForm = ref({
   full_name: '',
   phone: '',
   phone2: '',
-  notes: ''
+  notes: '',
+  is_teacher: false,
+  user: null,
 })
+
+// ── Teacher/instructor agent picker (edit modal) ───────
+// Mirrors AgentsView.vue's create/edit modal: an instructor/coordinator can
+// also be an "agent" via Agent.user. A teacher already linked to another
+// agent is excluded from the picker (except this agent's own current link).
+const editTeacherOptions = ref([])
+async function fetchEditTeacherOptions() {
+  try {
+    const [instRes, coordRes] = await Promise.all([
+      api.get('/users/', { params: { role: 'instructor', page_size: 1000 } }),
+      api.get('/users/', { params: { role: 'coordinator', page_size: 1000 } }),
+    ])
+    const instructors = instRes.data.results || instRes.data || []
+    const coordinators = coordRes.data.results || coordRes.data || []
+    editTeacherOptions.value = [...instructors, ...coordinators]
+  } catch (err) {
+    console.error("O'qituvchi/instruktorlarni yuklashda xatolik:", err)
+  }
+}
+
+const editAllAgentLinks = ref([])
+async function fetchEditAllAgentLinks() {
+  try {
+    const res = await api.get('/agents/', { params: { page_size: 1000 } })
+    const list = res.data.results || res.data || []
+    editAllAgentLinks.value = list.filter(a => a.user).map(a => ({ id: a.id, user: a.user }))
+  } catch (err) {
+    console.error("Agent bog'lanishlarini yuklashda xatolik:", err)
+  }
+}
+const editAssignedTeacherUserIds = computed(() => {
+  const ids = new Set()
+  editAllAgentLinks.value.forEach(link => {
+    if (link.id !== agent.value?.id) ids.add(link.user)
+  })
+  return ids
+})
+
+const editTeacherSearchText = ref('')
+const editTeacherDropdownOpen = ref(false)
+const filteredEditTeacherOptions = computed(() => {
+  const q = editTeacherSearchText.value.trim().toLowerCase()
+  const available = editTeacherOptions.value.filter(t => !editAssignedTeacherUserIds.value.has(t.id))
+  if (!q) return available
+  return available.filter(t =>
+    (t.full_name || '').toLowerCase().includes(q) || (t.phone || '').includes(q)
+  )
+})
+function selectEditTeacher(t) {
+  editForm.value.user = t ? t.id : null
+  editTeacherSearchText.value = t ? (t.full_name || t.phone) : ''
+  editTeacherDropdownOpen.value = false
+}
+function clearEditTeacher() {
+  selectEditTeacher(null)
+}
+function onToggleEditIsTeacher() {
+  if (editForm.value.is_teacher) {
+    if (editTeacherOptions.value.length === 0) fetchEditTeacherOptions()
+    fetchEditAllAgentLinks()
+  } else {
+    editForm.value.user = null
+    editTeacherSearchText.value = ''
+  }
+}
+function handleEditTeacherOutsideClick(e) {
+  if (e.target.closest('.teacher-searchable-select')) return
+  editTeacherDropdownOpen.value = false
+}
 
 const agentInitials = computed(() => {
   if (!agent.value || !agent.value.full_name) return 'A'
@@ -986,7 +1108,15 @@ function openEditAgentModal() {
     full_name: agent.value.full_name || '',
     phone: agent.value.phone ? formatPhoneDisplay(agent.value.phone) : '',
     phone2: agent.value.phone2 ? formatPhoneDisplay(agent.value.phone2) : '',
-    notes: agent.value.notes || ''
+    notes: agent.value.notes || '',
+    is_teacher: !!agent.value.user,
+    user: agent.value.user || null,
+  }
+  editTeacherSearchText.value = agent.value.user ? (agent.value.user_name || '') : ''
+  editTeacherDropdownOpen.value = false
+  if (agent.value.user) {
+    if (editTeacherOptions.value.length === 0) fetchEditTeacherOptions()
+    fetchEditAllAgentLinks()
   }
   showEditModal.value = true
 }
@@ -996,25 +1126,43 @@ function closeEditAgentModal() {
 }
 
 async function saveAgent() {
-  if (!editForm.value.full_name.trim() || !editForm.value.phone.trim()) {
-    editModalError.value = "Barcha majburiy maydonlarni to'ldiring."
-    return
-  }
+  let payload
 
-  editSaving.value = true
-  editModalError.value = null
-  try {
-    const payload = {
+  if (editForm.value.is_teacher) {
+    if (!editForm.value.user) {
+      editModalError.value = "O'qituvchi yoki instruktorni tanlang."
+      return
+    }
+    payload = { user: editForm.value.user, notes: editForm.value.notes?.trim() || '' }
+  } else {
+    if (!editForm.value.full_name.trim() || !editForm.value.phone.trim()) {
+      editModalError.value = "Barcha majburiy maydonlarni to'ldiring."
+      return
+    }
+    payload = {
+      user: null,
       full_name: editForm.value.full_name.trim(),
       phone: editForm.value.phone.replace(/\D/g, ''),
       phone2: editForm.value.phone2 ? editForm.value.phone2.replace(/\D/g, '') : '',
       notes: editForm.value.notes,
     }
+  }
+
+  editSaving.value = true
+  editModalError.value = null
+  try {
     const res = await api.patch(`/agents/${agent.value.id}/`, payload)
     agent.value = res.data
     closeEditAgentModal()
   } catch (err) {
-    editModalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi"
+    const data = err.response?.data
+    if (data?.phone) {
+      editModalError.value = "Ushbu telefon raqamli agent allaqachon mavjud."
+    } else if (data?.user) {
+      editModalError.value = Array.isArray(data.user) ? data.user[0] : String(data.user)
+    } else {
+      editModalError.value = data?.detail || "Saqlashda xatolik yuz berdi"
+    }
   } finally {
     editSaving.value = false
   }
@@ -1026,6 +1174,11 @@ onMounted(async () => {
   }
   fetchAll()
   fetchCategories()
+  document.addEventListener('click', handleEditTeacherOutsideClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleEditTeacherOutsideClick)
 })
 </script>
 
@@ -1354,7 +1507,7 @@ onMounted(async () => {
 .col-filter-input:focus, .col-filter-select:focus { border-color: #2D6A4F; }
 .col-filter-input::placeholder { color: #9CA3AF; }
 
-.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-range { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .col-date-input {
   width: 100%;
   min-width: 0;
@@ -1726,6 +1879,7 @@ onMounted(async () => {
 
 .field-input {
   width: 100%;
+  box-sizing: border-box;
   padding: 11px 14px;
   border: 1.5px solid #E5E7EB;
   border-radius: 10px;
@@ -1752,7 +1906,61 @@ onMounted(async () => {
   cursor: pointer;
 }
 
-.field-textarea { resize: vertical; }
+.field-textarea { width: 100%; max-width: 100%; resize: vertical; }
+
+.checkbox-row { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.form-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: #2D6A4F; }
+.form-checkbox-label { font-size: 13.5px; font-weight: 600; color: #374151; cursor: pointer; }
+
+.teacher-searchable-select { position: relative; }
+.teacher-searchable-select .field-input { width: 100%; box-sizing: border-box; }
+.teacher-searchable-select .field-input.has-clear { padding-right: 34px; }
+.btn-clear-teacher {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: #F3F4F6;
+  color: #6B7280;
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 1;
+}
+.btn-clear-teacher:hover { background: #E5E7EB; color: #374151; }
+.searchable-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 20;
+}
+.searchable-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 13.5px;
+  color: #374151;
+  cursor: pointer;
+}
+.searchable-option:hover { background: #F3F4F6; }
+.searchable-option.selected { background: #F0F7F4; color: #1B4332; font-weight: 600; }
+.searchable-empty { padding: 10px 14px; font-size: 12.5px; color: #9CA3AF; text-align: center; }
+.opt-role-tag { font-size: 10.5px; font-weight: 700; color: #4338CA; background: #E0E7FF; padding: 2px 7px; border-radius: 6px; flex-shrink: 0; }
 
 .modal-footer-actions {
   display: flex;

@@ -1388,7 +1388,7 @@
           <label class="form-label">Foydalanuvchi Rasmi (Foto)</label>
           <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
             <img v-if="editForm.existingImage" :src="editForm.existingImage" alt="Current Photo" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-            <FileSelectInput ref="userFileInputRef" accept="image/*" @change="onUserFileChange" />
+            <FileSelectInput ref="userFileInputRef" accept="image/jpeg,image/png" @change="onUserFileChange" />
           </div>
         </div>
 
@@ -1506,7 +1506,7 @@
 
         <div class="form-group">
           <label class="form-label required">Rasm</label>
-          <FileSelectInput ref="certUploadFileInputRef" accept="image/*" required @change="onCertUploadFileChange" />
+          <FileSelectInput ref="certUploadFileInputRef" accept="image/jpeg,image/png" required @change="onCertUploadFileChange" />
         </div>
 
         <div class="form-group">
@@ -3339,7 +3339,7 @@ watch(() => route.params.id, () => {
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
-.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-range { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 /* Narrow frozen davomat columns (100px) can't fit two date inputs
    side-by-side — stack them instead. */
 .col-date-range-vertical { flex-direction: column; }

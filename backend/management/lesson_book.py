@@ -78,6 +78,19 @@ def _resolve_photo_source(student):
     return DEFAULT_PHOTO_PATH if os.path.exists(DEFAULT_PHOTO_PATH) else None
 
 
+def _resolve_director_line(enrollment):
+    """
+    "Ta'lim muassasaning boshlig'i" row — the branch director's name,
+    printed with a trailing underscore for their handwritten signature.
+    Falls back to a blank signature line if the enrollment (or its group)
+    has no branch, or the branch has no director set.
+    """
+    branch = enrollment.branch or (enrollment.group.branch if enrollment.group else None)
+    director_name = (branch.director_full_name if branch else None) or ""
+    director_name = director_name.strip()
+    return f"{director_name}_________________" if director_name else "_________________"
+
+
 def _resolve_qr_source():
     if os.path.exists(QR_IMAGE_PATH):
         return QR_IMAGE_PATH
@@ -108,12 +121,14 @@ def generate_lesson_book_pdf(enrollment):
     ends_display = _format_date(group.ends_at) if group else "—"
 
     styles = {
-        "title": ParagraphStyle("title", fontName="DejaVu-Bold", fontSize=12, leading=15, alignment=TA_CENTER, spaceAfter=8),
-        "label": ParagraphStyle("label", fontName="DejaVu", fontSize=8.3, leading=11, alignment=TA_LEFT),
-        "value": ParagraphStyle("value", fontName="DejaVu-Bold", fontSize=8.3, leading=11, alignment=TA_LEFT),
-        "th": ParagraphStyle("th", fontName="DejaVu-Bold", fontSize=6.6, leading=8, alignment=TA_CENTER),
-        "td": ParagraphStyle("td", fontName="DejaVu", fontSize=6.8, leading=8.6, alignment=TA_LEFT),
-        "td_center": ParagraphStyle("td_center", fontName="DejaVu", fontSize=7, leading=8.6, alignment=TA_CENTER),
+        "title": ParagraphStyle("title", fontName="DejaVu-Bold", fontSize=11.5, leading=14, alignment=TA_CENTER, spaceAfter=3),
+        "label": ParagraphStyle("label", fontName="DejaVu", fontSize=8, leading=10, alignment=TA_LEFT),
+        "value": ParagraphStyle("value", fontName="DejaVu-Bold", fontSize=8, leading=10, alignment=TA_LEFT),
+        "th": ParagraphStyle("th", fontName="DejaVu-Bold", fontSize=6.4, leading=7.6, alignment=TA_CENTER),
+        "td": ParagraphStyle("td", fontName="DejaVu", fontSize=6.4, leading=7.8, alignment=TA_LEFT),
+        "td_center": ParagraphStyle("td_center", fontName="DejaVu", fontSize=6.6, leading=7.8, alignment=TA_CENTER),
+        "extra_label": ParagraphStyle("extra_label", fontName="DejaVu-Bold", fontSize=7.2, leading=9, alignment=TA_LEFT),
+        "extra_th": ParagraphStyle("extra_th", fontName="DejaVu", fontSize=6.6, leading=8, alignment=TA_LEFT),
     }
 
     story = [Paragraph("AMALIY MASHQ BAJARISH VARAQASI", styles["title"])]
@@ -125,7 +140,7 @@ def generate_lesson_book_pdf(enrollment):
         ("Yengil avtomobil markasi", car_display),
         ("O'qishning boshlanishi", started_display),
         ("O'qishning tugashi", ends_display),
-        ("Ta'lim muassasaning boshlig'i", "U. IMOMOV_________________"),
+        ("Ta'lim muassasaning boshlig'i", _resolve_director_line(enrollment)),
     ]
 
     photo_source = _resolve_photo_source(student)
@@ -145,8 +160,8 @@ def generate_lesson_book_pdf(enrollment):
 
     header_table = Table(
         header_table_rows,
-        colWidths=[26 * mm, 74 * mm, 68 * mm, 26 * mm],
-        rowHeights=[22 * mm / 7] * 7,
+        colWidths=[23 * mm, 76 * mm, 71 * mm, 24 * mm],
+        rowHeights=[17 * mm / 7] * 7,
     )
     header_table.setStyle(TableStyle([
         ("SPAN", (0, 0), (0, 6)),
@@ -155,11 +170,11 @@ def generate_lesson_book_pdf(enrollment):
         ("ALIGN", (0, 0), (0, 0), "CENTER"),
         ("ALIGN", (3, 0), (3, 0), "CENTER"),
         ("LEFTPADDING", (1, 0), (2, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8),
     ]))
     story.append(header_table)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 2))
 
     ex_header = [
         Paragraph("№", styles["th"]),
@@ -185,46 +200,49 @@ def generate_lesson_book_pdf(enrollment):
 
     ex_table = Table(
         ex_table_data,
-        colWidths=[10 * mm, 76 * mm, 17 * mm, 16 * mm, 16 * mm, 14 * mm, 12 * mm, 16 * mm, 17 * mm],
+        colWidths=[9 * mm, 78 * mm, 17 * mm, 16 * mm, 16 * mm, 13 * mm, 11 * mm, 16 * mm, 16 * mm],
         repeatRows=1,
     )
     ex_table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
         ("SPAN", (0, -1), (1, -1)),
         ("ALIGN", (1, -1), (1, -1), "RIGHT"),
     ]))
     story.append(ex_table)
-    story.append(Spacer(1, 4))
-
-    story.append(Paragraph("Qo'shimcha haydovchi-yo'riqchilar", styles["th"]))
     story.append(Spacer(1, 2))
 
+    story.append(Paragraph("Qo'shimcha haydovchi-yo'riqchilar", styles["extra_label"]))
+    story.append(Spacer(1, 1.5))
+
     extra_header = [
-        Paragraph("", styles["th"]),
-        Paragraph("Haydovchi-yo'riqchi F.I.SH", styles["th"]),
-        Paragraph("Avtotransport markasi", styles["th"]),
-        Paragraph("Avtotransport davlat raqami", styles["th"]),
+        "",
+        Paragraph("Haydovchi-yo'riqchi F.I.SH", styles["extra_th"]),
+        Paragraph("Avtotransport markasi", styles["extra_th"]),
+        Paragraph("Avtotransport davlat raqami", styles["extra_th"]),
     ]
     extra_table = Table(
-        [extra_header] + [[Paragraph(str(i), styles["td_center"]), "", "", ""] for i in range(1, 4)],
-        colWidths=[9 * mm, 65 * mm, 60 * mm, 60 * mm],
-        rowHeights=[6 * mm] * 4,
+        [extra_header] + [[Paragraph(str(i), styles["extra_th"]), "", "", ""] for i in range(1, 4)],
+        colWidths=[7 * mm, 65 * mm, 60 * mm, 62 * mm],
+        rowHeights=[5 * mm] * 4,
     )
     extra_table.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEBELOW", (1, 1), (-1, -1), 0.6, colors.black),
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
     ]))
     story.append(extra_table)
 
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        topMargin=6 * mm, bottomMargin=6 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
+        topMargin=4 * mm, bottomMargin=4 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
         title=f"Amaliy mashq varaqasi - {student_name}",
     )
     doc.build(story)

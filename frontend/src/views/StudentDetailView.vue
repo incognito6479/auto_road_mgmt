@@ -14,10 +14,10 @@
         <div class="header-avatar" @click="openImageModal(student.image || '/default_photo.png')" title="Rasmni kattalashtirish">
           <img :src="student.image || '/default_photo.png'" alt="Student" class="user-avatar-img" />
           <button
-            v-if="!student.image && authStore.isAdminOrSuperuser"
+            v-if="authStore.isAdminOrSuperuser"
             type="button"
             class="avatar-add-btn"
-            title="Rasm yuklash"
+            :title="student.image ? 'Rasmni tahrirlash' : 'Rasm yuklash'"
             @click.stop="openStudentPhotoModal"
           >+</button>
         </div>
@@ -40,13 +40,6 @@
       </div>
 
       <div class="header-actions" v-if="student">
-        <button class="btn-view-pass-header" v-if="student.pass_img" @click="openPassportPreview">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          Pasport rasmi
-        </button>
         <button class="btn-contract-header" v-if="enrollment" :disabled="downloadingContract" @click="downloadContract">
           <div v-if="downloadingContract" class="spinner spinner-sm"></div>
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
@@ -576,14 +569,14 @@
               <label class="form-label">O'quvchi Rasmi (Foto)</label>
               <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
                 <img v-if="editForm.existingImage" :src="editForm.existingImage" alt="Photo" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-                <FileSelectInput ref="editStudentPhotoInputRef" accept="image/*" @change="onEditStudentPhotoChange" />
+                <FileSelectInput ref="editStudentPhotoInputRef" accept="image/jpeg,image/png" @change="onEditStudentPhotoChange" />
               </div>
             </div>
             <div class="form-group">
               <label class="form-label">Pasport Rasmi / Nusxasi</label>
               <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
                 <img v-if="editForm.existingPassImg" :src="editForm.existingPassImg" alt="Passport" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-                <FileSelectInput ref="editPassportPhotoInputRef" accept="image/*,.pdf" @change="onEditPassportPhotoChange" />
+                <FileSelectInput ref="editPassportPhotoInputRef" accept="image/jpeg,image/png,.pdf" @change="onEditPassportPhotoChange" />
               </div>
             </div>
           </div>
@@ -646,7 +639,7 @@
             </div>
             <div class="form-group fg-full" v-if="payForm.method === 'click'">
               <label class="form-label">Click cheki rasmi (ixtiyoriy)</label>
-              <FileSelectInput ref="payCheckFileInputRef" accept="image/*" @change="onPayCheckFileChange" />
+              <FileSelectInput ref="payCheckFileInputRef" accept="image/jpeg,image/png" @change="onPayCheckFileChange" />
             </div>
             <div class="form-group fg-full"><label class="form-label">Eslatma</label><input v-model="payForm.notes" type="text" class="form-input" placeholder="Ixtiyoriy..."/></div>
           </div>
@@ -860,7 +853,7 @@
         <div class="form-section">
           <div class="form-group">
             <label class="form-label">Rasm <span class="req">*</span></label>
-            <FileSelectInput ref="certFileInputRef" accept="image/*" required @change="onCertFileChange" />
+            <FileSelectInput ref="certFileInputRef" accept="image/jpeg,image/png" required @change="onCertFileChange" />
           </div>
 
           <div class="form-group">
@@ -890,7 +883,7 @@
         <div class="form-section">
           <div class="form-group">
             <label class="form-label">Pasport rasmi / nusxasi <span class="req">*</span></label>
-            <FileSelectInput ref="passportUploadFileInputRef" accept="image/*,.pdf" required @change="onPassportUploadFileChange" />
+            <FileSelectInput ref="passportUploadFileInputRef" accept="image/jpeg,image/png,.pdf" required @change="onPassportUploadFileChange" />
           </div>
         </div>
 
@@ -944,7 +937,7 @@
         <div class="form-section">
           <div class="form-group">
             <label class="form-label">O'quvchi rasmi <span class="req">*</span></label>
-            <FileSelectInput ref="studentPhotoInputRef" accept="image/*" required @change="onStudentPhotoFileChange" />
+            <FileSelectInput ref="studentPhotoInputRef" accept="image/jpeg,image/png" required @change="onStudentPhotoFileChange" />
           </div>
         </div>
 
@@ -2581,23 +2574,6 @@ textarea.form-input{resize:vertical;min-height:80px}
 }
 .btn-view-pass:hover {
   background: #C7D2FE;
-}
-.btn-view-pass-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 16px;
-  background: #059669;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-view-pass-header:hover {
-  background: #047857;
 }
 .avatar-placeholder-box {
   width: 100%;

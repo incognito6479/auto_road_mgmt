@@ -771,7 +771,7 @@ onUnmounted(() => {
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #4F46E5; color: #4F46E5; background: #EEF2FF; }
 
-.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-range { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .col-date-input {
   width: 100%;
   min-width: 0;

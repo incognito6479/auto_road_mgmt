@@ -2063,6 +2063,12 @@ def import_excel_upload(request):
     if not uploaded:
         return Response({"detail": "Fayl yuborilmadi."}, status=status.HTTP_400_BAD_REQUEST)
 
+    branch_id = request.data.get("branch")
+    if not branch_id:
+        return Response({"detail": "Filial tanlanishi shart."}, status=status.HTTP_400_BAD_REQUEST)
+    if not Branch.objects.filter(pk=branch_id).exists():
+        return Response({"detail": "Tanlangan filial topilmadi."}, status=status.HTTP_400_BAD_REQUEST)
+
     allowed_extensions = (".xlsx", ".xlsm", ".xls")
     if not uploaded.name.lower().endswith(allowed_extensions):
         return Response(
@@ -2080,7 +2086,7 @@ def import_excel_upload(request):
         for chunk in uploaded.chunks():
             f.write(chunk)
 
-    task = import_excel_task.delay(saved_path, request.user.id)
+    task = import_excel_task.delay(saved_path, request.user.id, int(branch_id))
     return Response({"task_id": task.id}, status=status.HTTP_202_ACCEPTED)
 
 

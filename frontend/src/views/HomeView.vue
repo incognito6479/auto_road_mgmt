@@ -61,10 +61,14 @@
       <div class="money-stats-header">
         <h3 class="quick-title">Moliyaviy ko'rsatkichlar</h3>
         <div class="money-date-filter">
-          <label class="money-date-label">Sanadan:</label>
-          <input v-model="moneyDateFrom" type="date" class="money-date-input" />
-          <label class="money-date-label">Sanagacha:</label>
-          <input v-model="moneyDateTo" type="date" class="money-date-input" />
+          <div class="money-date-row">
+            <label class="money-date-label">Sanadan:</label>
+            <input v-model="moneyDateFrom" type="date" class="money-date-input" />
+          </div>
+          <div class="money-date-row">
+            <label class="money-date-label">Sanagacha:</label>
+            <input v-model="moneyDateTo" type="date" class="money-date-input" />
+          </div>
         </div>
       </div>
       <div class="stats-row">
@@ -199,7 +203,7 @@
 
             <div class="form-group" v-if="payForm.method === 'click'">
               <label class="flabel">Click cheki rasmi (ixtiyoriy)</label>
-              <FileSelectInput ref="payCheckFileInputRef" accept="image/*" @change="onPayCheckFileChange" />
+              <FileSelectInput ref="payCheckFileInputRef" accept="image/jpeg,image/png" @change="onPayCheckFileChange" />
             </div>
 
             <div class="form-group">
@@ -596,10 +600,17 @@
 
             <template v-if="!importTaskId">
               <div class="form-group">
+                <label class="flabel required">Filial *</label>
+                <select v-model="importBranchId" class="form-input">
+                  <option :value="null" disabled>Filialni tanlang</option>
+                  <option v-for="b in branchStore.branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label class="flabel required">Excel fayl (.xlsx, .xlsm, .xls) *</label>
                 <FileSelectInput ref="importFileInputRef" accept=".xlsx,.xlsm,.xls" @change="onImportFileChange" />
               </div>
-              <p class="import-hint">Fayldagi "Гурух" varag'idan guruhlar, o'quvchilar, to'lovlar va agent bonuslari import qilinadi. Bu amalni faqat bir marta bajarish tavsiya etiladi.</p>
+              <p class="import-hint">Fayldagi "Гурух" varag'idan guruhlar, o'quvchilar, to'lovlar va agent bonuslari import qilinadi. Barcha import qilinadigan yozuvlar tanlangan filialga biriktiriladi. Bu amalni faqat bir marta bajarish tavsiya etiladi.</p>
             </template>
 
             <template v-else-if="importPolling">
@@ -632,7 +643,7 @@
 
             <div class="modal-footer">
               <button type="button" class="btn-cancel" @click="closeImportModal">{{ importSummary ? 'Yopish' : 'Bekor qilish' }}</button>
-              <button v-if="!importTaskId" type="button" class="btn-save btn-teal-save" :disabled="importSaving || !importSelectedFile" @click="submitImportExcel">
+              <button v-if="!importTaskId" type="button" class="btn-save btn-teal-save" :disabled="importSaving || !importSelectedFile || !importBranchId" @click="submitImportExcel">
                 {{ importSaving ? "Yuklanmoqda..." : "Yuklash" }}
               </button>
             </div>
@@ -651,12 +662,14 @@ import AppLayout from '@/components/AppLayout.vue'
 import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatNumber } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 import { useGroupSelect } from '@/composables/useGroupSelect'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 // ── Icons (inline, monochrome, reused across quick nav + stat cards) ──
 const icoStudents = `<svg viewBox="0 0 24 24" fill="#2D6A4F" width="20" height="20"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z"/></svg>`
@@ -1238,6 +1251,7 @@ async function submitAddCert() {
 const showImportModal = ref(false)
 const importFileInputRef = ref(null)
 const importSelectedFile = ref(null)
+const importBranchId = ref(null)
 const importSaving = ref(false)
 const importError = ref('')
 const importTaskId = ref(null)
@@ -1248,11 +1262,13 @@ let importPollTimer = null
 function openImportExcelModal() {
   importError.value = ''
   importSelectedFile.value = null
+  importBranchId.value = null
   importFileInputRef.value?.reset()
   importTaskId.value = null
   importPolling.value = false
   importSummary.value = null
   showImportModal.value = true
+  if (branchStore.branches.length === 0) branchStore.fetchBranches()
 }
 
 function closeImportModal() {
@@ -1269,11 +1285,16 @@ async function submitImportExcel() {
     importError.value = "Excel faylni tanlang."
     return
   }
+  if (!importBranchId.value) {
+    importError.value = "Filialni tanlang."
+    return
+  }
   importSaving.value = true
   importError.value = ''
   try {
     const formData = new FormData()
     formData.append('file', importSelectedFile.value)
+    formData.append('branch', importBranchId.value)
     const res = await api.post('/import-excel/', formData)
     importTaskId.value = res.data.task_id
     pollImportStatus()
@@ -1367,9 +1388,13 @@ onUnmounted(() => {
 .money-stats-header .quick-title { margin-bottom: 0; }
 .money-date-filter {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.money-date-row {
+  display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 .money-date-label { font-size: 12.5px; font-weight: 600; color: #6B7280; }
 .money-date-input {

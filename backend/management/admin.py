@@ -6,9 +6,9 @@ from management.models import Branch, Category, User, Enrollment, Payment, Group
 
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "is_active", "notes", "created_at", "updated_at")
+    list_display = ("id", "name", "director_full_name", "is_active", "notes", "created_at", "updated_at")
     list_filter = ("is_active", "created_at")
-    search_fields = ("name", "notes")
+    search_fields = ("name", "director_full_name", "notes")
     ordering = ("name",)
     readonly_fields = ("id", "created_at", "updated_at")
 

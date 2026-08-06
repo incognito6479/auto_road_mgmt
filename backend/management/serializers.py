@@ -168,7 +168,7 @@ class HolidaysSerializer(serializers.ModelSerializer):
 class BranchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Branch
-        fields = ["id", "name", "notes", "is_active", "created_at", "updated_at"]
+        fields = ["id", "name", "director_full_name", "notes", "is_active", "created_at", "updated_at"]
         read_only_fields = ["id", "is_active", "created_at", "updated_at"]
 
 

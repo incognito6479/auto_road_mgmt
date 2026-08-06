@@ -7,7 +7,7 @@ import os
 from celery import shared_task
 from django.utils import timezone
 
-from management.models import Enrollment, Group, User
+from management.models import Branch, Enrollment, Group, User
 
 
 @shared_task
@@ -44,7 +44,7 @@ def finish_expired_groups():
 
 
 @shared_task
-def import_excel_task(file_path, actor_id):
+def import_excel_task(file_path, actor_id, branch_id):
     """
     Runs the legacy-data Excel import (management/import_excel.py) in the
     background — the file has thousands of rows, comfortably past what an
@@ -54,8 +54,9 @@ def import_excel_task(file_path, actor_id):
     from management.import_excel import import_excel_data
 
     actor = User.objects.filter(pk=actor_id).first()
+    branch = Branch.objects.filter(pk=branch_id).first()
     try:
-        summary = import_excel_data(file_path, actor)
+        summary = import_excel_data(file_path, actor, branch)
         return summary
     finally:
         try:

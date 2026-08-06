@@ -442,7 +442,7 @@
 
         <div class="form-group" v-if="paymentForm.method === 'click'">
           <label class="form-label">Click cheki rasmi (ixtiyoriy)</label>
-          <FileSelectInput ref="payCheckFileInputRef" accept="image/*" @change="onPayCheckFileChange" />
+          <FileSelectInput ref="payCheckFileInputRef" accept="image/jpeg,image/png" @change="onPayCheckFileChange" />
         </div>
 
         <div class="form-group">
@@ -684,7 +684,7 @@
 
         <div class="form-group">
           <label class="form-label">Rasm</label>
-          <FileSelectInput ref="examCertFileInputRef" accept="image/*" required @change="onExamCertFileChange" />
+          <FileSelectInput ref="examCertFileInputRef" accept="image/jpeg,image/png" required @change="onExamCertFileChange" />
         </div>
 
         <div class="form-group">

@@ -233,7 +233,7 @@
             <!-- Car Image -->
             <div class="form-group">
               <label class="flabel">Avtomobil Rasmi</label>
-              <FileSelectInput accept="image/*" @change="onCarFileChange" />
+              <FileSelectInput accept="image/jpeg,image/png" @change="onCarFileChange" />
             </div>
 
             <!-- Status Select -->

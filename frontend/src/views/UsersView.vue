@@ -297,7 +297,7 @@
               <label class="form-label">Foydalanuvchi Rasmi (Foto)</label>
               <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
                 <img v-if="userForm.existingImage" :src="userForm.existingImage" alt="User Photo" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-                <FileSelectInput ref="userFileInputRef" accept="image/*" @change="onUserFileChange" />
+                <FileSelectInput ref="userFileInputRef" accept="image/jpeg,image/png" @change="onUserFileChange" />
               </div>
             </div>
           </div>
@@ -1178,7 +1178,7 @@ watch(() => route.query.role, () => {
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
-.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-range { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .col-date-input {
   width: 100%;
   min-width: 0;

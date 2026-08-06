@@ -51,6 +51,13 @@ class Branch(BaseModel):
         help_text="Filial nomi",
     )
 
+    director_full_name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Filial rahbarining to'liq F.I.SH. (yo'l varaqasi va daftarcha kabi hujjatlarda ishlatiladi)",
+    )
+
     class Meta:
         db_table = "branch"
         verbose_name = "Filial"
@@ -213,6 +220,15 @@ class User(AbstractUser):
             self.last_name = parts[1] if len(parts) > 1 else ""
         if not self.password and self.jshshr:
             self.set_password(str(self.jshshr))
+
+        if self.pk:
+            # A replaced (or cleared) profile photo would otherwise leave
+            # the previous file behind on disk forever — delete it once the
+            # new one is confirmed different.
+            old_image = User.objects.filter(pk=self.pk).values_list("image", flat=True).first()
+            if old_image and old_image != self.image.name:
+                self.image.storage.delete(old_image)
+
         super().save(*args, **kwargs)
 
     def __str__(self):

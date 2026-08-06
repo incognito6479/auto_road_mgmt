@@ -21,7 +21,7 @@ Column layout of the "Гурух" sheet (0-indexed, as read by openpyxl):
 Everything else (A, B, E, H, I, X) is intentionally ignored — see the
 column-mapping conversation in the PR/commit that added this file for why.
 
-Entry point: `import_excel_data(file_path, actor)`. Runs inside a single
+Entry point: `import_excel_data(file_path, actor, branch)`. Runs inside a single
 `transaction.atomic()` block — either the whole file lands, or none of it
 does (an unhandled error rolls everything back). Individually messy rows
 (a garbled certificate number, an unparsable passport, ...) do NOT abort
@@ -80,14 +80,18 @@ def _payment_backdate(group):
     None of the per-installment payments carry their own date in the sheet,
     only the group's start date — used as a stand-in so five-year-old
     payments don't land in "today's income" on the finance dashboard.
-    Falls back to now() for the rare group with no start date at all.
+    Falls back to now() for a group with no start date, or with a start
+    date in the future (a not-yet-started group can't have payments dated
+    on a day that hasn't happened yet — that would otherwise show up as
+    future-dated "accepted" income).
     """
-    if group.started_at:
+    today = timezone.localdate()
+    if group.started_at and group.started_at <= today:
         return timezone.make_aware(datetime.combine(group.started_at, time(hour=12)))
     return timezone.now()
 
 
-def _import_row(ctx, row_number, row, actor):
+def _import_row(ctx, row_number, row, actor, branch):
     group_name = row[COL_GROUP]
     category_code = row[COL_CATEGORY]
     full_name_raw = row[COL_FULL_NAME]
@@ -108,7 +112,7 @@ def _import_row(ctx, row_number, row, actor):
 
     started_at = parse_excel_date(row[COL_GROUP_START])
     ends_at = parse_excel_date(row[COL_GROUP_END])
-    group = get_or_create_group(ctx, group_name, category, started_at, ends_at)
+    group = get_or_create_group(ctx, group_name, category, started_at, ends_at, branch)
 
     full_name = parse_full_name(full_name_raw)
     if not full_name:
@@ -124,7 +128,7 @@ def _import_row(ctx, row_number, row, actor):
     birth_date = parse_excel_date(row[COL_BIRTH_DATE])
 
     student, _created = get_or_create_student(
-        ctx, row_number, jshshr, phone, full_name, phone2, passport_serie, passport_number, birth_date,
+        ctx, row_number, jshshr, phone, full_name, phone2, passport_serie, passport_number, birth_date, branch,
     )
 
     cert_series, cert_number, cert_leftover = parse_certificate(row[COL_CERTIFICATE])
@@ -151,9 +155,10 @@ def _import_row(ctx, row_number, row, actor):
     agent = None
     agent_raw = row[COL_AGENT]
     if agent_raw and str(agent_raw).strip():
-        agent = get_or_create_agent(ctx, str(agent_raw).strip())
+        agent = get_or_create_agent(ctx, str(agent_raw).strip(), branch)
 
     enrollment = Enrollment.objects.create(
+        branch=branch,
         student=student,
         category=category,
         group=group,
@@ -172,6 +177,7 @@ def _import_row(ctx, row_number, row, actor):
         if amount <= 0:
             continue
         new_payments.append(Payment(
+            branch=branch,
             user=actor,
             created_by=actor,
             enrollment=enrollment,
@@ -189,6 +195,7 @@ def _import_row(ctx, row_number, row, actor):
             timezone.make_aware(datetime.combine(bonus_date, time(hour=12))) if bonus_date else payment_date
         )
         new_payments.append(Payment(
+            branch=branch,
             user=actor,
             created_by=actor,
             enrollment=enrollment,
@@ -209,10 +216,14 @@ def _import_row(ctx, row_number, row, actor):
             ctx.created["bonus_payments"] += 1
 
 
-def import_excel_data(file_path, actor):
+def import_excel_data(file_path, actor, branch):
     """
     Runs the full import inside one atomic transaction and returns a
     summary dict: {"created": {...counts...}, "warnings": [...]}.
+
+    `branch` is required — every group/student/enrollment/payment/agent
+    created (or matched) by this run is tagged with it, since the legacy
+    workbook itself carries no branch information of its own.
     """
     workbook = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
     if SHEET_NAME not in workbook.sheetnames:
@@ -223,6 +234,6 @@ def import_excel_data(file_path, actor):
     with transaction.atomic():
         rows = sheet.iter_rows(min_row=2, max_col=LAST_COL, values_only=True)
         for row_number, row in enumerate(rows, start=2):
-            _import_row(ctx, row_number, row, actor)
+            _import_row(ctx, row_number, row, actor, branch)
 
     return {"created": ctx.created, "warnings": ctx.warnings}

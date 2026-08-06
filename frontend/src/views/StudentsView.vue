@@ -370,12 +370,12 @@
 
           <div class="form-group">
             <label class="form-label">O'quvchi rasmi (foto)</label>
-            <FileSelectInput ref="studentPhotoInputRef" accept="image/*" @change="onStudentPhotoChange" />
+            <FileSelectInput ref="studentPhotoInputRef" accept="image/jpeg,image/png" @change="onStudentPhotoChange" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Pasport rasmi / nusxasi</label>
-            <FileSelectInput ref="passportPhotoInputRef" accept="image/*,.pdf" @change="onPassportPhotoChange" />
+            <FileSelectInput ref="passportPhotoInputRef" accept="image/jpeg,image/png,.pdf" @change="onPassportPhotoChange" />
           </div>
 
           <!-- Row 2: Passport & JSHSHR -->
@@ -859,12 +859,12 @@
 
           <div class="form-group">
             <label class="form-label">O'quvchi rasmi (foto)</label>
-            <FileSelectInput ref="editStudentPhotoInputRef" accept="image/*" @change="onEditStudentPhotoChange" />
+            <FileSelectInput ref="editStudentPhotoInputRef" accept="image/jpeg,image/png" @change="onEditStudentPhotoChange" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Pasport rasmi / nusxasi</label>
-            <FileSelectInput ref="editPassportPhotoInputRef" accept="image/*,.pdf" @change="onEditPassportPhotoChange" />
+            <FileSelectInput ref="editPassportPhotoInputRef" accept="image/jpeg,image/png,.pdf" @change="onEditPassportPhotoChange" />
           </div>
 
           <div class="form-group">
@@ -2326,6 +2326,7 @@ const saveStudent = async () => {
 /* ── Per-column date-range filters (under sort buttons) ────── */
 .col-date-range {
   display: flex;
+  flex-direction: column;
   gap: 4px;
   margin-top: 6px;
 }

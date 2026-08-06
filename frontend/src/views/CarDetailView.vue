@@ -553,7 +553,7 @@
           <label class="form-label">Avtomobil Rasmi (Foto)</label>
           <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
             <img v-if="editForm.existingImage" :src="editForm.existingImage" alt="Current Photo" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
-            <FileSelectInput ref="carFileInputRef" accept="image/*" @change="onCarFileChange" />
+            <FileSelectInput ref="carFileInputRef" accept="image/jpeg,image/png" @change="onCarFileChange" />
           </div>
         </div>
 
@@ -1447,6 +1447,11 @@ onUnmounted(() => {
   font-weight: 700;
   color: #111827;
 }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
 .btn-edit-profile {
   display: inline-flex;
@@ -1464,9 +1469,6 @@ onUnmounted(() => {
 }
 .btn-edit-profile:hover {
   background: #1B4332;
-}
-.btn-dispatch-log {
-  margin-left: 12px;
 }
 
 .state-container {

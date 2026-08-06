@@ -944,6 +944,7 @@ onUnmounted(() => {
 /* ── Per-column date-range filters (under sort buttons) ────── */
 .col-date-range {
   display: flex;
+  flex-direction: column;
   gap: 4px;
   margin-top: 6px;
 }

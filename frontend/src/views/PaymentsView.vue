@@ -80,10 +80,7 @@
             type="date"
             class="filter-input"
           />
-        </div>
-
-        <div class="filter-field">
-          <label class="filter-label">Sana (Gacha)</label>
+          <label class="filter-label" style="margin-top: 4px;">Sana (Gacha)</label>
           <input
             v-model="filterDateTo"
             type="date"

@@ -189,7 +189,7 @@ def get_or_create_category(ctx, name):
     return category
 
 
-def get_or_create_group(ctx, name, category, started_at, ends_at):
+def get_or_create_group(ctx, name, category, started_at, ends_at, branch):
     key = name.strip()
     if key in ctx.groups:
         return ctx.groups[key]
@@ -197,6 +197,7 @@ def get_or_create_group(ctx, name, category, started_at, ends_at):
     if group is None:
         status = Group.Status.FINISHED if (ends_at and ends_at < date.today()) else Group.Status.STARTED
         group = Group.objects.create(
+            branch=branch,
             category=category,
             name=key,
             started_at=started_at,
@@ -208,7 +209,7 @@ def get_or_create_group(ctx, name, category, started_at, ends_at):
     return group
 
 
-def get_or_create_agent(ctx, nickname):
+def get_or_create_agent(ctx, nickname, branch):
     key = nickname.strip()
     cache_key = key.lower()
     if cache_key in ctx.agents:
@@ -217,6 +218,7 @@ def get_or_create_agent(ctx, nickname):
     if agent is None:
         ctx._placeholder_agent_seq += 1
         agent = Agent.objects.create(
+            branch=branch,
             full_name=key,
             phone=f"import-{ctx._placeholder_agent_seq}",
             notes="Excel import orqali qo'shilgan — telefon raqami mavjud emas.",
@@ -226,7 +228,7 @@ def get_or_create_agent(ctx, nickname):
     return agent
 
 
-def get_or_create_student(ctx, row_number, jshshr, phone, full_name, phone2, passport_serie, passport_number, birth_date):
+def get_or_create_student(ctx, row_number, jshshr, phone, full_name, phone2, passport_serie, passport_number, birth_date, branch):
     """
     Looks up an existing student by JSHSHR (Uzbekistan's per-person national
     ID, so it's the one reliable natural key even when phone is missing or
@@ -254,6 +256,9 @@ def get_or_create_student(ctx, row_number, jshshr, phone, full_name, phone2, pas
         if not existing.birth_date and birth_date:
             existing.birth_date = birth_date
             updated_fields.append("birth_date")
+        if not existing.branch and branch:
+            existing.branch = branch
+            updated_fields.append("branch")
         if updated_fields:
             existing.save(update_fields=updated_fields + ["updated_at"])
         return existing, False
@@ -267,6 +272,7 @@ def get_or_create_student(ctx, row_number, jshshr, phone, full_name, phone2, pas
 
     student = User(
         role=User.Role.STUDENT,
+        branch=branch,
         full_name=full_name,
         phone=final_phone,
         phone2=phone2,

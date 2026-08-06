@@ -549,7 +549,7 @@
             <!-- Click check photo -->
             <div class="form-group" v-if="form.method === 'click'">
               <label class="flabel">Click cheki rasmi (ixtiyoriy)</label>
-              <FileSelectInput ref="checkFileInputRef" accept="image/*" @change="onCheckFileChange" />
+              <FileSelectInput ref="checkFileInputRef" accept="image/jpeg,image/png" @change="onCheckFileChange" />
             </div>
 
             <!-- Notes -->
@@ -1230,6 +1230,7 @@ onUnmounted(() => {
 /* ── Per-column date-range filters (under sort buttons) ────── */
 .col-date-range {
   display: flex;
+  flex-direction: column;
   gap: 4px;
   margin-top: 6px;
 }

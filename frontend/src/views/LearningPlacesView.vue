@@ -530,7 +530,7 @@ onMounted(async () => {
 .col-sort-icon-btn:hover { border-color: #9CA3AF; color: #374151; }
 .col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
-.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-range { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .col-date-input {
   width: 100%;
   min-width: 0;

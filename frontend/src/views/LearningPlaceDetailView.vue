@@ -593,7 +593,7 @@ onMounted(fetchAll)
 .col-sort-icon-btn.active { border-color: #2D6A4F; color: #2D6A4F; background: #F0F7F4; }
 
 /* ── Per-column date-range filters (under sort buttons) ────── */
-.col-date-range { display: flex; gap: 4px; margin-top: 6px; }
+.col-date-range { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .col-date-input {
   width: 100%;
   min-width: 0;
