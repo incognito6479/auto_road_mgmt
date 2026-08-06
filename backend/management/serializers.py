@@ -424,6 +424,13 @@ class StudentSerializer(serializers.ModelSerializer):
         return enrollment.group.ends_at if (enrollment and enrollment.group) else None
 
     def get_payment_amount(self, obj):
+        # `student_payment_amount_agg` is a queryset-level annotation (see
+        # StudentViewSet.get_queryset) that replaces a per-row Payment
+        # aggregate query with one computed for the whole list; instances
+        # that didn't come from that queryset (e.g. a single create/update
+        # response) fall back to the direct per-row query.
+        if hasattr(obj, "student_payment_amount_agg"):
+            return obj.student_payment_amount_agg or 0
         enrollment = get_current_student_enrollment(obj)
         if not enrollment:
             return 0

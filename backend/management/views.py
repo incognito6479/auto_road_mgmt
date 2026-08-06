@@ -601,6 +601,29 @@ class StudentViewSet(SoftDeleteModelViewSet):
             Prefetch("enrollments", queryset=current_enrollments_qs, to_attr="current_enrollment_list")
         )
 
+        # StudentSerializer.get_payment_amount was the one remaining
+        # per-row query after the prefetch above (one Payment aggregate per
+        # student) — same fix as get_current_student_enrollment: compute it
+        # once for the whole list instead of once per row. Two-step
+        # annotate (current_enrollment_id, then a Subquery keyed off it)
+        # rather than one nested Subquery, since OuterRef can't reach past
+        # an intermediate Subquery's own OuterRef.
+        current_enrollment_for_payment = Enrollment.objects.filter(
+            student=OuterRef("pk"), is_active=True
+        ).order_by("-created_at", "-id")
+        queryset = queryset.annotate(
+            current_enrollment_id_for_payment=Subquery(current_enrollment_for_payment.values("id")[:1])
+        )
+        paid_amount_sq = (
+            Payment.objects.filter(enrollment_id=OuterRef("current_enrollment_id_for_payment"), is_active=True)
+            .values("enrollment_id")
+            .annotate(total=Sum("amount"))
+            .values("total")
+        )
+        queryset = queryset.annotate(
+            student_payment_amount_agg=Coalesce(Subquery(paid_amount_sq), 0, output_field=IntegerField())
+        )
+
         return queryset
 
 
