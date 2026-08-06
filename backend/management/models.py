@@ -2,6 +2,8 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils import timezone
 
+from management.validators import validate_image_file, validate_image_or_pdf_file
+
 
 class UserManager(BaseUserManager):
     """Custom manager using phone as the unique identifier instead of username."""
@@ -182,6 +184,7 @@ class User(AbstractUser):
         upload_to="users/",
         blank=True,
         null=True,
+        validators=[validate_image_file],
         help_text="Foydalanuvchi rasmi",
     )
 
@@ -189,6 +192,7 @@ class User(AbstractUser):
         upload_to="passports/",
         blank=True,
         null=True,
+        validators=[validate_image_or_pdf_file],
         help_text="Pasport nusxasi / rasmi (faqat talabalar uchun)",
     )
 
@@ -607,6 +611,7 @@ class Payment(BaseModel):
         upload_to="click_checks/",
         blank=True,
         null=True,
+        validators=[validate_image_file],
         help_text="Click orqali to'langanda, to'lov cheki rasmi (ixtiyoriy)",
     )
 
@@ -636,6 +641,7 @@ class Car(BaseModel):
         upload_to="cars/",
         blank=True,
         null=True,
+        validators=[validate_image_file],
         help_text="Avtomobil rasmi",
     )
     manufact_year = models.IntegerField(
@@ -1046,6 +1052,7 @@ class StudentCertificate(BaseModel):
     )
     image = models.FileField(
         upload_to="certificates/",
+        validators=[validate_image_file],
         help_text="Sertifikat rasmi",
     )
     bonus_payment = models.ForeignKey(
