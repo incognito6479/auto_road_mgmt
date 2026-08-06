@@ -22,6 +22,28 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost").split(",")
 
+# nginx terminates TLS and proxies to gunicorn over plain HTTP — without
+# this, Django can't tell the original request was HTTPS, which breaks
+# secure-cookie logic and (combined with CSRF_TRUSTED_ORIGINS below) is the
+# most common cause of "admin login just fails" behind a reverse proxy.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Django 4+ checks the browser's Origin header on unsafe (POST) requests
+# against this list — without it, a real browser's admin login POST can be
+# rejected with "CSRF verification failed" even though the session/cookie
+# setup is otherwise correct. Derived from ALLOWED_HOSTS so there's one
+# source of truth (DJANGO_ALLOWED_HOSTS in .env) instead of a second list
+# to keep in sync by hand.
+CSRF_TRUSTED_ORIGINS = [
+    f"https://{host}" for host in ALLOWED_HOSTS if host not in ("localhost", "127.0.0.1")
+]
+
+# Browser only sends these cookies over HTTPS in production; local dev
+# (DEBUG=True) still runs over plain http://localhost, so this can't be
+# unconditionally True.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
 # ---------------------------------------------------------------------------
 # Application definition
 # ---------------------------------------------------------------------------
