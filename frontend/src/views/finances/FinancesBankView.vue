@@ -38,7 +38,7 @@
     <!-- Table Section -->
     <div class="table-section-card margin-top">
       <div class="table-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Bank to'lovlari yuklanmoqda...</span>
         </div>
@@ -127,10 +127,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedPayments.length === 0">
+            <tr v-if="payments.length === 0">
               <td colspan="6" class="no-data">Bank statusidagi to'lovlar topilmadi</td>
             </tr>
-            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
+            <tr v-for="p in payments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.notes || p.student_name || 'Bank Operatsiyasi' }}</div>
                 <div v-else class="student-name">{{ p.notes || p.student_name || 'Bank Operatsiyasi' }}</div>
@@ -172,7 +172,7 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ payments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -278,9 +278,12 @@ import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney } from '@/utils/formatters'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const router = useRouter()
 
 function goStudent(id) {
@@ -295,6 +298,7 @@ function goUser(id) {
 
 const payments = ref([])
 const loading = ref(true)
+const initialLoading = ref(true)
 
 const filterNotes = ref('')
 const filterMethod = ref('')
@@ -311,108 +315,105 @@ const modalError = ref(null)
 
 const form = ref({ amountFormatted: '', amount: 0, method: 'transfer', notes: '' })
 
-// ── Row-fetch-count selector ──────────────────────────────────
-// fetchPayments always pulls the entire status=bank scope (see
-// page_size: 100000 below) so every filter below sees every row, not just
-// whatever page happened to be loaded. pageSizeOption instead controls how
-// many of the *filtered* rows show per page (see displayedPayments/
-// changePage below).
+// Filtering/sorting/pagination are all applied server-side now (see
+// buildParams/fetchPayments) — `payments` only ever holds the current page.
+const totalCount = ref(0)
 const pageSizeOption = ref('50')
 const currentPage = ref(1)
 
-// All header filters (notes, method, cashier, sort) run entirely on the
-// client against the already-fetched `payments` list — no per-keystroke
-// or per-filter network round trip, so there's no debounce delay and no
-// input re-render to steal focus/cursor position, AND they see every row
-// matching status=bank, not just whatever page happened to be fetched.
-const filteredPayments = computed(() => {
-  let list = payments.value
-
-  if (filterNotes.value.trim()) {
-    const q = filterNotes.value.trim().toLowerCase()
-    list = list.filter(p => (p.notes || p.student_name || '').toLowerCase().includes(q))
-  }
-  if (filterMethod.value) list = list.filter(p => p.method === filterMethod.value)
-  if (filterCashierId.value) list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
-  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
-  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
-
-  if (paymentDateSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.created_at || '').localeCompare(b.created_at || '')
-      return paymentDateSort.value === 'desc' ? -d : d
-    })
-  } else if (amountSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.amount || 0) - (b.amount || 0)
-      return amountSort.value === 'desc' ? -d : d
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here so it self-corrects the moment a
-// filter shrinks the result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
-})
-const displayedPayments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredPayments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredPayments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchPayments()
 }
 
-// Metrics reflect the full filtered set (matching status=bank + any active
-// column filters), not just the current page's slice.
-const metrics = computed(() => {
-  const total = filteredPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  return { total, count: filteredPayments.value.length }
-})
+// Aggregated in the DB (via PaymentViewSet.totals) over every row matching
+// the active filters, not just the current page's slice.
+const metrics = ref({ total: 0, count: 0 })
+async function fetchTotals() {
+  try {
+    const res = await api.get('/payments/totals/', { params: buildParams({ forTotals: true }) })
+    metrics.value = res.data
+  } catch (err) { console.error(err) }
+}
 
-// Distinct cashiers among the fetched batch, for the "To'lov qabul
-// qiluvchi" filter select.
+// Distinct cashiers, for the "To'lov qabul qiluvchi" filter select. Fetched
+// separately (capped at 1000, same pattern as the other finance views) so
+// the dropdown still lists every cashier even though `payments` itself now
+// only holds one page.
+const allBankPayments = ref([])
+async function fetchDistinctCashiers() {
+  try {
+    const res = await api.get('/payments/', { params: { status: 'bank', page_size: 1000 } })
+    allBankPayments.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
 const distinctCashiers = computed(() => {
   const map = {}
-  payments.value.forEach(p => {
+  allBankPayments.value.forEach(p => {
     if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
   })
   return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
 })
 
+const ordering = computed(() => {
+  if (paymentDateSort.value) return (paymentDateSort.value === 'desc' ? '-' : '') + 'created_at'
+  if (amountSort.value) return (amountSort.value === 'desc' ? '-' : '') + 'amount'
+  return ''
+})
+function refetch() {
+  currentPage.value = 1
+  fetchPayments()
+  fetchTotals()
+}
 function setSort(direction) {
   amountSort.value = ''
   paymentDateSort.value = paymentDateSort.value === direction ? '' : direction
+  refetch()
 }
 function setAmountSort(direction) {
   paymentDateSort.value = ''
   amountSort.value = amountSort.value === direction ? '' : direction
+  refetch()
+}
+
+// Shared by fetchPayments and fetchTotals so both always see the exact same
+// filter set. forTotals omits page/page_size/ordering, which totals doesn't use.
+function buildParams({ forTotals = false } = {}) {
+  const params = { status: 'bank' }
+  if (!forTotals) {
+    params.page = currentPage.value
+    params.page_size = pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value)
+    if (ordering.value) params.ordering = ordering.value
+  }
+  if (filterNotes.value.trim()) params.student_name = filterNotes.value.trim()
+  if (filterMethod.value) params.method = filterMethod.value
+  if (filterCashierId.value) params.created_by = filterCashierId.value
+  if (paymentDateFrom.value) params.date_from = paymentDateFrom.value
+  if (paymentDateTo.value) params.date_to = paymentDateTo.value
+  if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+  return params
 }
 
 async function fetchPayments() {
   loading.value = true
   try {
-    const params = { status: 'bank', page: 1, page_size: 100000 }
-    const res = await api.get('/payments/', { params })
+    const res = await api.get('/payments/', { params: buildParams() })
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     payments.value = rawList
+    totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
-  finally { loading.value = false }
+  finally { loading.value = false; initialLoading.value = false }
 }
 
-// pageSizeOption no longer needs a backend round trip — it only controls
-// how many of the filtered rows show per page, so just reset to page 1.
-watch(pageSizeOption, () => {
-  currentPage.value = 1
-})
+watch(pageSizeOption, refetch)
+watch([filterMethod, filterCashierId, paymentDateFrom, paymentDateTo], refetch)
+watch(filterNotes, debounce(refetch, 400))
+watch(() => branchStore.activeBranchId, refetch)
 
 function methodText(m) {
   switch (m) {
@@ -469,6 +470,8 @@ async function savePayment() {
     }
     closeModal()
     fetchPayments()
+    fetchTotals()
+    fetchDistinctCashiers()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
 }
@@ -492,6 +495,7 @@ async function performDelete() {
     await api.delete(`/payments/${deletingPayment.value.id}/`)
     deleteModal.value?.close()
     fetchPayments()
+    fetchTotals()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -501,6 +505,8 @@ async function performDelete() {
 
 onMounted(() => {
   fetchPayments()
+  fetchTotals()
+  fetchDistinctCashiers()
 })
 </script>
 

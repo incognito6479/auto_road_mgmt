@@ -29,6 +29,8 @@ the import; they're skipped/degraded gracefully and recorded in the
 returned summary's "warnings" list instead.
 """
 
+import hashlib
+import os
 from datetime import date, datetime, time
 
 import openpyxl
@@ -50,7 +52,7 @@ from management.helpers import (
     normalize_phone,
     to_money,
 )
-from management.models import Enrollment, Group, Payment
+from management.models import Enrollment, ExcelImportBatch, Group, Payment
 
 SHEET_NAME = "Гурух"
 
@@ -216,24 +218,83 @@ def _import_row(ctx, row_number, row, actor, branch):
             ctx.created["bonus_payments"] += 1
 
 
+def _compute_file_hash(file_path):
+    """SHA-256 of the file's bytes — the only stable identity a re-upload
+    of "the same roster, now with more rows" has, since the saved path is
+    always a fresh UUID-prefixed filename (see import_excel_upload)."""
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _original_filename_from_path(file_path):
+    """Recovers the user's original filename from the "{uuid4().hex}_{name}"
+    convention import_excel_upload saves uploads under — best-effort, only
+    used for the batch record's display label."""
+    basename = os.path.basename(file_path)
+    if len(basename) > 33 and basename[32] == "_":
+        return basename[33:]
+    return basename
+
+
 def import_excel_data(file_path, actor, branch):
     """
     Runs the full import inside one atomic transaction and returns a
-    summary dict: {"created": {...counts...}, "warnings": [...]}.
+    summary dict: {"created": {...counts...}, "warnings": [...],
+    "resumed_from_row": int, "last_row": int}.
 
     `branch` is required — every group/student/enrollment/payment/agent
     created (or matched) by this run is tagged with it, since the legacy
     workbook itself carries no branch information of its own.
+
+    Re-uploading the exact same file content (e.g. the same roster with new
+    rows appended at the bottom) resumes from the row after wherever the
+    last *successful* run of this file left off, instead of re-scanning
+    rows that were already imported — row dedup already made re-imports
+    correct (student/enrollment lookups skip existing matches), this only
+    saves the wasted time of re-scanning/re-querying rows already known
+    good. "resumed_from_row": 0 means this file has never been imported
+    before.
     """
     workbook = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
     if SHEET_NAME not in workbook.sheetnames:
         raise ValueError(f"Faylda '{SHEET_NAME}' varag'i topilmadi.")
     sheet = workbook[SHEET_NAME]
 
+    file_hash = _compute_file_hash(file_path)
+    original_filename = _original_filename_from_path(file_path)
+
     ctx = ImportContext()
     with transaction.atomic():
-        rows = sheet.iter_rows(min_row=2, max_col=LAST_COL, values_only=True)
-        for row_number, row in enumerate(rows, start=2):
-            _import_row(ctx, row_number, row, actor, branch)
+        batch, _created = ExcelImportBatch.objects.select_for_update().get_or_create(
+            original_filename=original_filename,
+            branch=branch,
+            defaults={"last_file_hash": file_hash},
+        )
+        resumed_from_row = batch.last_row
+        start_row = batch.last_row + 1 if batch.last_row else 2
 
-    return {"created": ctx.created, "warnings": ctx.warnings}
+        last_row_number = batch.last_row
+        rows = sheet.iter_rows(min_row=start_row, max_col=LAST_COL, values_only=True)
+        for row_number, row in enumerate(rows, start=start_row):
+            _import_row(ctx, row_number, row, actor, branch)
+            last_row_number = row_number
+
+        # Only advances inside this same atomic block — if anything above
+        # raises, the whole transaction (including this) rolls back, so a
+        # failed run never falsely marks rows as successfully imported.
+        batch.last_file_hash = file_hash
+        update_fields = ["last_file_hash", "updated_at"]
+        if last_row_number > batch.last_row:
+            batch.last_row = last_row_number
+            update_fields.append("last_row")
+        batch.save(update_fields=update_fields)
+
+    return {
+        "created": ctx.created,
+        "warnings": ctx.warnings,
+        "resumed_from_row": resumed_from_row,
+        "last_row": max(last_row_number, resumed_from_row),
+    }

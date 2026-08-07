@@ -15,7 +15,7 @@
         <div class="card-metric-icon">⚠️</div>
         <div>
           <span class="metric-lbl">Qarzdor O'quvchilar Soni</span>
-          <h4 class="metric-val text-red">{{ filteredDebtEnrollments.length }} ta o'quvchi</h4>
+          <h4 class="metric-val text-red">{{ debtMetrics.count }} ta o'quvchi</h4>
         </div>
       </div>
 
@@ -23,7 +23,7 @@
         <div class="card-metric-icon">💸</div>
         <div>
           <span class="metric-lbl">Jami Qarzdorlik Summasi</span>
-          <h4 class="metric-val text-orange">{{ formatMoney(totalDebtSum) }}</h4>
+          <h4 class="metric-val text-orange">{{ formatMoney(debtMetrics.total) }}</h4>
         </div>
       </div>
     </div>
@@ -31,7 +31,7 @@
     <!-- Table Section with Filters -->
     <div class="table-section-card margin-top">
       <div class="table-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Qarzdorlar ro'yxati yuklanmoqda...</span>
         </div>
@@ -200,10 +200,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedDebtEnrollments.length === 0">
+            <tr v-if="debtEnrollments.length === 0">
               <td colspan="13" class="no-data">Qarzdor o'quvchilar topilmadi</td>
             </tr>
-            <tr v-for="e in displayedDebtEnrollments" :key="e.id" class="table-row">
+            <tr v-for="e in debtEnrollments" :key="e.id" class="table-row">
               <td class="td-name">
                 <div class="student-name-link" @click="goStudent(e.student)">{{ e.student_name || 'Noma\'lum' }}</div>
               </td>
@@ -249,7 +249,7 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ sortedDebtEnrollments.length }}</strong> tadan <strong>{{ displayedDebtEnrollments.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ debtEnrollments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -367,15 +367,18 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatDate } from '@/utils/formatters'
+import { debounce } from '@/utils/debounce'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const branchStore = useBranchStore()
 
-const enrollments = ref([])
+const debtEnrollments = ref([])
+const totalCount = ref(0)
 const categories = ref([])
 const groups = ref([])
 const loading = ref(true)
+const initialLoading = ref(true)
 
 const groupsById = computed(() => {
   const map = {}
@@ -396,13 +399,9 @@ const startDateTo = ref('')
 const endDateFrom = ref('')
 const endDateTo = ref('')
 
-// ── Row-fetch-count selector ──────────────────────────────────
-// Controls how many of the *filtered* debtors show per page (see
-// displayedDebtEnrollments below). The fetch itself always pulls every
-// enrollment — debt totals/metrics and filtering all need to see every
-// debtor, not just whatever page happened to be fetched. Defaults to
-// "Barchasi", preserving the previous behavior of always showing every
-// debtor at once.
+// Filtering/sorting/pagination/the has_debt scope are all applied
+// server-side now (see buildParams/fetchEnrollments) — `debtEnrollments`
+// only ever holds the current page.
 const pageSizeOption = ref('all')
 const currentPage = ref(1)
 
@@ -414,18 +413,24 @@ const paidAmountSort = ref('')
 const debtAmountSort = ref('')
 
 const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, paidAmount: paidAmountSort, debtAmount: debtAmountSort }
+const ORDERING_PARAM_MAP = {
+  groupStart: 'group_started_at',
+  groupEnd: 'group_ends_at',
+  paidAmount: 'paid_amount',
+  debtAmount: 'debt_amount',
+}
+const ordering = computed(() => {
+  for (const [column, sortRef] of Object.entries(sortRefs)) {
+    if (sortRef.value) return (sortRef.value === 'desc' ? '-' : '') + ORDERING_PARAM_MAP[column]
+  }
+  return ''
+})
 function setSort(column, direction) {
   const target = sortRefs[column]
   Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
   target.value = target.value === direction ? '' : direction
+  refetch()
 }
-
-// Row-fetch-count no longer needs a backend round trip — it only resets to
-// page 1 of the filtered result set; every filter/sort/page above is
-// purely client-side.
-watch(pageSizeOption, () => {
-  currentPage.value = 1
-})
 
 const showPayModal = ref(false)
 const activeEnrollment = ref(null)
@@ -441,29 +446,36 @@ const getDebt = (e) => {
   return Math.max(0, contract - paid)
 }
 
-const debtEnrollments = computed(() => {
-  return enrollments.value.filter(e => getDebt(e) > 0 && branchStore.isBranchMatch(e))
-})
+// Aggregated in the DB (via EnrollmentViewSet.debts_totals) over every
+// debtor matching the active filters, not just the current page.
+const debtMetrics = ref({ total: 0, count: 0 })
+async function fetchDebtMetrics() {
+  try {
+    const res = await api.get('/enrollments/debts-totals/', { params: buildParams({ forTotals: true }) })
+    debtMetrics.value = res.data
+  } catch (err) { console.error(err) }
+}
 
-const totalDebtSum = computed(() => {
-  return filteredDebtEnrollments.value.reduce((sum, e) => sum + getDebt(e), 0)
-})
-
-// Built from the debtors actually on screen, not a separate unrelated
-// "all agents" fetch — an agent only shows up as a filter option if one of
-// their referred students actually has debt right now.
+// Agent and contract-amount filter options, sourced from every current
+// debtor (has_debt=true, no other filters, capped at 1000) rather than the
+// current page — so the dropdowns don't shrink to whatever page is loaded.
+const allDebtors = ref([])
+async function fetchDebtorOptions() {
+  try {
+    const res = await api.get('/enrollments/', { params: { has_debt: 'true', page_size: 1000 } })
+    allDebtors.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
 const agentOptions = computed(() => {
   const map = new Map()
-  debtEnrollments.value.forEach(e => {
+  allDebtors.value.forEach(e => {
     if (e.agent && !map.has(e.agent)) map.set(e.agent, e.agent_name || '')
   })
   return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
 })
-
-// Deduped, sorted contract (enrolled) amounts among the current debtors.
 const distinctEnrolledAmounts = computed(() => {
   const amounts = new Set()
-  debtEnrollments.value.forEach(e => {
+  allDebtors.value.forEach(e => {
     if (!e.enrolled_free && e.enrolled_amount) amounts.add(Number(e.enrolled_amount))
   })
   return [...amounts].sort((a, b) => a - b)
@@ -471,97 +483,50 @@ const distinctEnrolledAmounts = computed(() => {
 
 const certLabel = (e) => `${e.student_certificate_series || ''} ${e.student_certificate_number}`.trim()
 
-const filteredDebtEnrollments = computed(() => {
-  return debtEnrollments.value.filter(e => {
-    const q = filterStudentName.value.toLowerCase().trim()
-    const matchSearch = !q || (e.student_name || '').toLowerCase().includes(q)
-
-    const matchCategory = !filterCategory.value || String(e.category) === String(filterCategory.value)
-
-    const matchAgent = !filterAgent.value || e.agent === filterAgent.value
-
-    const matchGroup = !filterGroup.value || (e.group_name || '').toLowerCase().includes(filterGroup.value.toLowerCase().trim())
-
-    const hasCert = !!e.student_certificate_number
-    const matchCertificate = !filterCertificate.value ||
-      (filterCertificate.value === 'bor' && hasCert) ||
-      (filterCertificate.value === 'yoq' && !hasCert)
-
-    const matchStatus = !filterStatus.value || e.status === filterStatus.value
-
-    const matchEnrolledAmount = !filterEnrolledAmount.value || Number(e.enrolled_amount) === Number(filterEnrolledAmount.value)
-
-    const gStart = groupsById.value[e.group]?.started_at
-    const gEnd = groupsById.value[e.group]?.ends_at
-    const matchStartDate = (!startDateFrom.value || (gStart && gStart >= startDateFrom.value)) &&
-      (!startDateTo.value || (gStart && gStart <= startDateTo.value))
-    const matchEndDate = (!endDateFrom.value || (gEnd && gEnd >= endDateFrom.value)) &&
-      (!endDateTo.value || (gEnd && gEnd <= endDateTo.value))
-
-    return matchSearch && matchCategory && matchAgent && matchGroup && matchCertificate && matchStatus && matchEnrolledAmount && matchStartDate && matchEndDate
-  })
-})
-
-// Sorting doesn't remove rows, only reorders — applied after filtering, before
-// the pagination slice. Enrollments without a resolved group sort last
-// regardless of direction.
-const sortedDebtEnrollments = computed(() => {
-  const list = [...filteredDebtEnrollments.value]
-
-  if (paidAmountSort.value || debtAmountSort.value) {
-    const direction = paidAmountSort.value || debtAmountSort.value
-    const dir = direction === 'asc' ? 1 : -1
-    list.sort((a, b) => {
-      const va = paidAmountSort.value ? (Number(a.paid_amount) || 0) : getDebt(a)
-      const vb = paidAmountSort.value ? (Number(b.paid_amount) || 0) : getDebt(b)
-      return (va - vb) * dir
-    })
-    return list
-  }
-
-  const field = groupStartSort.value ? 'started_at' : (groupEndSort.value ? 'ends_at' : null)
-  if (!field) return list
-  const direction = groupStartSort.value || groupEndSort.value
-  list.sort((a, b) => {
-    const da = groupsById.value[a.group]?.[field] || ''
-    const db = groupsById.value[b.group]?.[field] || ''
-    if (!da && !db) return 0
-    if (!da) return 1
-    if (!db) return -1
-    return direction === 'asc' ? da.localeCompare(db) : db.localeCompare(da)
-  })
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(sortedDebtEnrollments.value.length / displayPageSize.value))
-})
-const displayedDebtEnrollments = computed(() => {
-  if (pageSizeOption.value === 'all') return sortedDebtEnrollments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return sortedDebtEnrollments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchEnrollments()
+}
+
+// Shared by fetchEnrollments and fetchDebtMetrics so both always see the
+// exact same filter set. forTotals omits page/page_size/ordering.
+function buildParams({ forTotals = false } = {}) {
+  const params = { has_debt: 'true' }
+  if (!forTotals) {
+    params.page = currentPage.value
+    params.page_size = pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value)
+    if (ordering.value) params.ordering = ordering.value
+  }
+  if (filterStudentName.value.trim()) params.student_name = filterStudentName.value.trim()
+  if (filterCategory.value) params.category = filterCategory.value
+  if (filterAgent.value) params.agent = filterAgent.value
+  if (filterGroup.value.trim()) params.group_name = filterGroup.value.trim()
+  if (filterCertificate.value === 'bor') params.has_certificate = 'true'
+  if (filterCertificate.value === 'yoq') params.has_certificate = 'false'
+  if (filterStatus.value) params.status = filterStatus.value
+  if (filterEnrolledAmount.value) params.enrolled_amount = filterEnrolledAmount.value
+  if (startDateFrom.value) params.group_start_from = startDateFrom.value
+  if (startDateTo.value) params.group_start_to = startDateTo.value
+  if (endDateFrom.value) params.group_end_from = endDateFrom.value
+  if (endDateTo.value) params.group_end_to = endDateTo.value
+  if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+  return params
 }
 
 async function fetchEnrollments() {
   loading.value = true
   try {
-    // Always the full enrollment list — filtering/sorting/pagination above
-    // all need to see every debtor, not just one page of them.
-    const res = await api.get('/enrollments/', { params: { page_size: 100000 } })
-    enrollments.value = res.data.results || res.data
+    const res = await api.get('/enrollments/', { params: buildParams() })
+    const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
+    debtEnrollments.value = rawList
+    totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
-  finally { loading.value = false }
+  finally { loading.value = false; initialLoading.value = false }
 }
 
 async function fetchCategories() {
@@ -577,6 +542,17 @@ async function fetchGroups() {
     groups.value = res.data.results || res.data
   } catch (err) { console.error(err) }
 }
+
+function refetch() {
+  currentPage.value = 1
+  fetchEnrollments()
+  fetchDebtMetrics()
+}
+watch(pageSizeOption, refetch)
+watch([filterCategory, filterAgent, filterCertificate, filterStatus, filterEnrolledAmount, startDateFrom, startDateTo, endDateFrom, endDateTo], refetch)
+const debouncedRefetch = debounce(refetch, 400)
+watch([filterStudentName, filterGroup], debouncedRefetch)
+watch(() => branchStore.activeBranchId, refetch)
 
 function statusText(st) {
   switch (st) {
@@ -669,6 +645,8 @@ async function savePayment() {
     }
     closePayModal()
     fetchEnrollments()
+    fetchDebtMetrics()
+    fetchDebtorOptions()
   } catch (err) {
     modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi"
   } finally {
@@ -678,6 +656,8 @@ async function savePayment() {
 
 onMounted(() => {
   fetchEnrollments()
+  fetchDebtMetrics()
+  fetchDebtorOptions()
   fetchCategories()
   fetchGroups()
 })

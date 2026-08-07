@@ -13,7 +13,7 @@ from urllib.parse import quote
 from celery.result import AsyncResult
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Q, OuterRef, Subquery, F, Sum, Prefetch, IntegerField
+from django.db.models import Q, OuterRef, Subquery, F, Sum, Count, Prefetch, IntegerField
 from django.db.models.functions import TruncMonth, Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
@@ -638,6 +638,19 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
     serializer_class = EnrollmentSerializer
     pagination_class = StandardPagination
 
+    # debt_amount isn't a real column — it's enrolled_amount minus the
+    # paid_amount_agg subquery annotation get_queryset already attaches, so
+    # ordering by it (and the has_debt filter below) both need that same F()
+    # expression rather than a plain field reference.
+    ORDERING_FIELDS = {
+        "group_started_at": F("group__started_at").asc(nulls_last=True),
+        "-group_started_at": F("group__started_at").desc(nulls_last=True),
+        "group_ends_at": F("group__ends_at").asc(nulls_last=True),
+        "-group_ends_at": F("group__ends_at").desc(nulls_last=True),
+        "paid_amount": F("paid_amount_agg").asc(nulls_last=True),
+        "-paid_amount": F("paid_amount_agg").desc(nulls_last=True),
+    }
+
     def get_queryset(self):
         queryset = annotate_enrollment_paid_amount(
             super().get_queryset().select_related(*ENROLLMENT_SELECT_RELATED)
@@ -651,6 +664,15 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
         group = self.request.query_params.get("group")
         learning_place = self.request.query_params.get("learning_place")
         has_certificate = self.request.query_params.get("has_certificate")
+        student_name = self.request.query_params.get("student_name")
+        group_name = self.request.query_params.get("group_name")
+        enrolled_amount = self.request.query_params.get("enrolled_amount")
+        has_debt = self.request.query_params.get("has_debt")
+        group_start_from = self.request.query_params.get("group_start_from")
+        group_start_to = self.request.query_params.get("group_start_to")
+        group_end_from = self.request.query_params.get("group_end_from")
+        group_end_to = self.request.query_params.get("group_end_to")
+        ordering = self.request.query_params.get("ordering")
 
         if student:
             queryset = queryset.filter(student_id=student)
@@ -670,7 +692,50 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(learning_place_id=learning_place)
         if has_certificate and has_certificate.lower() in ("1", "true", "yes"):
             queryset = queryset.exclude(student__certificate_number__isnull=True).exclude(student__certificate_number="")
-        return filter_by_branch(queryset, self.request, "branch")
+        elif has_certificate and has_certificate.lower() in ("0", "false", "no"):
+            queryset = queryset.filter(Q(student__certificate_number__isnull=True) | Q(student__certificate_number=""))
+        if student_name:
+            queryset = queryset.filter(student__full_name__icontains=student_name)
+        if group_name:
+            queryset = queryset.filter(group__name__icontains=group_name)
+        if enrolled_amount:
+            queryset = queryset.filter(enrolled_amount=enrolled_amount)
+        if has_debt and has_debt.lower() in ("1", "true", "yes"):
+            queryset = queryset.filter(enrolled_free=False, enrolled_amount__gt=F("paid_amount_agg"))
+        if group_start_from:
+            queryset = queryset.filter(group__started_at__gte=group_start_from)
+        if group_start_to:
+            queryset = queryset.filter(group__started_at__lte=group_start_to)
+        if group_end_from:
+            queryset = queryset.filter(group__ends_at__gte=group_end_from)
+        if group_end_to:
+            queryset = queryset.filter(group__ends_at__lte=group_end_to)
+
+        queryset = filter_by_branch(queryset, self.request, "branch")
+
+        if ordering in ("debt_amount", "-debt_amount"):
+            queryset = queryset.annotate(debt_amount_agg=F("enrolled_amount") - F("paid_amount_agg"))
+            sort_expr = F("debt_amount_agg")
+            sort_expr = sort_expr.desc(nulls_last=True) if ordering.startswith("-") else sort_expr.asc(nulls_last=True)
+            queryset = queryset.order_by(sort_expr, "-updated_at", "-created_at")
+        elif ordering in self.ORDERING_FIELDS:
+            queryset = queryset.order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-created_at")
+
+        return queryset
+
+    @action(detail=False, methods=["get"], url_path="debts-totals")
+    def debts_totals(self, request):
+        """
+        Aggregate count/sum of outstanding debt in the DB for the current
+        filter set (same filters as the list endpoint, forcing has_debt).
+        FinancesDebtsView's metrics cards need this over every matching
+        debtor, not just the current page.
+        """
+        qs = self.get_queryset().filter(enrolled_free=False, enrolled_amount__gt=F("paid_amount_agg"))
+        agg = qs.annotate(debt_amount_agg=F("enrolled_amount") - F("paid_amount_agg")).aggregate(
+            total=Sum("debt_amount_agg"), count=Count("id")
+        )
+        return Response({"total": agg["total"] or 0, "count": agg["count"] or 0})
 
     # Enrollment write access wasn't restricted at all before this — since
     # get_queryset only narrows by explicit filter params (never by
@@ -812,6 +877,7 @@ class PaymentViewSet(SoftDeleteModelViewSet):
         method = self.request.query_params.get("method")
         category = self.request.query_params.get("category")
         student_name = self.request.query_params.get("student_name")
+        student_full_name = self.request.query_params.get("student_full_name")
         agent_name = self.request.query_params.get("agent_name")
         group_name = self.request.query_params.get("group_name")
         jshshr = self.request.query_params.get("jshshr")
@@ -861,6 +927,19 @@ class PaymentViewSet(SoftDeleteModelViewSet):
                 Q(user__last_name__icontains=student_name) |
                 Q(notes__icontains=student_name)
             )
+        if student_full_name:
+            # Unlike student_name above, this only ever matches the
+            # student's own name — student_name's OR also matches `user`
+            # (the cashier who recorded the payment, or the instructor/
+            # teacher being paid, depending on status), which silently
+            # matched *every* row on a bulk-imported dataset where one
+            # admin account recorded the whole import: searching that
+            # admin's own name returned the entire unfiltered table instead
+            # of narrowing anything, under a column literally labeled
+            # "student name". Views whose search box is unambiguously "find
+            # this student" (not a generic text/person search) use this
+            # instead.
+            queryset = queryset.filter(enrollment__student__full_name__icontains=student_full_name)
         if agent_name:
             queryset = queryset.filter(
                 Q(agent__full_name__icontains=agent_name) |
@@ -874,6 +953,23 @@ class PaymentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(created_at__gte=date_from)
         if date_to:
             queryset = queryset.filter(created_at__lte=f"{date_to} 23:59:59.999999")
+
+        # The finance views' "guruh boshlanishi/tugashi" column filters used
+        # to run client-side only (against a full unfiltered fetch) — moving
+        # them server-side needed these two ranges, which nothing else here
+        # provided (only ordering on the same fields existed before).
+        group_start_from = self.request.query_params.get("group_start_from")
+        group_start_to = self.request.query_params.get("group_start_to")
+        group_end_from = self.request.query_params.get("group_end_from")
+        group_end_to = self.request.query_params.get("group_end_to")
+        if group_start_from:
+            queryset = queryset.filter(enrollment__group__started_at__gte=group_start_from)
+        if group_start_to:
+            queryset = queryset.filter(enrollment__group__started_at__lte=group_start_to)
+        if group_end_from:
+            queryset = queryset.filter(enrollment__group__ends_at__gte=group_end_from)
+        if group_end_to:
+            queryset = queryset.filter(enrollment__group__ends_at__lte=group_end_to)
 
         branch = get_scoped_branch_value(self.request)
         if branch == "__none__":
@@ -953,6 +1049,25 @@ class PaymentViewSet(SoftDeleteModelViewSet):
             bucket["total"] += amount
 
         return Response(sorted(buckets.values(), key=lambda b: b["key"], reverse=True))
+
+    @action(detail=False, methods=["get"], url_path="totals")
+    def totals(self, request):
+        """
+        Aggregate count/sum in the DB for the current filter set — same
+        filters as the list endpoint (get_queryset applies them from the
+        request's own query params). The finance views' metrics cards need
+        totals over every row matching the active filters, not just the
+        current page, and used to get this by summing a client-side copy of
+        the whole filtered table instead of asking the database.
+        """
+        queryset = self.get_queryset()
+        agg = queryset.aggregate(total=Sum("amount"), count=Count("id"))
+        # Some finance views (FinancesPaidView) break the total down by
+        # payment method for their metrics cards — cheap to compute
+        # alongside the overall total, so always included rather than
+        # adding a second endpoint just for this.
+        by_method = {row["method"]: row["total"] or 0 for row in queryset.values("method").annotate(total=Sum("amount"))}
+        return Response({"total": agg["total"] or 0, "count": agg["count"] or 0, "by_method": by_method})
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):

@@ -38,7 +38,7 @@
     <!-- Table Section -->
     <div class="table-section-card margin-top">
       <div class="table-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Qaytarilgan to'lovlar yuklanmoqda...</span>
         </div>
@@ -215,10 +215,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedPayments.length === 0">
+            <tr v-if="payments.length === 0">
               <td colspan="12" class="no-data">Qaytarilgan statusdagi to'lovlar topilmadi</td>
             </tr>
-            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
+            <tr v-for="p in payments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
@@ -268,7 +268,7 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ payments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -435,11 +435,14 @@ import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatDate } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 import { useGroupSelect } from '@/composables/useGroupSelect'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const router = useRouter()
 
 function goStudent(id) {
@@ -462,14 +465,12 @@ const enrollments = ref([])
 const categories = ref([])
 const groups = ref([])
 const loading = ref(true)
+const initialLoading = ref(true)
 
-// ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: pick how many rows to show per
-// page of the filtered result set (see displayedPayments below). The
-// fetch itself always pulls the full status=returned dataset — filtering
-// has to see every row, not just whatever page happened to be fetched.
+// Filtering/sorting/pagination are applied server-side (see buildParams/
+// fetchPayments) — `payments` only ever holds the current page.
 const pageSizeOption = ref('50')
-const totalCount = ref(0) // total rows matching status=returned, per backend
+const totalCount = ref(0)
 const currentPage = ref(1)
 
 // Group-first cascade: pick a group, then the student list narrows to that group.
@@ -542,17 +543,39 @@ const studentPaidSort = ref('')
 const amountSort = ref('')
 
 const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, paymentDate: paymentDateSort, studentPaid: studentPaidSort, amount: amountSort }
+const ORDERING_PARAM_MAP = {
+  groupStart: 'group_started_at',
+  groupEnd: 'group_ends_at',
+  paymentDate: 'created_at',
+  studentPaid: 'student_paid_amount',
+  amount: 'amount',
+}
+const ordering = computed(() => {
+  for (const [column, sortRef] of Object.entries(sortRefs)) {
+    if (sortRef.value) return (sortRef.value === 'desc' ? '-' : '') + ORDERING_PARAM_MAP[column]
+  }
+  return ''
+})
 function setSort(column, direction) {
   const target = sortRefs[column]
   Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
   target.value = target.value === direction ? '' : direction
+  refetch()
 }
 
-// Distinct admins/superusers who recorded payments in the fetched batch,
-// for the "To'lovni kiritgan" filter select.
+// Distinct cashiers, for the "To'lovni kiritgan" filter select. Fetched
+// separately (capped at 1000) so the dropdown still lists every cashier
+// even though `payments` now only holds one page.
+const allReturnedPayments = ref([])
+async function fetchDistinctCashiers() {
+  try {
+    const res = await api.get('/payments/', { params: { status: 'returned', page_size: 1000 } })
+    allReturnedPayments.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
 const distinctCashiers = computed(() => {
   const map = {}
-  payments.value.forEach(p => {
+  allReturnedPayments.value.forEach(p => {
     if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
   })
   return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
@@ -570,91 +593,25 @@ const selectedStudentLabel = ref('')
 
 const form = ref({ enrollment: '', amountFormatted: '', amount: 0, method: 'cash', notes: '' })
 
-// All header filters (student name, category, group name, date ranges,
-// method, cashier, sort) run entirely on the client against the
-// already-fetched `payments` list — no per-keystroke or per-filter network
-// round trip, so there's no debounce delay and no input re-render to steal
-// focus/cursor position, AND they see every row matching status=returned
-// (fetchPayments always pulls all of them), not just whatever page happened
-// to be loaded. No filter/sort triggers a backend request.
-const filteredPayments = computed(() => {
-  let list = payments.value
-
-  if (filterStudentName.value.trim()) {
-    const q = filterStudentName.value.trim().toLowerCase()
-    list = list.filter(p => (p.student_name || '').toLowerCase().includes(q))
-  }
-  if (filterCategory.value) list = list.filter(p => String(p.category) === String(filterCategory.value))
-  if (filterGroupName.value.trim()) {
-    const q = filterGroupName.value.trim().toLowerCase()
-    list = list.filter(p => (p.group_name || '').toLowerCase().includes(q))
-  }
-  if (filterMethod.value) list = list.filter(p => p.method === filterMethod.value)
-  if (filterCashierId.value) list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
-
-  if (groupStartFrom.value) list = list.filter(p => p.group_started_at && p.group_started_at >= groupStartFrom.value)
-  if (groupStartTo.value) list = list.filter(p => p.group_started_at && p.group_started_at <= groupStartTo.value)
-  if (groupEndFrom.value) list = list.filter(p => p.group_ends_at && p.group_ends_at >= groupEndFrom.value)
-  if (groupEndTo.value) list = list.filter(p => p.group_ends_at && p.group_ends_at <= groupEndTo.value)
-  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
-  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
-
-  if (groupStartSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.group_started_at || '').localeCompare(b.group_started_at || '')
-      return groupStartSort.value === 'desc' ? -d : d
-    })
-  } else if (groupEndSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.group_ends_at || '').localeCompare(b.group_ends_at || '')
-      return groupEndSort.value === 'desc' ? -d : d
-    })
-  } else if (paymentDateSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.created_at || '').localeCompare(b.created_at || '')
-      return paymentDateSort.value === 'desc' ? -d : d
-    })
-  } else if (studentPaidSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.student_paid_amount ?? -Infinity) - (b.student_paid_amount ?? -Infinity)
-      return studentPaidSort.value === 'desc' ? -d : d
-    })
-  } else if (amountSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.amount || 0) - (b.amount || 0)
-      return amountSort.value === 'desc' ? -d : d
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
-})
-const displayedPayments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredPayments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredPayments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchPayments()
 }
 
-// Metrics reflect the currently filtered dataset (not just the visible
-// page) — consistent with "Jami" in the pagination footer below.
-const metrics = computed(() => {
-  const total = filteredPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  return { total, count: filteredPayments.value.length }
-})
+// Aggregated in the DB over every row matching the active filters, not just
+// the current page.
+const metrics = ref({ total: 0, count: 0 })
+async function fetchTotals() {
+  try {
+    const res = await api.get('/payments/totals/', { params: buildParams({ forTotals: true }) })
+    metrics.value = res.data
+  } catch (err) { console.error(err) }
+}
 
 const filteredEnrollments = computed(() => {
   if (!selectedGroupId.value) return []
@@ -665,18 +622,39 @@ const filteredEnrollments = computed(() => {
   })
 })
 
+// Shared by fetchPayments and fetchTotals so both always see the exact same
+// filter set. forTotals omits page/page_size/ordering, which totals doesn't use.
+function buildParams({ forTotals = false } = {}) {
+  const params = { status: 'returned' }
+  if (!forTotals) {
+    params.page = currentPage.value
+    params.page_size = pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value)
+    if (ordering.value) params.ordering = ordering.value
+  }
+  if (filterStudentName.value.trim()) params.student_full_name = filterStudentName.value.trim()
+  if (filterCategory.value) params.category = filterCategory.value
+  if (filterGroupName.value.trim()) params.group_name = filterGroupName.value.trim()
+  if (filterMethod.value) params.method = filterMethod.value
+  if (filterCashierId.value) params.created_by = filterCashierId.value
+  if (groupStartFrom.value) params.group_start_from = groupStartFrom.value
+  if (groupStartTo.value) params.group_start_to = groupStartTo.value
+  if (groupEndFrom.value) params.group_end_from = groupEndFrom.value
+  if (groupEndTo.value) params.group_end_to = groupEndTo.value
+  if (paymentDateFrom.value) params.date_from = paymentDateFrom.value
+  if (paymentDateTo.value) params.date_to = paymentDateTo.value
+  if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+  return params
+}
+
 async function fetchPayments() {
   loading.value = true
   try {
-    // Always the full status=returned dataset — filtering/sorting/pagination
-    // above all need to see every row, not just one page of them.
-    const params = { status: 'returned', page: 1, page_size: 100000 }
-    const res = await api.get('/payments/', { params })
+    const res = await api.get('/payments/', { params: buildParams() })
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     payments.value = rawList
     totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
-  finally { loading.value = false }
+  finally { loading.value = false; initialLoading.value = false }
 }
 
 async function fetchEnrollments() {
@@ -700,12 +678,16 @@ async function fetchGroups() {
   } catch (err) { console.error(err) }
 }
 
-// Row-fetch-count no longer needs a backend round trip — it only resets to
-// page 1 of the filtered result set; every filter/sort/page above is
-// purely client-side.
-watch(pageSizeOption, () => {
+function refetch() {
   currentPage.value = 1
-})
+  fetchPayments()
+  fetchTotals()
+}
+watch(pageSizeOption, refetch)
+watch([filterCategory, filterMethod, filterCashierId, groupStartFrom, groupStartTo, groupEndFrom, groupEndTo, paymentDateFrom, paymentDateTo], refetch)
+const debouncedRefetch = debounce(refetch, 400)
+watch([filterStudentName, filterGroupName], debouncedRefetch)
+watch(() => branchStore.activeBranchId, refetch)
 
 function selectEnrollment(e) {
   form.value.enrollment = e.id
@@ -778,6 +760,8 @@ async function savePayment() {
     }
     closeModal()
     fetchPayments()
+    fetchTotals()
+    fetchDistinctCashiers()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
 }
@@ -801,6 +785,7 @@ async function performDelete() {
     await api.delete(`/payments/${deletingPayment.value.id}/`)
     deleteModal.value?.close()
     fetchPayments()
+    fetchTotals()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -810,6 +795,8 @@ async function performDelete() {
 
 onMounted(() => {
   fetchPayments()
+  fetchTotals()
+  fetchDistinctCashiers()
   fetchEnrollments()
   fetchCategories()
   fetchGroups()

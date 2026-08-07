@@ -619,6 +619,14 @@ class Payment(BaseModel):
         db_table = "payment"
         verbose_name = "To'lov"
         verbose_name_plural = "To'lovlar"
+        # status/method/created_at are the most heavily filtered/sorted
+        # fields on the finance views' payment list (PaymentViewSet.
+        # get_queryset) and had no index despite that.
+        indexes = [
+            models.Index(fields=["status"], name="payment_status_idx"),
+            models.Index(fields=["method"], name="payment_method_idx"),
+            models.Index(fields=["created_at"], name="payment_created_at_idx"),
+        ]
 
     def __str__(self):
         student_name = self.enrollment.student.full_name if (self.enrollment and self.enrollment.student) else 'No Student'
@@ -1074,4 +1082,45 @@ class StudentCertificate(BaseModel):
         who = self.instructor.full_name if self.instructor else "Noma'lum"
         return f"{self.student.full_name} - {who}"
 
+
+class ExcelImportBatch(BaseModel):
+    """
+    Resume tracking for the group-roster Excel import (import_excel.py).
+
+    Keyed by (original_filename, branch) rather than a content hash —
+    the realistic re-upload workflow is "append new rows to the bottom of
+    the same tracked file and re-upload it", which changes the file's
+    bytes (and therefore any content hash) on every single re-upload, so
+    hashing the whole file can never recognize it as "the same roster,
+    just grown". The original filename is the one thing that stays stable
+    across that workflow (the saved path itself is always a fresh
+    UUID-prefixed name, see import_excel_upload/_original_filename_from_path).
+    """
+
+    original_filename = models.CharField(max_length=255)
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="excel_import_batches",
+    )
+    last_row = models.PositiveIntegerField(
+        default=0,
+        help_text="Sheet row number the import last successfully finished at. 0 = never imported.",
+    )
+    last_file_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="SHA-256 of the most recently imported file, for reference only (not used for matching).",
+    )
+
+    class Meta:
+        db_table = "excel_import_batch"
+        verbose_name = "Excel import partiyasi"
+        verbose_name_plural = "Excel import partiyalari"
+        unique_together = [("original_filename", "branch")]
+
+    def __str__(self):
+        return f"{self.original_filename} (row {self.last_row})"
 

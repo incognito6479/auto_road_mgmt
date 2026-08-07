@@ -7,12 +7,12 @@
     </div>
 
     <!-- State containers -->
-    <div v-if="loading" class="state-container">
+    <div v-if="initialLoading" class="state-container">
       <div class="spinner"></div>
       <p class="state-text">To'lovlar yuklanmoqda...</p>
     </div>
 
-    <div v-else-if="error" class="state-container state-error">
+    <div v-else-if="error && payments.length === 0" class="state-container state-error">
       <p class="state-text">{{ error }}</p>
       <button class="btn-retry" @click="fetchPayments">Qayta urinish</button>
     </div>
@@ -147,10 +147,10 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-if="displayedPayments.length === 0">
+              <tr v-if="payments.length === 0">
                 <td :colspan="authStore.isSuperuser ? 12 : 11" class="td-empty">To'lovlar topilmadi.</td>
               </tr>
-              <tr v-for="p in displayedPayments" :key="p.id">
+              <tr v-for="p in payments" :key="p.id">
                 <td class="td-id">#{{ p.id }}</td>
                 <td class="td-student">{{ p.student_name || '-' }}</td>
                 <td class="td-jshshr" style="font-family: monospace; font-size: 12px;">{{ p.student_jshshr || '-' }}</td>
@@ -181,7 +181,7 @@
           <!-- Row-fetch-count / pagination controls -->
           <div class="pagination-bar">
             <span class="pagination-info">
-              Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
+              Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ payments.length }}</strong> ko'rsatilmoqda
             </span>
             <div class="pagination-actions">
               <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -284,15 +284,22 @@ import { ref, computed, onMounted, watch } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
 const payments = ref([])
 const loading = ref(false)
+// Only gates the initial full-page spinner/error screen — reusing `loading`
+// there meant every filter-triggered refetch unmounted the filter card
+// (including the search inputs), stealing focus and resetting scroll.
+const initialLoading = ref(true)
 const error = ref('')
 
 const dateSort = ref('') // '', 'asc', 'desc'
+const ordering = computed(() => dateSort.value ? (dateSort.value === 'desc' ? '-' : '') + 'created_at' : '')
 function setDateSort(direction) {
   dateSort.value = dateSort.value === direction ? '' : direction
+  refetch()
 }
 
 // Filter states
@@ -309,13 +316,8 @@ const filterStudentName = ref('')
 const filterJshshr = ref('')
 const filterAgent = ref('')
 
-// ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: fetch always pulls every payment
-// (see fetchPayments below) — this view has no scope-narrowing tabs, so
-// there's nothing for the backend query to narrow. Filtering runs
-// client-side against the full set (filteredPayments), and pageSizeOption
-// instead controls how many of the *filtered* results are shown per page
-// (see displayedPayments/changePage below).
+// Filtering/sorting/pagination are applied server-side (see buildParams/
+// fetchPayments) — `payments` only ever holds the current page.
 const pageSizeOption = ref('50')
 const totalCount = ref(0)
 const currentPage = ref(1)
@@ -350,15 +352,30 @@ const formattedEditPrice = computed({
   }
 })
 
+// Shared by fetchPayments so every request/refetch sees the exact same
+// filter set.
+function buildParams() {
+  const params = {
+    page: currentPage.value,
+    page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+  }
+  if (ordering.value) params.ordering = ordering.value
+  if (filterStudentName.value.trim()) params.student_full_name = filterStudentName.value.trim()
+  if (filterJshshr.value.trim()) params.jshshr = filterJshshr.value.trim()
+  if (filterCategory.value) params.category = filterCategory.value
+  if (filterMethod.value) params.method = filterMethod.value
+  if (filterAgent.value) params.agent = filterAgent.value
+  if (filterStatus.value) params.status = filterStatus.value
+  if (filterDateFrom.value) params.date_from = filterDateFrom.value
+  if (filterDateTo.value) params.date_to = filterDateTo.value
+  return params
+}
+
 const fetchPayments = async () => {
   loading.value = true
   error.value = ''
   try {
-    // Always the full dataset — filtering/sorting/pagination below all
-    // need to see every row, not just one page of them.
-    const params = { page: 1, page_size: 100000 }
-
-    const response = await api.get('/payments/', { params })
+    const response = await api.get('/payments/', { params: buildParams() })
     const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
     payments.value = rawList
     totalCount.value = response.data.count ?? rawList.length
@@ -367,85 +384,35 @@ const fetchPayments = async () => {
     error.value = "To'lovlar ro'yxatini yuklashda xatolik yuz berdi."
   } finally {
     loading.value = false
+    initialLoading.value = false
   }
 }
 
-// Selecting an agent narrows the view to that agent's bonus payments —
-// still purely a client-side filter, see displayedPayments below.
+function refetch() {
+  currentPage.value = 1
+  fetchPayments()
+}
+
+// Selecting an agent narrows the view to that agent's bonus payments.
 watch(filterAgent, (newVal) => {
   if (newVal) {
     filterStatus.value = 'bonus'
   }
 })
 
-// This view has no scope-narrowing tabs, so nothing ever needs a refetch
-// after the initial load — the row-fetch-count selector only resets the
-// display page.
-watch(pageSizeOption, () => {
-  currentPage.value = 1
-})
+watch(pageSizeOption, refetch)
+watch([filterCategory, filterMethod, filterAgent, filterStatus, filterDateFrom, filterDateTo], refetch)
+const debouncedRefetch = debounce(refetch, 400)
+watch([filterStudentName, filterJshshr], debouncedRefetch)
 
-// All header filters (name, jshshr, category, status, method, agent, date
-// range) run entirely on the client against the already-fetched `payments`
-// list — no per-keystroke network round trip.
-const filteredPayments = computed(() => {
-  let list = payments.value
-
-  if (filterStudentName.value.trim()) {
-    const q = filterStudentName.value.trim().toLowerCase()
-    list = list.filter(p => (p.student_name || '').toLowerCase().includes(q))
-  }
-  if (filterJshshr.value.trim()) {
-    const q = filterJshshr.value.trim().toLowerCase()
-    list = list.filter(p => (p.student_jshshr || '').toLowerCase().includes(q))
-  }
-  if (filterCategory.value) {
-    list = list.filter(p => p.category_name === filterCategory.value)
-  }
-  if (filterMethod.value) {
-    list = list.filter(p => p.method === filterMethod.value)
-  }
-  if (filterAgent.value) {
-    list = list.filter(p => String(p.agent) === String(filterAgent.value))
-  }
-  if (filterStatus.value) {
-    list = list.filter(p => p.status === filterStatus.value)
-  }
-  if (filterDateFrom.value) {
-    list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= filterDateFrom.value)
-  }
-  if (filterDateTo.value) {
-    list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= filterDateTo.value)
-  }
-
-  if (dateSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.created_at || '').localeCompare(b.created_at || '')
-      return dateSort.value === 'desc' ? -d : d
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
-})
-const displayedPayments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredPayments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredPayments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchPayments()
 }
 
 const fetchCategories = async () => {

@@ -46,7 +46,7 @@
     <!-- Table Section -->
     <div class="table-section-card margin-top">
       <div class="table-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Instruktorlar to'lovlari yuklanmoqda...</span>
         </div>
@@ -170,10 +170,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedPayments.length === 0">
+            <tr v-if="payments.length === 0">
               <td colspan="10" class="no-data">Instruktorlar bo'yicha to'lovlar topilmadi</td>
             </tr>
-            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
+            <tr v-for="p in payments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.user" class="teacher-name link-value" @click="goUser(p.user)">🚘 {{ p.user_full_name || p.cashier_name || 'Instruktor' }}</div>
                 <div v-else class="teacher-name">🚘 {{ p.user_full_name || p.cashier_name || 'Instruktor' }}</div>
@@ -225,7 +225,7 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ payments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -378,10 +378,13 @@ import AppLayout from '@/components/AppLayout.vue'
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const router = useRouter()
 
 function goUser(id) {
@@ -397,6 +400,7 @@ function goStudent(id) {
 const payments = ref([])
 const instructors = ref([])
 const loading = ref(true)
+const initialLoading = ref(true)
 
 const filterInstructorName = ref('')
 const filterPaymentType = ref('')
@@ -420,100 +424,67 @@ const selectedInstructorLabel = ref('')
 
 const form = ref({ instructor: '', amountFormatted: '', amount: 0, status: 'paid', method: 'cash', notes: '' })
 
-// ── Row-fetch-count selector ──────────────────────────────────
-// Controls how many of the *filtered* rows show per page (see
-// displayedPayments below). The fetch itself always pulls the full
-// status=paid,bonus_teacher dataset — filtering has to see every row, not
-// just whatever page happened to be fetched.
+// Filtering/sorting/pagination are applied server-side (see buildParams/
+// fetchPayments) — `payments` only ever holds the current page.
 const pageSizeOption = ref('50')
 const totalCount = ref(0)
 const currentPage = ref(1)
 
 const sortRefs = { paymentDate: paymentDateSort, studentPaid: studentPaidSort, amount: amountSort }
+const ORDERING_PARAM_MAP = { paymentDate: 'created_at', studentPaid: 'student_paid_amount', amount: 'amount' }
+const ordering = computed(() => {
+  for (const [column, sortRef] of Object.entries(sortRefs)) {
+    if (sortRef.value) return (sortRef.value === 'desc' ? '-' : '') + ORDERING_PARAM_MAP[column]
+  }
+  return ''
+})
 function setSort(column, direction) {
   const target = sortRefs[column]
   Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
   target.value = target.value === direction ? '' : direction
+  refetch()
 }
 
-// All header filters (instructor name, payment type, method, cashier) and
-// sorting run entirely on the client against the already-fetched `payments`
-// list — no per-keystroke or per-filter network round trip, AND they see
-// every row matching status=paid,bonus_teacher (fetchPayments always pulls
-// all of them), not just whatever page happened to be loaded.
-const filteredPayments = computed(() => {
-  let list = payments.value
-
-  if (filterInstructorName.value.trim()) {
-    const q = filterInstructorName.value.trim().toLowerCase()
-    list = list.filter(p => (p.user_full_name || p.cashier_name || '').toLowerCase().includes(q))
-  }
-  if (filterPaymentType.value) {
-    list = list.filter(p => p.status === filterPaymentType.value)
-  }
-  if (filterMethod.value) {
-    list = list.filter(p => p.method === filterMethod.value)
-  }
-  if (filterCashierId.value) {
-    list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
-  }
-  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
-  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
-
-  if (paymentDateSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.created_at || '').localeCompare(b.created_at || '')
-      return paymentDateSort.value === 'desc' ? -d : d
-    })
-  } else if (studentPaidSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (Number(a.student_paid_amount) || 0) - (Number(b.student_paid_amount) || 0)
-      return studentPaidSort.value === 'desc' ? -d : d
-    })
-  } else if (amountSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (Number(a.amount) || 0) - (Number(b.amount) || 0)
-      return amountSort.value === 'desc' ? -d : d
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
-})
-const displayedPayments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredPayments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredPayments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchPayments()
 }
 
-// Metrics reflect the currently filtered dataset (not just the visible
-// page) — consistent with "Jami" in the pagination footer below.
-const metrics = computed(() => {
-  const total = filteredPayments.value.reduce((s, p) => s + (p.amount || 0), 0)
-  const bonus = filteredPayments.value.filter(p => p.status === 'bonus_teacher').reduce((s, p) => s + (p.amount || 0), 0)
-  return { total, bonus, count: filteredPayments.value.length }
-})
+// Aggregated in the DB over every row matching the active filters, not just
+// the current page. The bonus subtotal is a second totals call scoped to
+// status=bonus_teacher (skipped entirely when the type filter already
+// excludes bonus rows, since it would trivially be 0).
+const metrics = ref({ total: 0, count: 0, bonus: 0 })
+async function fetchMetrics() {
+  try {
+    const totalsRes = await api.get('/payments/totals/', { params: buildParams({ forTotals: true }) })
+    let bonus = 0
+    if (filterPaymentType.value !== 'paid') {
+      const bonusRes = await api.get('/payments/totals/', { params: buildParams({ forTotals: true, forceStatus: 'bonus_teacher' }) })
+      bonus = bonusRes.data.total
+    }
+    metrics.value = { total: totalsRes.data.total, count: totalsRes.data.count, bonus }
+  } catch (err) { console.error(err) }
+}
 
-// Distinct admins/superusers who recorded these payments, for the
-// "To'lovni kiritgan" filter select — built from the full fetched batch,
-// not the currently filtered subset.
+// Distinct cashiers, for the "To'lovni kiritgan" filter select. Fetched
+// separately (capped at 1000) so the dropdown still lists every cashier
+// even though `payments` now only holds one page.
+const allInstructorPayments = ref([])
+async function fetchDistinctCashiers() {
+  try {
+    const res = await api.get('/payments/', { params: { status: 'paid,bonus_teacher', user_role: 'instructor', page_size: 1000 } })
+    allInstructorPayments.value = res.data.results || res.data
+  } catch (err) { console.error(err) }
+}
 const distinctCashiers = computed(() => {
   const map = {}
-  payments.value.forEach(p => {
+  allInstructorPayments.value.forEach(p => {
     if (p.created_by && !map[p.created_by]) map[p.created_by] = { id: p.created_by, name: p.created_by_name || `#${p.created_by}` }
   })
   return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
@@ -534,19 +505,34 @@ function getUserFullName(u) {
   return u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username || 'Xodim'
 }
 
+// Shared by fetchPayments and fetchMetrics so both always see the exact
+// same filter set. forTotals omits page/page_size/ordering. forceStatus
+// overrides the status param (used by the bonus subtotal call).
+function buildParams({ forTotals = false, forceStatus = null } = {}) {
+  const params = { status: forceStatus || (filterPaymentType.value || 'paid,bonus_teacher'), user_role: 'instructor' }
+  if (!forTotals) {
+    params.page = currentPage.value
+    params.page_size = pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value)
+    if (ordering.value) params.ordering = ordering.value
+  }
+  if (filterInstructorName.value.trim()) params.student_name = filterInstructorName.value.trim()
+  if (filterMethod.value) params.method = filterMethod.value
+  if (filterCashierId.value) params.created_by = filterCashierId.value
+  if (paymentDateFrom.value) params.date_from = paymentDateFrom.value
+  if (paymentDateTo.value) params.date_to = paymentDateTo.value
+  if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+  return params
+}
+
 async function fetchPayments() {
   loading.value = true
   try {
-    // Always the full status=paid,bonus_teacher dataset — filtering/sorting/
-    // pagination above all need to see every row, not just one page of them.
-    const params = { status: 'paid,bonus_teacher', user_role: 'instructor', page: 1, page_size: 100000 }
-
-    const res = await api.get('/payments/', { params })
+    const res = await api.get('/payments/', { params: buildParams() })
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     payments.value = rawList
     totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
-  finally { loading.value = false }
+  finally { loading.value = false; initialLoading.value = false }
 }
 
 async function fetchInstructors() {
@@ -557,14 +543,16 @@ async function fetchInstructors() {
   } catch (err) { console.error(err) }
 }
 
-// Row-fetch-count no longer needs a backend round trip — it only resets to
-// page 1 of the filtered result set. Every column filter (instructor name,
-// payment type, method, cashier) and sort above runs purely client-side in
-// filteredPayments, with zero debounce and no re-render that could steal
-// focus/cursor position from a text input.
-watch(pageSizeOption, () => {
+function refetch() {
   currentPage.value = 1
-})
+  fetchPayments()
+  fetchMetrics()
+}
+watch(pageSizeOption, refetch)
+watch([filterPaymentType, filterMethod, filterCashierId, paymentDateFrom, paymentDateTo], refetch)
+const debouncedRefetch = debounce(refetch, 400)
+watch(filterInstructorName, debouncedRefetch)
+watch(() => branchStore.activeBranchId, refetch)
 
 function selectInstructor(t) {
   form.value.instructor = t.id
@@ -656,6 +644,8 @@ async function savePayment() {
     }
     closeModal()
     fetchPayments()
+    fetchMetrics()
+    fetchDistinctCashiers()
   } catch (err) { modalError.value = err.response?.data?.detail || "Saqlashda xatolik yuz berdi" }
   finally { saving.value = false }
 }
@@ -679,6 +669,7 @@ async function performDelete() {
     await api.delete(`/payments/${deletingPayment.value.id}/`)
     deleteModal.value?.close()
     fetchPayments()
+    fetchMetrics()
   } catch (err) {
     deleteError.value = "O'chirishda xatolik yuz berdi"
   } finally {
@@ -688,6 +679,8 @@ async function performDelete() {
 
 onMounted(() => {
   fetchPayments()
+  fetchMetrics()
+  fetchDistinctCashiers()
   fetchInstructors()
   document.addEventListener('click', handleSelectOutsideClick)
 })

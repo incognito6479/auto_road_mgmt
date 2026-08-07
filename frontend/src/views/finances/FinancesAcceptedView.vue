@@ -201,7 +201,7 @@
     <!-- 3. PAYMENTS TABLE -->
     <div class="table-section-card">
       <div class="table-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Tushumlar yuklanmoqda...</span>
         </div>
@@ -357,10 +357,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedPayments.length === 0">
+            <tr v-if="payments.length === 0">
               <td colspan="11" class="no-data">Tushumlar topilmadi</td>
             </tr>
-            <tr v-for="p in displayedPayments" :key="p.id" class="table-row">
+            <tr v-for="p in payments" :key="p.id" class="table-row">
               <td class="td-name">
                 <div v-if="p.student" class="student-name link-value" @click="goStudent(p.student)">{{ p.student_name || 'Noma\'lum' }}</div>
                 <div v-else class="student-name">{{ p.student_name || 'Noma\'lum' }}</div>
@@ -412,7 +412,7 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredPayments.length }}</strong> tadan <strong>{{ displayedPayments.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ payments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -594,6 +594,7 @@ import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatDate } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 import { useGroupSelect } from '@/composables/useGroupSelect'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -617,6 +618,12 @@ const enrollments = ref([])
 const categories = ref([])
 const groups = ref([])
 const loading = ref(true)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter-triggered refetch (search inputs are debounced but
+// still hit the backend now) unmounted the whole table — including the
+// column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting scroll position on every keystroke pause.
+const initialLoading = ref(true)
 
 // Group-first cascade: pick a group, then the student list narrows to that group.
 const {
@@ -676,11 +683,9 @@ const endDateFrom = ref('')
 const endDateTo = ref('')
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Controls how many of the *filtered* rows show per page (see
-// displayedPayments below). The fetch itself always pulls the full
-// backend-scoped dataset (status=accepted + monthly date-range, if any) —
-// filtering has to see every row in scope, not just whatever page happened
-// to be fetched.
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side now (see fetchPayments) — the table only ever
+// holds the current page's rows, not the whole scoped table.
 const pageSizeOption = ref('50')
 const totalCount = ref(0)
 const currentPage = ref(1)
@@ -694,12 +699,27 @@ const paymentDateFrom = ref('')
 const paymentDateTo = ref('')
 
 const sortRefs = { groupStart: groupStartSort, groupEnd: groupEndSort, paymentDate: paymentDateSort, amount: amountSort }
+// Maps the active sort column/direction to PaymentViewSet's `ordering` param.
+const ORDERING_PARAM_MAP = {
+  groupStart: 'group_started_at',
+  groupEnd: 'group_ends_at',
+  paymentDate: 'created_at',
+  amount: 'amount',
+}
+const ordering = computed(() => {
+  for (const [column, sortRef] of Object.entries(sortRefs)) {
+    if (sortRef.value) return (sortRef.value === 'desc' ? '-' : '') + ORDERING_PARAM_MAP[column]
+  }
+  return ''
+})
 // Clicking the already-active direction clears the sort; clicking the other
 // direction (or another column) switches to it. Only one column sorts at a time.
 function setSort(column, direction) {
   const target = sortRefs[column]
   Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
   target.value = target.value === direction ? '' : direction
+  currentPage.value = 1
+  fetchPayments()
 }
 
 // Distinct admins/superusers who recorded this status's payments, for the
@@ -712,82 +732,38 @@ const distinctCashiers = computed(() => {
   return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-// All header filters (name, category, group, method, cashier, date ranges,
-// sort) run entirely on the client against the already-fetched `payments`
-// list — no per-keystroke or per-filter network round trip, AND they see
-// every row in the current backend scope (fetchPayments always pulls all
-// of them), not just whatever page happened to be loaded.
-const filteredPayments = computed(() => {
-  let list = payments.value.filter(p => branchStore.isBranchMatch(p))
-
-  if (filterStudentName.value.trim()) {
-    const q = filterStudentName.value.trim().toLowerCase()
-    list = list.filter(p => (p.student_name || '').toLowerCase().includes(q))
-  }
-  if (filterCategory.value) {
-    list = list.filter(p => String(p.category) === String(filterCategory.value))
-  }
-  if (filterGroupName.value.trim()) {
-    const q = filterGroupName.value.trim().toLowerCase()
-    list = list.filter(p => (p.group_name || '').toLowerCase().includes(q))
-  }
-  if (filterMethod.value) {
-    list = list.filter(p => p.method === filterMethod.value)
-  }
-  if (filterCashierId.value) {
-    list = list.filter(p => String(p.created_by) === String(filterCashierId.value))
-  }
-  if (startDateFrom.value) list = list.filter(p => p.group_started_at && p.group_started_at >= startDateFrom.value)
-  if (startDateTo.value) list = list.filter(p => p.group_started_at && p.group_started_at <= startDateTo.value)
-  if (endDateFrom.value) list = list.filter(p => p.group_ends_at && p.group_ends_at >= endDateFrom.value)
-  if (endDateTo.value) list = list.filter(p => p.group_ends_at && p.group_ends_at <= endDateTo.value)
-  if (paymentDateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= paymentDateFrom.value)
-  if (paymentDateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= paymentDateTo.value)
-
-  if (groupStartSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.group_started_at || '').localeCompare(b.group_started_at || '')
-      return groupStartSort.value === 'desc' ? -d : d
-    })
-  } else if (groupEndSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.group_ends_at || '').localeCompare(b.group_ends_at || '')
-      return groupEndSort.value === 'desc' ? -d : d
-    })
-  } else if (paymentDateSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.created_at || '').localeCompare(b.created_at || '')
-      return paymentDateSort.value === 'desc' ? -d : d
-    })
-  } else if (amountSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (Number(a.amount) || 0) - (Number(b.amount) || 0)
-      return amountSort.value === 'desc' ? -d : d
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+// All header filters (name, category, group, method, cashier, date ranges)
+// plus sort and pagination are now sent to the backend as query params in
+// fetchPayments — `payments` only ever holds the current page's rows, not
+// the whole scoped table. Text inputs are debounced (see the watchers
+// below); everything else refetches immediately on change.
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredPayments.value.length / displayPageSize.value))
-})
-const displayedPayments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredPayments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredPayments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchPayments()
 }
+
+// The monthly-cards date range and the table's own "Sana" column filter
+// both narrow on the same underlying field (Payment.created_at) — the
+// backend only takes one date_from/date_to pair, so intersect them here
+// exactly as the old client-side filtering effectively did (both applied
+// together, narrowing to whichever bound is tighter).
+const effectiveDateFrom = computed(() => {
+  if (monthlyDateFrom.value && paymentDateFrom.value) {
+    return monthlyDateFrom.value > paymentDateFrom.value ? monthlyDateFrom.value : paymentDateFrom.value
+  }
+  return monthlyDateFrom.value || paymentDateFrom.value || ''
+})
+const effectiveDateTo = computed(() => {
+  if (monthlyDateTo.value && paymentDateTo.value) {
+    return monthlyDateTo.value < paymentDateTo.value ? monthlyDateTo.value : paymentDateTo.value
+  }
+  return monthlyDateTo.value || paymentDateTo.value || ''
+})
 
 const showModal = ref(false)
 const isEditing = ref(false)
@@ -859,8 +835,15 @@ async function fetchMonthlySummary() {
   try {
     const params = { status: 'accepted' }
     if (monthlyHasActiveFilters.value) {
-      if (monthlyDateFrom.value) params.date_from = monthlyDateFrom.value
-      if (monthlyDateTo.value) params.date_to = monthlyDateTo.value
+      // Picking only one side left the other bound wide open (e.g. "Dan"
+      // alone meant "from that date to the start of all data"), pulling in
+      // every month in that direction — rendered as one card-block per
+      // month, which read as the same 5 cards duplicated over and over.
+      // Mirroring the missing bound to the one given collapses it back to
+      // a single specific date/period, matching what picking one date
+      // actually reads as to a user (unless both are set for a real range).
+      params.date_from = monthlyDateFrom.value || monthlyDateTo.value
+      params.date_to = monthlyDateTo.value || monthlyDateFrom.value
     } else {
       const now = new Date()
       params.date_from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
@@ -906,22 +889,44 @@ async function fetchAllAcceptedMetrics() {
   } catch (err) { console.error(err) }
 }
 
+// Guards against an older, slower request (e.g. the initial unfiltered
+// load) resolving *after* a newer filtered one and clobbering it with
+// stale results — debounce only limits how often a request starts, it
+// doesn't guarantee they finish in the same order they were sent.
+let fetchToken = 0
 async function fetchPayments() {
+  const token = ++fetchToken
   loading.value = true
   try {
-    // Always the full backend-scoped dataset (status=accepted + monthly
-    // date-range, if any) — filtering/sorting/pagination above all need to
-    // see every row, not just one page of them.
-    const params = { status: 'accepted', page: 1, page_size: 100000 }
-    if (monthlyDateFrom.value) params.date_from = monthlyDateFrom.value
-    if (monthlyDateTo.value) params.date_to = monthlyDateTo.value
+    // Only the current page is fetched — every filter/sort/branch-scope
+    // below is applied server-side (PaymentViewSet.get_queryset), not
+    // against a full client-held copy of the table.
+    const params = {
+      status: 'accepted',
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (effectiveDateFrom.value) params.date_from = effectiveDateFrom.value
+    if (effectiveDateTo.value) params.date_to = effectiveDateTo.value
+    if (filterStudentName.value.trim()) params.student_full_name = filterStudentName.value.trim()
+    if (filterCategory.value) params.category = filterCategory.value
+    if (filterGroupName.value.trim()) params.group_name = filterGroupName.value.trim()
+    if (filterMethod.value) params.method = filterMethod.value
+    if (filterCashierId.value) params.created_by = filterCashierId.value
+    if (startDateFrom.value) params.group_start_from = startDateFrom.value
+    if (startDateTo.value) params.group_start_to = startDateTo.value
+    if (endDateFrom.value) params.group_end_from = endDateFrom.value
+    if (endDateTo.value) params.group_end_to = endDateTo.value
+    if (ordering.value) params.ordering = ordering.value
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
 
     const res = await api.get('/payments/', { params })
+    if (token !== fetchToken) return // a newer request has since been sent — discard this stale response
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     payments.value = rawList
     totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
-  finally { loading.value = false }
+  finally { if (token === fetchToken) { loading.value = false; initialLoading.value = false } }
 }
 
 async function fetchEnrollments() {
@@ -938,22 +943,40 @@ async function fetchGroups() {
   } catch (err) { console.error(err) }
 }
 
-// Only the monthly cards' date-range filter needs a backend round trip —
-// every column filter/sort above (name, category, group, method, cashier,
-// group start/end date ranges) runs purely client-side in filteredPayments,
-// with zero debounce and no re-render that could steal focus/cursor
-// position from a text input. The row-fetch-count selector no longer
-// refetches — it only resets to page 1 of the filtered result set.
+// Row-fetch-count selector refetches page 1 at the new page_size.
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchPayments()
 })
 
 // The monthly cards' date-range filter also narrows the payments table
 // below (one-directional — the table's own toolbar filters never affect
 // the monthly cards).
 watch([monthlyDateFrom, monthlyDateTo], () => {
+  currentPage.value = 1
   fetchPayments()
   fetchMonthlySummary()
+})
+
+// Select/date filters refetch immediately on change (discrete input, no
+// per-keystroke risk). Text filters are debounced so typing doesn't fire a
+// request per keystroke — the input itself never gets re-rendered/replaced
+// by this (only the table rows below it do), so no risk of losing focus.
+watch([filterCategory, filterMethod, filterCashierId, startDateFrom, startDateTo, endDateFrom, endDateTo, paymentDateFrom, paymentDateTo], () => {
+  currentPage.value = 1
+  fetchPayments()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchPayments()
+}, 400)
+watch([filterStudentName, filterGroupName], debouncedRefetch)
+
+// Superuser branch switch narrows the same request server-side now instead
+// of a client-side isBranchMatch post-filter over an already-fetched page.
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchPayments()
 })
 
 function selectEnrollment(e) {
