@@ -24,8 +24,10 @@
       </button>
     </div>
 
-    <!-- Loading / error states -->
-    <div v-if="loading" class="state-container">
+    <!-- Loading / error states — only gates the very first load; later
+         refetches (filters/sort/pagination) leave the table (and whatever
+         column-filter input the user is typing in) mounted the whole time. -->
+    <div v-if="initialLoading" class="state-container">
       <div class="spinner"></div>
       <p class="state-text">O'quvchilar yuklanmoqda...</p>
     </div>
@@ -251,10 +253,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedStudents.length === 0">
+            <tr v-if="students.length === 0">
               <td colspan="14" class="no-data">Ma'lumot topilmadi</td>
             </tr>
-            <tr v-for="s in displayedStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
+            <tr v-for="s in students" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
               <td class="td-name">
                 <div style="display: flex; align-items: center; gap: 10px;">
                   <img :src="s.image || '/default_photo.png'" alt="Student" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #E5E7EB; flex-shrink: 0;" />
@@ -301,7 +303,7 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredStudents.length }}</strong> tadan <strong>{{ displayedStudents.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ students.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -1186,6 +1188,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 import { useFillViewportHeight } from '@/composables/useFillViewportHeight'
+import { debounce } from '@/utils/debounce'
 
 const pageFlexColRef = ref(null)
 useFillViewportHeight(pageFlexColRef)
@@ -1243,6 +1246,8 @@ function setGroupSort(column, direction) {
     if (key !== column) r.value = ''
   })
   target.value = target.value === direction ? '' : direction
+  currentPage.value = 1
+  fetchStudents()
 }
 
 // ── Enrollment status tabs ─────────────────────────────────────
@@ -1275,19 +1280,22 @@ function selectTab(key) {
 }
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: fetch always pulls every row
-// matching the active scope tab (see fetchStudents below), filtering runs
-// client-side against the full set (filteredStudents), and pageSizeOption
-// instead controls how many of the *filtered* results are shown per page
-// (see displayedStudents/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchStudents) — the table only ever
+// holds the current page's rows, not the whole scoped table.
 const pageSizeOption = ref('50')
-const totalCount = ref(0) // total rows matching the active scope tab, per backend
+const totalCount = ref(0) // total rows matching every active filter, per backend
 const currentPage = ref(1)
 
 // ── Loading & state ──────────────────────────────────────────
 const students = ref([])
 const categories = ref([])
 const loading = ref(false)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole table (via
+// v-if) — including whatever column-filter <input> the user was typing
+// into — stealing focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 const error = ref('')
 
 // ── Modal state ──────────────────────────────────────────────
@@ -1597,31 +1605,62 @@ const formattedEnrolledAmount = computed({
 })
 
 // ── Fetch data ───────────────────────────────────────────────
-// The data scope (status/has-group tab) and category both need a backend
-// round trip — category especially, since the "faol" tab alone is ~6k rows
-// in production and fetching all of them just to filter by category
-// client-side was the dominant cost. Every other filter below (name,
-// phone, jshshr, group name, group date ranges, sort) is purely
-// client-side against the already-fetched `students` list — see
-// displayedStudents below.
+// Every filter, sort, and page below is now applied server-side
+// (StudentViewSet.get_queryset) — `students` only ever holds the current
+// page's rows, not a full tab-scoped copy of the table. This replaced a
+// page_size=100000 fetch-everything-then-filter-client-side model: even
+// after scoping to one category, StudentSerializer's 17 per-row computed
+// fields took ~7.5s to serialize alone for a ~4k-row category, on top of
+// the payload size — a cost that scaled with any category's row count,
+// not just the unfiltered worst case.
+const ORDERING_PARAM_MAP = {
+  groupStart: 'group_started_at',
+  groupEnd: 'group_ends_at',
+  birth: 'birth_date',
+  joined: 'date_joined',
+}
+const ordering = computed(() => {
+  const refs = { groupStart: groupStartSort, groupEnd: groupEndSort, birth: birthDateSort, joined: joinedDateSort }
+  for (const [key, sortRef] of Object.entries(refs)) {
+    if (sortRef.value) return (sortRef.value === 'desc' ? '-' : '') + ORDERING_PARAM_MAP[key]
+  }
+  return ''
+})
+
+// Guards against an older, slower request (e.g. the initial load) resolving
+// *after* a newer filtered one and clobbering it with stale results —
+// debounce only limits how often a request starts, not the order replies
+// come back in.
+let fetchToken = 0
 const fetchStudents = async () => {
+  const token = ++fetchToken
   loading.value = true
   error.value = ''
   try {
-    // Always the full tab-scoped dataset — filtering/sorting/pagination
-    // below all need to see every row, not just one page of them.
     const params = {
-      page: 1,
-      page_size: 100000,
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
     }
     if (filterStatus.value) params.status = filterStatus.value
     if (groupFilter.value) params.has_group = groupFilter.value
-    // Narrows the "faol" tab's ~6k-row dataset server-side instead of
-    // pulling every active student just to filter by category client-side —
-    // the single biggest win available for that tab's load time.
     if (filterCategory.value) params.category = filterCategory.value
+    if (filterName.value.trim()) params.search = filterName.value.trim()
+    if (filterPhone.value.trim()) params.phone = filterPhone.value.trim()
+    if (filterJshshr.value.trim()) params.jshshr = filterJshshr.value.trim()
+    if (filterGroupName.value.trim()) params.group_name = filterGroupName.value.trim()
+    if (groupStartDateFrom.value) params.group_start_from = groupStartDateFrom.value
+    if (groupStartDateTo.value) params.group_start_to = groupStartDateTo.value
+    if (groupEndDateFrom.value) params.group_end_from = groupEndDateFrom.value
+    if (groupEndDateTo.value) params.group_end_to = groupEndDateTo.value
+    if (birthDateFrom.value) params.birth_date_from = birthDateFrom.value
+    if (birthDateTo.value) params.birth_date_to = birthDateTo.value
+    if (joinedDateFrom.value) params.joined_date_from = joinedDateFrom.value
+    if (joinedDateTo.value) params.joined_date_to = joinedDateTo.value
+    if (ordering.value) params.ordering = ordering.value
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
 
     const response = await api.get('/students/', { params })
+    if (token !== fetchToken) return // a newer request has since been sent — discard this stale response
     const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
     students.value = rawList.map(mapStudent)
     totalCount.value = response.data.count ?? rawList.length
@@ -1629,14 +1668,18 @@ const fetchStudents = async () => {
     console.error(err)
     error.value = "O'quvchilarni yuklashda xatolik yuz berdi."
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
   }
 }
 
-// The scope tab and category filter both need a backend round trip (see
-// fetchStudents); everything else still filters/sorts instantly on the
-// client against whatever that pair narrowed the dataset down to.
+// Every filter/sort below now triggers a backend refetch (see
+// fetchStudents). Select/date/tab filters refetch immediately on change
+// (discrete input, no per-keystroke risk); text filters are debounced so
+// typing doesn't fire a request per keystroke — the input itself is never
+// re-rendered/replaced by any of this (only the table rows below it are),
+// so there's no risk of losing focus or cursor position mid-word.
 watch(activeTab, () => {
+  currentPage.value = 1
   fetchStudents()
 })
 watch(filterCategory, (val) => {
@@ -1645,12 +1688,25 @@ watch(filterCategory, (val) => {
   } else {
     localStorage.removeItem('students_filter_category')
   }
+  currentPage.value = 1
   fetchStudents()
 })
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — it only resets the display page, no refetch needed.
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchStudents()
+})
+watch([groupStartDateFrom, groupStartDateTo, groupEndDateFrom, groupEndDateTo, birthDateFrom, birthDateTo, joinedDateFrom, joinedDateTo], () => {
+  currentPage.value = 1
+  fetchStudents()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchStudents()
+}, 400)
+watch([filterName, filterPhone, filterJshshr, filterGroupName], debouncedRefetch)
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchStudents()
 })
 
 const fetchCategories = async () => {
@@ -1726,97 +1782,17 @@ const mapStudent = (s) => {
   }
 }
 
-// The remaining header filters (name, phone, jshshr, group name, group
-// date ranges, sort) run entirely on the client against the already-
-// fetched `students` list — no per-keystroke network round trip, so
-// there's no debounce delay and no input re-render to steal focus/cursor
-// position. Category (like the scope tab) instead triggers a new backend
-// request — see the watchers above fetchStudents — since re-filtering a
-// ~6k-row "faol" tab client-side is exactly the slow path this is meant
-// to avoid; this filter here is just a redundant-but-harmless guard for
-// the brief window between changing the category and the refetch landing.
-// The client-side filter below still exists for that reason, even though
-// the fetched list is already narrowed by the time it usually runs.
-const filteredStudents = computed(() => {
-  let list = students.value.filter(s => branchStore.isBranchMatch(s))
-
-  if (filterName.value.trim()) {
-    const q = filterName.value.trim().toLowerCase()
-    list = list.filter(s => (s.name || '').toLowerCase().includes(q))
-  }
-  if (filterCategory.value) {
-    list = list.filter(s => s.category === filterCategory.value)
-  }
-  if (filterPhone.value.trim()) {
-    const q = filterPhone.value.replace(/\D/g, '')
-    if (q) {
-      list = list.filter(s => {
-        const p1 = (s.phone || '').replace(/\D/g, '')
-        const p2 = (s.phone2 || '').replace(/\D/g, '')
-        return p1.includes(q) || p2.includes(q)
-      })
-    }
-  }
-  if (filterJshshr.value.trim()) {
-    const q = filterJshshr.value.trim()
-    list = list.filter(s => (s.jshshr || '').includes(q))
-  }
-  if (filterGroupName.value.trim()) {
-    const q = filterGroupName.value.trim().toLowerCase()
-    list = list.filter(s => (s.groupName || '').toLowerCase().includes(q))
-  }
-  if (groupStartDateFrom.value) list = list.filter(s => s.groupStartedAtRaw && s.groupStartedAtRaw >= groupStartDateFrom.value)
-  if (groupStartDateTo.value) list = list.filter(s => s.groupStartedAtRaw && s.groupStartedAtRaw <= groupStartDateTo.value)
-  if (groupEndDateFrom.value) list = list.filter(s => s.groupEndsAtRaw && s.groupEndsAtRaw >= groupEndDateFrom.value)
-  if (groupEndDateTo.value) list = list.filter(s => s.groupEndsAtRaw && s.groupEndsAtRaw <= groupEndDateTo.value)
-  if (birthDateFrom.value) list = list.filter(s => s.birthDateRaw && s.birthDateRaw >= birthDateFrom.value)
-  if (birthDateTo.value) list = list.filter(s => s.birthDateRaw && s.birthDateRaw <= birthDateTo.value)
-  if (joinedDateFrom.value) list = list.filter(s => s.dateJoinedRaw && s.dateJoinedRaw >= joinedDateFrom.value)
-  if (joinedDateTo.value) list = list.filter(s => s.dateJoinedRaw && s.dateJoinedRaw <= joinedDateTo.value)
-
-  if (groupStartSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.groupStartedAtRaw || '').localeCompare(b.groupStartedAtRaw || '')
-      return groupStartSort.value === 'desc' ? -d : d
-    })
-  } else if (groupEndSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.groupEndsAtRaw || '').localeCompare(b.groupEndsAtRaw || '')
-      return groupEndSort.value === 'desc' ? -d : d
-    })
-  } else if (birthDateSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.birthDateRaw || '').localeCompare(b.birthDateRaw || '')
-      return birthDateSort.value === 'desc' ? -d : d
-    })
-  } else if (joinedDateSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.dateJoinedRaw || '').localeCompare(b.dateJoinedRaw || '')
-      return joinedDateSort.value === 'desc' ? -d : d
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+// Every header filter, sort, and page is applied server-side now (see
+// fetchStudents/ordering above) — `students` already holds exactly the
+// rows to display, in the right order, for the current page.
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredStudents.value.length / displayPageSize.value))
-})
-const displayedStudents = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredStudents.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredStudents.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchStudents()
 }
 
 const formatPhoneDisplay = (p) => {

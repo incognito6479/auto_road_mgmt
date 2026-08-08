@@ -561,11 +561,15 @@ class StudentViewSet(SoftDeleteModelViewSet):
     # Students without a group have a NULL group_started_at/group_ends_at;
     # nulls_last keeps them at the bottom regardless of sort direction,
     # instead of Postgres's default of sorting NULLs first on DESC.
-    GROUP_ORDERING_FIELDS = {
+    ORDERING_FIELDS = {
         "group_started_at": F("group_started_at").asc(nulls_last=True),
         "-group_started_at": F("group_started_at").desc(nulls_last=True),
         "group_ends_at": F("group_ends_at").asc(nulls_last=True),
         "-group_ends_at": F("group_ends_at").desc(nulls_last=True),
+        "birth_date": F("birth_date").asc(nulls_last=True),
+        "-birth_date": F("birth_date").desc(nulls_last=True),
+        "date_joined": F("date_joined").asc(nulls_last=True),
+        "-date_joined": F("date_joined").desc(nulls_last=True),
     }
 
     def get_queryset(self):
@@ -578,6 +582,14 @@ class StudentViewSet(SoftDeleteModelViewSet):
         group_name = self.request.query_params.get("group_name")
         has_group = self.request.query_params.get("has_group")
         ordering = self.request.query_params.get("ordering")
+        group_start_from = self.request.query_params.get("group_start_from")
+        group_start_to = self.request.query_params.get("group_start_to")
+        group_end_from = self.request.query_params.get("group_end_from")
+        group_end_to = self.request.query_params.get("group_end_to")
+        birth_date_from = self.request.query_params.get("birth_date_from")
+        birth_date_to = self.request.query_params.get("birth_date_to")
+        joined_date_from = self.request.query_params.get("joined_date_from")
+        joined_date_to = self.request.query_params.get("joined_date_to")
 
         if category:
             if category.isdigit():
@@ -628,21 +640,51 @@ class StudentViewSet(SoftDeleteModelViewSet):
                 queryset = queryset.filter(has_group_active_group)
             else:
                 queryset = queryset.exclude(has_group_active_group)
+        if birth_date_from:
+            queryset = queryset.filter(birth_date__gte=birth_date_from)
+        if birth_date_to:
+            queryset = queryset.filter(birth_date__lte=birth_date_to)
+        if joined_date_from:
+            queryset = queryset.filter(date_joined__date__gte=joined_date_from)
+        if joined_date_to:
+            queryset = queryset.filter(date_joined__date__lte=joined_date_to)
+        if group_start_from or group_start_to or group_end_from or group_end_to:
+            # Same "current enrollment" definition as the status filter above
+            # and get_current_student_enrollment in serializers.py — so these
+            # date filters always agree with what the row actually displays.
+            current_enrollment_group = Enrollment.objects.filter(
+                student=OuterRef("pk"), is_active=True
+            ).order_by("-created_at", "-id")
+            queryset = queryset.annotate(
+                current_group_started_at=Subquery(current_enrollment_group.values("group__started_at")[:1]),
+                current_group_ends_at=Subquery(current_enrollment_group.values("group__ends_at")[:1]),
+            )
+            if group_start_from:
+                queryset = queryset.filter(current_group_started_at__gte=group_start_from)
+            if group_start_to:
+                queryset = queryset.filter(current_group_started_at__lte=group_start_to)
+            if group_end_from:
+                queryset = queryset.filter(current_group_ends_at__gte=group_end_from)
+            if group_end_to:
+                queryset = queryset.filter(current_group_ends_at__lte=group_end_to)
 
         queryset = filter_by_branch(queryset, self.request, "branch")
         queryset = queryset.distinct()
 
-        if ordering in self.GROUP_ORDERING_FIELDS:
+        if ordering in self.ORDERING_FIELDS:
             # Same "current enrollment" definition as get_current_student_enrollment
             # in serializers.py (latest active enrollment) — so the group dates
             # sorted on here always match the ones StudentSerializer displays.
+            # birth_date/date_joined are plain fields and don't need this
+            # annotation, but it's harmless to attach regardless of which
+            # field is actually being sorted on.
             active_enrollment = Enrollment.objects.filter(
                 student=OuterRef("pk"), is_active=True
             ).order_by("-created_at", "-id")
             queryset = queryset.annotate(
                 group_started_at=Subquery(active_enrollment.values("group__started_at")[:1]),
                 group_ends_at=Subquery(active_enrollment.values("group__ends_at")[:1]),
-            ).order_by(self.GROUP_ORDERING_FIELDS[ordering], "-updated_at", "-date_joined")
+            ).order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-date_joined")
 
         # StudentSerializer's 17 SerializerMethodFields all resolve to a
         # single get_current_student_enrollment(student) call each — without
