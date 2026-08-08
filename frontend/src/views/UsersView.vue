@@ -679,6 +679,12 @@ const fetchUsers = async () => {
 }
 
 const filteredUsers = computed(() => {
+  // No branch filtering here on purpose: this is staff/account management,
+  // not branch-scoped operational data, and the backend already restricts
+  // admins to their own branch regardless — filtering by the navbar's
+  // (unrelated) branch selection on top of that only hid staff from
+  // superusers, e.g. the one admin account disappearing entirely whenever
+  // a different branch happened to be selected.
   let list = users.value.filter(u => {
     const role = filterRole.value
     // admin filter also includes superusers
@@ -689,8 +695,7 @@ const filteredUsers = computed(() => {
     const q = filterFullName.value.toLowerCase().trim()
     const fullName = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
     const matchSearch = !q || fullName.includes(q)
-    const matchBranch = branchStore.isBranchMatch(u)
-    return matchRole && matchSearch && matchBranch
+    return matchRole && matchSearch
   })
 
   if (dateJoinedFrom.value) list = list.filter(u => u.date_joined && u.date_joined.slice(0, 10) >= dateJoinedFrom.value)
