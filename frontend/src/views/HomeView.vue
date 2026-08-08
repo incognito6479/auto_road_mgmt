@@ -34,7 +34,7 @@
         <button class="quick-action-btn action-amber" @click="openAddCertModal">
           <span class="qa-icon">+</span> Sertifikat qo'shish
         </button>
-        <button v-if="authStore.isSuperuser" class="quick-action-btn action-teal" @click="openImportExcelModal">
+        <button v-if="authStore.isAdminOrSuperuser" class="quick-action-btn action-teal" @click="openImportExcelModal">
           <span class="qa-icon">+</span> Excel orqali guruh yuklash
         </button>
       </div>
@@ -601,7 +601,7 @@
             <template v-if="!importTaskId">
               <div class="form-group">
                 <label class="flabel required">Filial *</label>
-                <select v-model="importBranchId" class="form-input">
+                <select v-model="importBranchId" class="form-input" :disabled="!authStore.isSuperuser">
                   <option :value="null" disabled>Filialni tanlang</option>
                   <option v-for="b in branchStore.branches" :key="b.id" :value="b.id">{{ b.name }}</option>
                 </select>
@@ -943,6 +943,7 @@ async function submitAcceptPayment() {
       formData.append('method', payForm.value.method)
       if (payForm.value.notes) formData.append('notes', payForm.value.notes)
       formData.append('click_check_image', payCheckFile.value)
+      formData.append('branch', branchStore.activeBranchId ?? '')
       await api.post('/payments/', formData)
     } else {
       await api.post('/payments/', {
@@ -952,6 +953,7 @@ async function submitAcceptPayment() {
         status: 'accepted',
         method: payForm.value.method,
         notes: payForm.value.notes,
+        branch: branchStore.activeBranchId ?? null,
       })
     }
     closeAcceptPaymentModal()
@@ -1126,6 +1128,7 @@ async function submitPayTeacher() {
       status: teacherPayForm.value.status,
       method: teacherPayForm.value.method,
       notes: teacherPayForm.value.notes,
+      branch: branchStore.activeBranchId ?? null,
     })
     closePayTeacherModal()
     fetchDashboardStats()
@@ -1262,7 +1265,8 @@ let importPollTimer = null
 function openImportExcelModal() {
   importError.value = ''
   importSelectedFile.value = null
-  importBranchId.value = null
+  // Admins always import into their own branch — only a superuser picks.
+  importBranchId.value = authStore.isSuperuser ? null : (authStore.user?.branch ?? null)
   importFileInputRef.value?.reset()
   importTaskId.value = null
   importPolling.value = false

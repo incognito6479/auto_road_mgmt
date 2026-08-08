@@ -167,7 +167,7 @@
             <div class="info-row"><span class="info-label">O'quv joyi</span><span class="info-value">{{ enrollment.learning_place_name || '-' }}</span></div>
             <div class="info-row"><span class="info-label">O'quv vaqti</span><span class="info-value">{{ enrollment.learning_time || '-' }}</span></div>
             <div class="info-row"><span class="info-label">O'quv kunlari</span><span class="info-value">{{ enrollment.learning_days ? formatLearningDays(enrollment.learning_days) : '-' }}</span></div>
-            <div class="info-row">
+            <div class="info-row" v-if="!authStore.isStudent">
               <span class="info-label">Agent</span>
               <span v-if="enrollment.agent_name" class="info-value link-value" @click="goAgent(enrollment.agent)">{{ enrollment.agent_name }}</span>
               <span v-else class="info-value">-</span>
@@ -1077,10 +1077,12 @@ import AppLayout from '@/components/AppLayout.vue'
 import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 const student    = ref(null)
 const enrollment = ref(null)
@@ -1176,9 +1178,9 @@ const canLeaveReview = computed(() => !!(
 ))
 
 // Exam-pass certificate uploads are restricted to the teacher (coordinator)
-// role, plus superuser — never the student whose page this is.
+// role, plus admin/superuser — never the student whose page this is.
 const canUploadCertificate = computed(() => !!(
-  (authStore.user?.role === 'coordinator' || authStore.isSuperuser) &&
+  (authStore.user?.role === 'coordinator' || authStore.isAdminOrSuperuser) &&
   student.value && authStore.user?.id !== student.value.id
 ))
 
@@ -1715,7 +1717,8 @@ const submitLessonConfirmation = async () => {
       student: student.value.id,
       instructor: enrollment.value.instructor,
       car: lessonForm.value.car,
-      notes: lessonForm.value.notes || ''
+      notes: lessonForm.value.notes || '',
+      branch: branchStore.activeBranchId ?? null,
     })
 
     // 2. Create Notification for admins
@@ -1724,6 +1727,7 @@ const submitLessonConfirmation = async () => {
       note: `O'quvchi: ${student.value.full_name} | Instruktor: ${enrollment.value.instructor_name || '-'} | Avtomobil: ${carName} | Sana: ${todayDateFormatted.value}`,
       status: 'driving_lesson',
       target_id: student.value.id,
+      branch: branchStore.activeBranchId ?? null,
     })
 
     await fetchDrivingLessons()
@@ -1883,6 +1887,7 @@ async function submitGrant() {
       visits: grantForm.value.visits,
       start_date: grantForm.value.start_date,
       end_date: grantForm.value.end_date,
+      branch: branchStore.activeBranchId ?? null,
     })
     grantModal.value?.close()
     await fetchAutodromeGrants()
@@ -1927,7 +1932,8 @@ const submitAutodromeConfirmation = async () => {
       instructor: enrollment.value.instructor,
       lesson_type: 'autodrome',
       hours: autodromeForm.value.hours,
-      notes: autodromeForm.value.notes || ''
+      notes: autodromeForm.value.notes || '',
+      branch: branchStore.activeBranchId ?? null,
     })
 
     await api.post('/notifications/', {
@@ -1935,6 +1941,7 @@ const submitAutodromeConfirmation = async () => {
       note: `O'quvchi: ${student.value.full_name} | Instruktor: ${enrollment.value.instructor_name || '-'} | Soat: ${autodromeForm.value.hours} | Sana: ${todayDateFormatted.value}`,
       status: 'driving_lesson',
       target_id: student.value.id,
+      branch: branchStore.activeBranchId ?? null,
     })
 
     await fetchDrivingLessons()

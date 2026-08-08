@@ -33,6 +33,9 @@ export const useAuthStore = defineStore('auth', {
     /** Returning money to a student is superuser-only; admins are excluded. */
     canReturnMoney: (state) => !!(state.user && (state.user.is_superuser || state.user.role === 'superuser')),
 
+    /** Paying a bonus (to an agent, or to a teacher for a completion certificate) is superuser-only; admins are excluded. */
+    canPayBonus: (state) => !!(state.user && (state.user.is_superuser || state.user.role === 'superuser')),
+
     /** Accepting/among-staff money movement: superuser + admin only. */
     canManageFinances: (state) => !!(state.user && (state.user.is_superuser || state.user.role === 'superuser' || state.user.role === 'admin')),
 
@@ -62,6 +65,20 @@ export const useAuthStore = defineStore('auth', {
 
     /** Only students leave reviews for their teachers/instructors. */
     canLeaveReviews: (state) => !!(state.user && state.user.role === 'student'),
+
+    /**
+     * User-account management is superuser-only by default. Adding/editing
+     * non-superuser accounts can be opted in per-admin via the backend's
+     * Django permission check (has_perm) — can_add_users/can_change_users
+     * come from that, which is also how a superuser can grant a specific
+     * admin the capability via /admin/ without opening it to every admin.
+     * Deleting a user is never permission-based — can_delete_users is only
+     * ever true for a real superuser. Don't replace these with role checks.
+     */
+    canAddUsers: (state) => !!(state.user && state.user.can_add_users),
+    canChangeUsers: (state) => !!(state.user && state.user.can_change_users),
+    canDeleteUsers: (state) => !!(state.user && state.user.can_delete_users),
+    canManageUsers: (state) => !!(state.user && (state.user.can_add_users || state.user.can_change_users || state.user.can_delete_users)),
 
     /** Where this role lands right after login. */
     homeRoute() {

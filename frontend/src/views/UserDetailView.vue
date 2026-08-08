@@ -14,7 +14,7 @@
         <h2 class="page-main-title">{{ user?.full_name || 'Foydalanuvchi Ma\'lumotlari' }}</h2>
       </div>
 
-      <button v-if="authStore.isSuperuser && user" class="btn-edit-profile" @click="openEditModal">
+      <button v-if="authStore.canChangeUsers && user && (authStore.isSuperuser || (user.role !== 'superuser' && !user.is_superuser))" class="btn-edit-profile" @click="openEditModal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="margin-right: 6px;">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
           <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -190,8 +190,8 @@
         </template>
       </div>
 
-      <!-- Assigned Car(s) — visible to everyone, including students -->
-      <div class="linked-section" v-if="user.role === 'instructor'">
+      <!-- Assigned Car(s) — hidden from student viewers, per the student-role audit -->
+      <div class="linked-section" v-if="user.role === 'instructor' && !authStore.isStudent">
         <div class="section-header">
           <h3 class="section-title">Biriktirilgan Avtomobil</h3>
         </div>
@@ -566,6 +566,7 @@
             <thead>
               <tr>
                 <th>O'quvchi F.I.SH.</th>
+                <th>Avtomaktab</th>
                 <th>Kategoriya</th>
                 <th>Guruh nomi</th>
                 <th>Guruh boshlanishi</th>
@@ -588,6 +589,7 @@
                 <th>
                   <input v-model="studentTableSearch" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
                 </th>
+                <th></th>
                 <th>
                   <div class="select-wrap-relative">
                     <select v-model="studentTableCategoryFilter" class="col-filter-select">
@@ -730,6 +732,7 @@
                 <td class="td-name">
                   <div class="student-link">{{ e.student_name }}</div>
                 </td>
+                <td>{{ e.branch_name || '-' }}</td>
                 <td><span class="group-badge">{{ e.category_name || '-' }}</span></td>
                 <td class="td-group" @click.stop>
                   <span v-if="e.group" class="link-value" @click="goGroup(e.group)">{{ e.group_name || '-' }}</span>
@@ -976,7 +979,7 @@
       </div>
 
       <!-- Agent sifatida biriktirilgan o'quvchilar -->
-      <div class="linked-section" v-if="agentRecord">
+      <div class="linked-section" v-if="agentRecord && !authStore.isStudent">
         <div class="section-header">
           <h3 class="section-title">Agent sifatida biriktirilgan o'quvchilar</h3>
           <span class="count-badge">{{ filteredAgentReferredEnrollments.length }} ta o'quvchi</span>
@@ -1130,8 +1133,8 @@
         </template>
       </div>
 
-      <!-- Amaliy darslar tarixi (instructor only) -->
-      <div class="linked-section" v-if="user.role === 'instructor'">
+      <!-- Amaliy darslar tarixi (instructor only, hidden from student viewers) -->
+      <div class="linked-section" v-if="user.role === 'instructor' && !authStore.isStudent">
         <div class="section-header">
           <h3 class="section-title">Amaliy darslar tarixi</h3>
           <span class="count-badge">{{ filteredInstructorLessonStudents.length }} ta o'quvchi</span>
@@ -1343,7 +1346,7 @@
               <option value="coordinator">O'qituvchi</option>
               <option value="mechanic">Mexanik</option>
               <option value="admin">Admin</option>
-              <option value="superuser">Superuser</option>
+              <option v-if="authStore.isSuperuser" value="superuser">Superuser</option>
             </select>
           </div>
         </div>
@@ -1720,9 +1723,9 @@ const showCoordinatorColumn = computed(() => user.value?.role === 'instructor')
 const showInstructorColumn = computed(() => user.value?.role === 'coordinator')
 
 // Exam-pass certificate uploads are restricted to the teacher (coordinator)
-// role, plus superuser — regardless of whose detail page is viewed.
+// role, plus admin/superuser — regardless of whose detail page is viewed.
 const canUploadExamCert = computed(() => !!(
-  authStore.user?.role === 'coordinator' || authStore.isSuperuser
+  authStore.user?.role === 'coordinator' || authStore.isAdminOrSuperuser
 ))
 
 const reviews = ref([])
@@ -2307,7 +2310,7 @@ function changeStudentTablePage(page) {
 // Fixed columns (16) plus whichever of the counterpart teacher/instructor
 // columns is currently shown — kept in sync with the <thead> so the empty
 // state row spans the table correctly.
-const studentTableColspan = computed(() => 16 + (showCoordinatorColumn.value ? 1 : 0) + (showInstructorColumn.value ? 1 : 0))
+const studentTableColspan = computed(() => 17 + (showCoordinatorColumn.value ? 1 : 0) + (showInstructorColumn.value ? 1 : 0))
 
 watch([studentTableSearch, studentTableGroupFilter, studentTableCategoryFilter, filterExamCertStatus, filterCourseCertStatus, filterStatus, filterAgentName, filterLearningPlace, filterCounterpartName, groupStartSort, groupEndSort, bonusPaidDateSort, groupStartFrom, groupStartTo, groupEndFrom, groupEndTo, bonusPaidDateFrom, bonusPaidDateTo], () => {
   studentTableCurrentPage.value = 1

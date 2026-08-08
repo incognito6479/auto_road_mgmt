@@ -87,6 +87,33 @@ def _model_has_own_branch_field(model):
     return getattr(field, "many_to_one", False)
 
 
+def _resolve_write_branch_id(request):
+    """
+    The branch_id a new/updated row should be stamped with: superusers may
+    pass an explicit `branch` in the payload (this is how the navbar branch
+    selector stamps new records), defaulting to their own branch if omitted;
+    every other role is always forced to their own assigned branch,
+    regardless of what the client sends. Shared by every perform_create that
+    needs branch derivation beyond the base ViewSet's automatic handling
+    (i.e. viewsets with extra fields like `granted_by`/`student` to set
+    alongside `branch`).
+    """
+    user = getattr(request, "user", None)
+    is_super = bool(
+        user and user.is_authenticated and (user.is_superuser or user.role == User.Role.SUPERUSER)
+    )
+    if is_super:
+        raw_branch = None
+        if hasattr(request.data, "get"):
+            raw_branch = request.data.get("branch")
+        if raw_branch not in (None, "", "null"):
+            try:
+                return int(raw_branch)
+            except (TypeError, ValueError):
+                pass
+    return getattr(user, "branch_id", None)
+
+
 class SoftDeleteModelViewSet(viewsets.ModelViewSet):
     """
     A ModelViewSet where `destroy` performs a soft-delete:
@@ -110,6 +137,13 @@ class SoftDeleteModelViewSet(viewsets.ModelViewSet):
         if model is None or not _model_has_own_branch_field(model):
             serializer.save()
             return
+        serializer.save(branch_id=_resolve_write_branch_id(self.request))
+
+    def perform_update(self, serializer):
+        model = getattr(getattr(serializer, "Meta", None), "model", None)
+        if model is None or not _model_has_own_branch_field(model):
+            serializer.save()
+            return
 
         user = self.request.user
         is_super = bool(
@@ -117,22 +151,13 @@ class SoftDeleteModelViewSet(viewsets.ModelViewSet):
         )
 
         if is_super:
-            raw_branch = None
-            if hasattr(self.request.data, "get"):
-                raw_branch = self.request.data.get("branch")
-            if raw_branch not in (None, "", "null"):
-                try:
-                    serializer.save(branch_id=int(raw_branch))
-                    return
-                except (TypeError, ValueError):
-                    pass
-            if getattr(user, "branch_id", None):
-                serializer.save(branch_id=user.branch_id)
-                return
+            # Superusers may still explicitly reassign branch via payload
+            # (e.g. UsersView's branch picker); if the payload omits it,
+            # the existing value is left untouched.
             serializer.save()
             return
 
-        # Non-superusers: always their own branch, client value ignored entirely.
+        # Non-superusers: branch can never move off their own, regardless of payload.
         serializer.save(branch_id=getattr(user, "branch_id", None))
 
 
@@ -425,32 +450,67 @@ class UserViewSet(SoftDeleteModelViewSet):
         request.user.save(update_fields=["password"])
         return Response({"detail": "Parol muvaffaqiyatli o'zgartirildi."})
 
+    # User-account management is superuser-only by default. Adding/editing
+    # a non-superuser account (teacher/instructor/mechanic/admin) can be
+    # opted in per-admin via Django's has_perm() (which already returns
+    # True unconditionally for real superusers, so one check covers both)
+    # — a superuser grants it via /admin/ (Users -> that admin -> User
+    # permissions -> add/change "user"). Regardless of that grant, an
+    # admin can never create/edit a SUPERUSER-role account, and deleting a
+    # user is never permission-based — only a real superuser may do that.
+    @staticmethod
+    def _requests_superuser(request):
+        data = request.data
+        role = data.get("role") if hasattr(data, "get") else None
+        is_super_flag = data.get("is_superuser") if hasattr(data, "get") else None
+        return role == User.Role.SUPERUSER or is_super_flag in (True, "true", "True")
+
     def create(self, request, *args, **kwargs):
-        if not (request.user and (request.user.is_superuser or request.user.role == User.Role.SUPERUSER)):
+        if not (request.user and request.user.is_authenticated and request.user.has_perm("management.add_user")):
             return Response(
-                {"detail": "Faqat superuser foydalanuvchi yaratishi mumkin."},
+                {"detail": "Faqat superuser (yoki shunga ruxsat berilgan admin) foydalanuvchi yaratishi mumkin."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        if not is_superuser(request.user) and self._requests_superuser(request):
+            return Response(
+                {"detail": "Superuser hisobini faqat superuser yaratishi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        if not (request.user and (request.user.is_superuser or request.user.role == User.Role.SUPERUSER)):
+        if not (request.user and request.user.is_authenticated and request.user.has_perm("management.change_user")):
             return Response(
-                {"detail": "Faqat superuser foydalanuvchini tahrirlashi mumkin."},
+                {"detail": "Faqat superuser (yoki shunga ruxsat berilgan admin) foydalanuvchini tahrirlashi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
             )
+        if not is_superuser(request.user):
+            target = self.get_object()
+            if target.is_superuser or target.role == User.Role.SUPERUSER or self._requests_superuser(request):
+                return Response(
+                    {"detail": "Superuser hisobini faqat superuser tahrirlashi mumkin."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        if not (request.user and (request.user.is_superuser or request.user.role == User.Role.SUPERUSER)):
+        if not (request.user and request.user.is_authenticated and request.user.has_perm("management.change_user")):
             return Response(
-                {"detail": "Faqat superuser foydalanuvchini tahrirlashi mumkin."},
+                {"detail": "Faqat superuser (yoki shunga ruxsat berilgan admin) foydalanuvchini tahrirlashi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
             )
+        if not is_superuser(request.user):
+            target = self.get_object()
+            if target.is_superuser or target.role == User.Role.SUPERUSER or self._requests_superuser(request):
+                return Response(
+                    {"detail": "Superuser hisobini faqat superuser tahrirlashi mumkin."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
         return super().partial_update(request, *args, **kwargs)
 
+    # Deleting a user is never permission-based — only a real superuser.
     def destroy(self, request, *args, **kwargs):
-        if not (request.user and (request.user.is_superuser or request.user.role == User.Role.SUPERUSER)):
+        if not is_superuser(request.user):
             return Response(
                 {"detail": "Faqat superuser foydalanuvchini o'chirishi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
@@ -998,6 +1058,14 @@ class PaymentViewSet(SoftDeleteModelViewSet):
         elif ordering in self.ORDERING_FIELDS:
             queryset = queryset.order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-created_at")
 
+        # A student's payment history is always their own, regardless of
+        # what `?student=`/`?enrollment=`/etc. they pass — the filters above
+        # are client-controlled and would otherwise let a student view
+        # another student's payments by id.
+        request_user = self.request.user
+        if request_user and request_user.is_authenticated and request_user.role == User.Role.STUDENT:
+            queryset = queryset.filter(enrollment__student_id=request_user.id).exclude(status=Payment.Status.BONUS_TEACHER)
+
         return queryset
 
     @action(detail=False, methods=["get"], url_path="monthly-summary")
@@ -1075,11 +1143,16 @@ class PaymentViewSet(SoftDeleteModelViewSet):
                 {"detail": "To'lovni qabul qilish faqat admin va superuser uchun ruxsat etilgan."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        # Returning money is a superuser-only operation — admins may record
-        # every other kind of payment but never hand money back.
-        if request.data.get("status") == Payment.Status.RETURNED and not is_superuser(request.user):
+        # Returning money, and paying a bonus (to an agent, or to a
+        # teacher/instructor for a completion certificate — the latter
+        # normally only ever created via StudentCertificateViewSet.pay_bonus,
+        # but blocked here too so it can't be reached via a direct POST) are
+        # superuser-only operations — admins may record every other kind of
+        # payment but never hand money back or pay out a bonus.
+        superuser_only_statuses = {Payment.Status.RETURNED, Payment.Status.BONUS, Payment.Status.BONUS_TEACHER}
+        if request.data.get("status") in superuser_only_statuses and not is_superuser(request.user):
             return Response(
-                {"detail": "Pulni qaytarish faqat superuser uchun ruxsat etilgan."},
+                {"detail": "Pulni qaytarish yoki bonus to'lash faqat superuser uchun ruxsat etilgan."},
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().create(request, *args, **kwargs)
@@ -1102,48 +1175,41 @@ class PaymentViewSet(SoftDeleteModelViewSet):
 
         # No enrollment (e.g. a teacher's salary payment) — same branch
         # auto-assignment every other model gets via SoftDeleteModelViewSet.
-        is_super = bool(
-            user and user.is_authenticated and (user.is_superuser or user.role == User.Role.SUPERUSER)
-        )
-        if is_super:
-            raw_branch = None
-            if hasattr(self.request.data, "get"):
-                raw_branch = self.request.data.get("branch")
-            if raw_branch not in (None, "", "null"):
-                try:
-                    serializer.save(created_by=user, branch_id=int(raw_branch))
-                    return
-                except (TypeError, ValueError):
-                    pass
-            if getattr(user, "branch_id", None):
-                serializer.save(created_by=user, branch_id=user.branch_id)
-                return
-            serializer.save(created_by=user)
-            return
-        serializer.save(created_by=user, branch_id=getattr(user, "branch_id", None))
+        serializer.save(created_by=user, branch_id=_resolve_write_branch_id(self.request))
+
+    # Payments whose current OR requested status is a return/bonus/
+    # bonus_teacher stay superuser-only to edit or delete; every other
+    # payment (accepted/paid/bank) is editable/deletable by admin too.
+    SUPERUSER_ONLY_PAYMENT_STATUSES = {Payment.Status.RETURNED, Payment.Status.BONUS, Payment.Status.BONUS_TEACHER}
+
+    def _payment_write_needs_superuser(self, request, instance):
+        if is_superuser(request.user):
+            return False
+        statuses = {instance.status}
+        requested = request.data.get("status") if hasattr(request.data, "get") else None
+        if requested:
+            statuses.add(requested)
+        return bool(statuses & self.SUPERUSER_ONLY_PAYMENT_STATUSES)
 
     def update(self, request, *args, **kwargs):
-        if not (request.user and (request.user.is_superuser or request.user.role == User.Role.SUPERUSER)):
-            return Response(
-                {"detail": "Faqat superuser to'lov ma'lumotlarini tahrirlashi mumkin."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if not is_admin_or_superuser(request.user):
+            return Response({"detail": "Faqat admin va superuser to'lov ma'lumotlarini tahrirlashi mumkin."}, status=status.HTTP_403_FORBIDDEN)
+        if self._payment_write_needs_superuser(request, self.get_object()):
+            return Response({"detail": "Pulni qaytarish yoki bonus to'lovlarini faqat superuser tahrirlashi mumkin."}, status=status.HTTP_403_FORBIDDEN)
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        if not (request.user and (request.user.is_superuser or request.user.role == User.Role.SUPERUSER)):
-            return Response(
-                {"detail": "Faqat superuser to'lov ma'lumotlarini tahrirlashi mumkin."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if not is_admin_or_superuser(request.user):
+            return Response({"detail": "Faqat admin va superuser to'lov ma'lumotlarini tahrirlashi mumkin."}, status=status.HTTP_403_FORBIDDEN)
+        if self._payment_write_needs_superuser(request, self.get_object()):
+            return Response({"detail": "Pulni qaytarish yoki bonus to'lovlarini faqat superuser tahrirlashi mumkin."}, status=status.HTTP_403_FORBIDDEN)
         return super().partial_update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        if not (request.user and (request.user.is_superuser or request.user.role == User.Role.SUPERUSER)):
-            return Response(
-                {"detail": "Faqat superuser to'lov ma'lumotlarini tahrirlashi mumkin."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if not is_admin_or_superuser(request.user):
+            return Response({"detail": "Faqat admin va superuser to'lov ma'lumotlarini o'chirishi mumkin."}, status=status.HTTP_403_FORBIDDEN)
+        if self._payment_write_needs_superuser(request, self.get_object()):
+            return Response({"detail": "Pulni qaytarish yoki bonus to'lovlarini faqat superuser o'chirishi mumkin."}, status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)
 
 
@@ -1179,7 +1245,13 @@ class GroupViewSet(SoftDeleteModelViewSet):
         # fetch across the app (e.g. StudentDetailView, just to read
         # started_at/ends_at by id) was paying to prefetch and serialize a
         # roster it never reads, same waste as the list case below.
-        if self.action == "retrieve" and self.request.query_params.get("with_enrollments"):
+        # Students never get the nested roster, even for their own group —
+        # it would leak other students' names/payments/notes to a classmate.
+        is_student = bool(
+            self.request.user and self.request.user.is_authenticated
+            and self.request.user.role == User.Role.STUDENT
+        )
+        if self.action == "retrieve" and self.request.query_params.get("with_enrollments") and not is_student:
             enrollments_qs = annotate_enrollment_paid_amount(
                 Enrollment.objects.filter(is_active=True).select_related(*ENROLLMENT_SELECT_RELATED)
             )
@@ -1217,6 +1289,24 @@ class GroupViewSet(SoftDeleteModelViewSet):
             qs = qs.order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-created_at")
 
         return qs
+
+    # Students never see the group list/roster page — the frontend has no
+    # such route for them — but they DO need to retrieve their own current
+    # group (StudentDetailView reads its status to gate lesson-confirm
+    # buttons), so retrieve is scoped to "a group the student is actively
+    # enrolled in", not blocked outright like list is.
+    def list(self, request, *args, **kwargs):
+        if request.user and request.user.role == User.Role.STUDENT:
+            return Response({"detail": "Guruhlar ro'yxatini ko'rish sizga ruxsat etilmagan."}, status=status.HTTP_403_FORBIDDEN)
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        user = request.user
+        if user and user.role == User.Role.STUDENT:
+            group_id = kwargs.get("pk")
+            if not Enrollment.objects.filter(student=user, group_id=group_id, is_active=True).exists():
+                return Response({"detail": "Bu guruh sizga tegishli emas."}, status=status.HTTP_403_FORBIDDEN)
+        return super().retrieve(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
@@ -1397,6 +1487,18 @@ class AgentViewSet(SoftDeleteModelViewSet):
             qs = qs.filter(Q(phone__icontains=phone_cleaned) | Q(phone2__icontains=phone_cleaned))
         return filter_by_branch(qs, self.request, "branch")
 
+    # Agents (recruiter identity/phone) are never visible to students —
+    # not in a list, not a single record, regardless of branch scoping.
+    def list(self, request, *args, **kwargs):
+        if request.user and request.user.role == User.Role.STUDENT:
+            return Response({"detail": "Agent ma'lumotlarini ko'rish sizga ruxsat etilmagan."}, status=status.HTTP_403_FORBIDDEN)
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        if request.user and request.user.role == User.Role.STUDENT:
+            return Response({"detail": "Agent ma'lumotlarini ko'rish sizga ruxsat etilmagan."}, status=status.HTTP_403_FORBIDDEN)
+        return super().retrieve(request, *args, **kwargs)
+
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
             return Response(
@@ -1458,6 +1560,14 @@ class CarViewSet(SoftDeleteModelViewSet):
     @staticmethod
     def _can_write(user):
         return is_admin_or_superuser(user) or (user and user.is_authenticated and user.role == User.Role.MECHANIC)
+
+    # Students may still hit the filtered list (e.g. `?instructor=<id>`,
+    # used by StudentDetailView to show their instructor's car name for
+    # lesson confirmation), but never a car's own detail page.
+    def retrieve(self, request, *args, **kwargs):
+        if request.user and request.user.role == User.Role.STUDENT:
+            return Response({"detail": "Avtomobil tafsilotlarini ko'rish sizga ruxsat etilmagan."}, status=status.HTTP_403_FORBIDDEN)
+        return super().retrieve(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         if not self._can_write(request.user):
@@ -1647,8 +1757,7 @@ class AutodromeAccessGrantViewSet(SoftDeleteModelViewSet):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        user = self.request.user
-        serializer.save(granted_by=user, branch_id=getattr(user, "branch_id", None))
+        serializer.save(granted_by=self.request.user, branch_id=_resolve_write_branch_id(self.request))
 
     # create() above was the only restriction here — update/destroy were
     # wide open to any authenticated user (a student could grant/revoke
@@ -1867,15 +1976,23 @@ class StudentCertificateViewSet(SoftDeleteModelViewSet):
             qs = qs.filter(student_id=student)
         if coordinator:
             qs = qs.filter(coordinator_id=coordinator)
-        return filter_by_branch(qs, self.request, "branch")
+        qs = filter_by_branch(qs, self.request, "branch")
+
+        # A student may only ever see their own certificates, regardless of
+        # what `?student=` id they pass.
+        request_user = self.request.user
+        if request_user and request_user.is_authenticated and request_user.role == User.Role.STUDENT:
+            qs = qs.filter(student_id=request_user.id)
+
+        return qs
 
     def create(self, request, *args, **kwargs):
         user = request.user
         if not (user and user.is_authenticated and (
-            user.role == User.Role.COORDINATOR or user.is_superuser or user.role == User.Role.SUPERUSER
+            user.role == User.Role.COORDINATOR or is_admin_or_superuser(user)
         )):
             return Response(
-                {"detail": "Faqat o'qituvchi yoki superuser sertifikat yuklashi mumkin."},
+                {"detail": "Faqat o'qituvchi, admin yoki superuser sertifikat yuklashi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().create(request, *args, **kwargs)
@@ -1891,7 +2008,7 @@ class StudentCertificateViewSet(SoftDeleteModelViewSet):
             # Uploader isn't the coordinator themself (e.g. superuser) —
             # fall back to the student's currently assigned coordinator, if any.
             coordinator = enrollment.coordinator if (enrollment and enrollment.coordinator) else None
-        cert = serializer.save(coordinator=coordinator, branch_id=getattr(user, "branch_id", None), is_active=True)
+        cert = serializer.save(coordinator=coordinator, branch_id=_resolve_write_branch_id(self.request), is_active=True)
 
         student_label = cert.student.full_name or cert.student.phone
         coordinator_label = cert.coordinator.full_name if cert.coordinator else (user.full_name or user.phone)
@@ -2168,9 +2285,9 @@ def import_excel_upload(request):
     thousands of rows, far past what should run inline in a request/response
     cycle. Returns a task id the frontend polls via import_excel_status.
     """
-    if not is_superuser(request.user):
+    if not is_admin_or_superuser(request.user):
         return Response(
-            {"detail": "Excel orqali import qilish faqat superuser uchun ruxsat etilgan."},
+            {"detail": "Excel orqali import qilish faqat admin va superuser uchun ruxsat etilgan."},
             status=status.HTTP_403_FORBIDDEN,
         )
 
@@ -2178,7 +2295,10 @@ def import_excel_upload(request):
     if not uploaded:
         return Response({"detail": "Fayl yuborilmadi."}, status=status.HTTP_400_BAD_REQUEST)
 
-    branch_id = request.data.get("branch")
+    # Admins may only ever import into their own branch — same rule as
+    # every other write in the app — regardless of what `branch` they pass;
+    # only a superuser's explicit choice is honored.
+    branch_id = _resolve_write_branch_id(request)
     if not branch_id:
         return Response({"detail": "Filial tanlanishi shart."}, status=status.HTTP_400_BAD_REQUEST)
     if not Branch.objects.filter(pk=branch_id).exists():
@@ -2208,9 +2328,9 @@ def import_excel_upload(request):
 @api_view(["GET"])
 def import_excel_status(request, task_id):
     """Polled by the frontend while the import task runs in the background."""
-    if not is_superuser(request.user):
+    if not is_admin_or_superuser(request.user):
         return Response(
-            {"detail": "Excel orqali import qilish faqat superuser uchun ruxsat etilgan."},
+            {"detail": "Excel orqali import qilish faqat admin va superuser uchun ruxsat etilgan."},
             status=status.HTTP_403_FORBIDDEN,
         )
 

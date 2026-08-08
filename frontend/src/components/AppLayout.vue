@@ -369,9 +369,9 @@ function handleOutsideClick(e) {
 }
 
 async function fetchUnreadCount() {
-  // Notifications polling is superuser-only — other roles don't need to hit
-  // the backend on a timer just to keep a badge count updated.
-  if (!authStore.isSuperuser) return
+  // Notifications polling is for admin/superuser only — other roles don't
+  // need to hit the backend on a timer just to keep a badge count updated.
+  if (!authStore.isAdminOrSuperuser) return
   try {
     const res = await api.get('/notifications/unread_count/')
     unreadNotifCount.value = res.data.unread_count || 0
@@ -414,7 +414,7 @@ onMounted(() => {
   document.addEventListener('click', handleOutsideClick)
   window.addEventListener('resize', handleViewportResize)
   fetchUnreadCount()
-  if (authStore.isSuperuser) {
+  if (authStore.isAdminOrSuperuser) {
     unreadTimer = setInterval(fetchUnreadCount, 5000)
   }
   syncBranchForCurrentUser()

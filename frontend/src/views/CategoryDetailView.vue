@@ -605,7 +605,7 @@
           </div>
 
           <!-- Row 6: Checkboxes, Custom Price & Notes -->
-          <div v-if="authStore.isSuperuser" class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
+          <div v-if="authStore.canManageFinances" class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <input
                 id="std-enrolled-free"
@@ -626,7 +626,7 @@
             </div>
           </div>
 
-          <div v-if="authStore.isSuperuser && newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
+          <div v-if="authStore.canManageFinances && newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
             <label for="std-enrolled-amount" class="form-label">Shartnoma summasi (so'm)</label>
             <input
               id="std-enrolled-amount"
@@ -887,11 +887,13 @@ import AppLayout from '@/components/AppLayout.vue'
 import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const categoryId = route.params.id
 
 const goToStudentDetail = (id) => {
@@ -1011,6 +1013,7 @@ const startGroup = async () => {
       category: parseInt(categoryId, 10),
       status: 'started',
       student_ids: selectedStudentIds.value,
+      branch: branchStore.activeBranchId ?? null,
     }
     await api.post('/groups/', payload)
 
@@ -1721,7 +1724,8 @@ const saveStudent = async () => {
       enrolled_amount: (s.has_custom_price && !s.enrolled_free) ? parseInt(s.enrolled_amount, 10) : null,
       can_view_payments: s.can_view_payments !== false,
       notes: s.notes,
-      status: 'new' // Set student status to new!
+      status: 'new', // Set student status to new!
+      branch: branchStore.activeBranchId ?? null,
     }
     
     if (selectedStudentPhoto.value || selectedPassportPhoto.value) {

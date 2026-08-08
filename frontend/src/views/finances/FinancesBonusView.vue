@@ -7,7 +7,7 @@
         <p class="page-sub-title">Hamkor agentlarga to'langan bonuslar va qaytarilgan bonuslar ro'yxati</p>
       </div>
 
-      <button class="btn-primary-action btn-gold" @click="openCreateModal">
+      <button v-if="authStore.canPayBonus" class="btn-primary-action btn-gold" @click="openCreateModal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -791,7 +791,8 @@ async function savePayment() {
         amount: form.value.amount,
         status: 'bonus',
         method: form.value.method,
-        notes: form.value.notes
+        notes: form.value.notes,
+        branch: branchStore.activeBranchId ?? null,
       })
     }
     closeModal()

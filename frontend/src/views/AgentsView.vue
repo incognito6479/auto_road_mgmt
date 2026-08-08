@@ -304,7 +304,7 @@ const filteredAgents = computed(() => {
     }
   }
 
-  return list
+  return list.slice().sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
 })
 
 // pageSizeOption now purely controls how many of the *filtered* rows show
@@ -521,7 +521,7 @@ const saveAgent = async () => {
     if (isEditing.value) {
       await api.patch(`/agents/${editingId.value}/`, payload)
     } else {
-      await api.post('/agents/', payload)
+      await api.post('/agents/', { ...payload, branch: branchStore.activeBranchId ?? null })
     }
     closeModal()
     fetchAgents()

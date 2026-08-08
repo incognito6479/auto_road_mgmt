@@ -68,7 +68,6 @@
               <th>
                 <div class="select-wrap">
                   <select v-model="filterCategory" class="col-filter-select">
-                    <option value="">Barchasi</option>
                     <option v-for="c in categories" :key="c.id" :value="c.name">
                       {{ c.name }}
                     </option>
@@ -749,7 +748,7 @@
           </div>
 
           <!-- Row 6: Checkboxes, Custom Price & Notes -->
-          <div v-if="authStore.isSuperuser" class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
+          <div v-if="authStore.canManageFinances" class="form-group checkbox-group" style="grid-column: span 3; display: flex; align-items: center; gap: 24px; margin-top: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <input
                 id="std-enrolled-free"
@@ -770,7 +769,7 @@
             </div>
           </div>
 
-          <div v-if="authStore.isSuperuser && newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
+          <div v-if="authStore.canManageFinances && newStudent.has_custom_price && !newStudent.enrolled_free" class="form-group" style="grid-column: span 3;">
             <label for="std-enrolled-amount" class="form-label">Shartnoma summasi (so'm)</label>
             <input
               id="std-enrolled-amount"
@@ -1211,7 +1210,10 @@ const goToStudentDetail = (id) => {
 
 // ── Filter state ─────────────────────────────────────────────
 const filterStatus = ref('Faol')
-const filterCategory = ref('')
+// Persisted so revisiting this view (e.g. back from a student's detail
+// page) restores the last category filter instead of re-loading the
+// full ~6k-row "faol" tab unfiltered.
+const filterCategory = ref(localStorage.getItem('students_filter_category') || '')
 const filterName = ref('')
 const filterPhone = ref('')
 const filterJshshr = ref('')
@@ -1595,9 +1597,11 @@ const formattedEnrolledAmount = computed({
 })
 
 // ── Fetch data ───────────────────────────────────────────────
-// Only the data scope (status/has-group tab) and how many rows to pull
-// need a backend round trip; every other filter below (name, phone,
-// jshshr, group name, category, group date ranges, sort) is purely
+// The data scope (status/has-group tab) and category both need a backend
+// round trip — category especially, since the "faol" tab alone is ~6k rows
+// in production and fetching all of them just to filter by category
+// client-side was the dominant cost. Every other filter below (name,
+// phone, jshshr, group name, group date ranges, sort) is purely
 // client-side against the already-fetched `students` list — see
 // displayedStudents below.
 const fetchStudents = async () => {
@@ -1612,6 +1616,10 @@ const fetchStudents = async () => {
     }
     if (filterStatus.value) params.status = filterStatus.value
     if (groupFilter.value) params.has_group = groupFilter.value
+    // Narrows the "faol" tab's ~6k-row dataset server-side instead of
+    // pulling every active student just to filter by category client-side —
+    // the single biggest win available for that tab's load time.
+    if (filterCategory.value) params.category = filterCategory.value
 
     const response = await api.get('/students/', { params })
     const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
@@ -1625,9 +1633,18 @@ const fetchStudents = async () => {
   }
 }
 
-// Only the scope tab needs a backend round trip; everything else
-// filters/sorts instantly on the client.
+// The scope tab and category filter both need a backend round trip (see
+// fetchStudents); everything else still filters/sorts instantly on the
+// client against whatever that pair narrowed the dataset down to.
 watch(activeTab, () => {
+  fetchStudents()
+})
+watch(filterCategory, (val) => {
+  if (val) {
+    localStorage.setItem('students_filter_category', val)
+  } else {
+    localStorage.removeItem('students_filter_category')
+  }
   fetchStudents()
 })
 // pageSizeOption now purely controls how many of the *filtered* rows show
@@ -1709,14 +1726,17 @@ const mapStudent = (s) => {
   }
 }
 
-// All header filters (name, category, phone, jshshr, group name, group
+// The remaining header filters (name, phone, jshshr, group name, group
 // date ranges, sort) run entirely on the client against the already-
-// fetched `students` list — no per-keystroke or per-filter network round
-// trip, so there's no debounce delay and no input re-render to steal
-// focus/cursor position, AND they see every row matching the active tab
-// (fetchStudents always pulls all of them), not just whatever page
-// happened to be loaded. Only the scope tab triggers a new backend
-// request (see watch above fetchStudents).
+// fetched `students` list — no per-keystroke network round trip, so
+// there's no debounce delay and no input re-render to steal focus/cursor
+// position. Category (like the scope tab) instead triggers a new backend
+// request — see the watchers above fetchStudents — since re-filtering a
+// ~6k-row "faol" tab client-side is exactly the slow path this is meant
+// to avoid; this filter here is just a redundant-but-harmless guard for
+// the brief window between changing the category and the refetch landing.
+// The client-side filter below still exists for that reason, even though
+// the fetched list is already narrowed by the time it usually runs.
 const filteredStudents = computed(() => {
   let list = students.value.filter(s => branchStore.isBranchMatch(s))
 
@@ -1813,8 +1833,16 @@ onMounted(async () => {
   if (!authStore.user) {
     await authStore.fetchCurrentUser()
   }
-  fetchStudents()
-  fetchCategories()
+  await fetchCategories()
+  // No persisted category yet (first-ever visit) — default to the first
+  // one from the DB so the initial "faol" tab load is scoped server-side
+  // from the start instead of pulling all ~6k rows unfiltered. Setting
+  // this triggers the filterCategory watcher's own fetchStudents() call.
+  if (!filterCategory.value && categories.value.length > 0) {
+    filterCategory.value = categories.value[0].name
+  } else {
+    fetchStudents()
+  }
   // Fetched here (not just when the "add student" modal opens) so the edit
   // modal's instructor/coordinator/agent selects always have options, even
   // if the user opens "edit" without ever opening "add" first.
@@ -2165,7 +2193,8 @@ const saveStudent = async () => {
       enrolled_amount: (s.has_custom_price && !s.enrolled_free) ? parseInt(s.enrolled_amount, 10) : null,
       can_view_payments: s.can_view_payments !== false,
       notes: s.notes,
-      status: 'new' // Register new student in new status
+      status: 'new', // Register new student in new status
+      branch: branchStore.activeBranchId ?? null,
     }
     
     if (selectedStudentPhoto.value || selectedPassportPhoto.value) {

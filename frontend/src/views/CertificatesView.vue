@@ -49,7 +49,7 @@
               <th>Shartnoma</th>
               <th>To'langan</th>
               <th>Qarzdorlik</th>
-              <th v-if="authStore.isSuperuser" style="text-align: right;">Amallar</th>
+              <th v-if="authStore.isAdminOrSuperuser" style="text-align: right;">Amallar</th>
             </tr>
             <tr class="col-filter-row">
               <th>
@@ -158,12 +158,12 @@
                   </select>
                 </div>
               </th>
-              <th v-if="authStore.isSuperuser"></th>
+              <th v-if="authStore.isAdminOrSuperuser"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="displayedEnrollments.length === 0">
-              <td :colspan="authStore.isSuperuser ? 14 : 13" class="td-empty">Filtrlarga mos sertifikat topilmadi</td>
+              <td :colspan="authStore.isAdminOrSuperuser ? 14 : 13" class="td-empty">Filtrlarga mos sertifikat topilmadi</td>
             </tr>
             <tr v-for="e in displayedEnrollments" :key="e.id" class="table-row clickable-row" @click="goStudent(e.student)">
               <td class="td-name">{{ e.student_name || 'Noma\'lum' }}</td>
@@ -199,7 +199,7 @@
                 <span v-if="getDebt(e) > 0" class="debt-chip">-{{ formatMoney(getDebt(e)) }}</span>
                 <span v-else class="paid-chip">To'langan</span>
               </td>
-              <td v-if="authStore.isSuperuser" style="text-align: right;" @click.stop>
+              <td v-if="authStore.isAdminOrSuperuser" style="text-align: right;" @click.stop>
                 <div class="row-actions">
                   <button class="btn-action-edit" @click="openEditModal(e)" title="Tahrirlash">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">

@@ -96,6 +96,7 @@
             <thead>
               <tr>
                 <th>O'quvchi F.I.SH.</th>
+                <th>Avtomaktab</th>
                 <th>Holati</th>
                 <th>Eslatmasi</th>
                 <th>O'quv Joyi</th>
@@ -120,6 +121,7 @@
                     placeholder="Ism bo'yicha qidirish..."
                   />
                 </th>
+                <th></th>
                 <th>
                   <div class="select-wrap-relative">
                     <select v-model="filterEnrollmentStatus" class="col-filter-select">
@@ -217,6 +219,7 @@
               </tr>
               <tr v-for="e in filteredEnrollments" :key="e.id" class="stbl-row clickable-row" @click="goToStudentDetail(e.student)">
                 <td class="td-name link-value">{{ e.student_name }}</td>
+                <td>{{ e.branch_name || '-' }}</td>
                 <td><span class="enroll-status-chip" :class="e.status">{{ enrollmentStatusText(e.status) }}</span></td>
                 <td class="td-notes">{{ e.notes || '-' }}</td>
 
@@ -729,11 +732,13 @@ import AppLayout from '@/components/AppLayout.vue'
 import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatLearningDays } from '@/utils/formatters'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 const groupId = route.params.id
 
 const goToStudentDetail = (studentId) => {
@@ -867,7 +872,7 @@ const weekdayOptions = [
 ]
 
 const tableColspan = computed(() => {
-  let count = 8 // Student Name, Status, Notes, Learning Place, Learning Time, Learning Days, Sertifikat, Imtihon sertifikati
+  let count = 9 // Student Name, Branch, Status, Notes, Learning Place, Learning Time, Learning Days, Sertifikat, Imtihon sertifikati
   if (authStore.isAdminOrSuperuser || authStore.isMechanic) count += 3 // Coordinator, Instructor, Agent
   if (!authStore.isMechanic) count += 4 // Shartnoma, Paid, Qoldiq, Amallar
   return count
@@ -1028,7 +1033,7 @@ const filteredEnrollments = computed(() => {
       if (filterExamCert.value === 'not_uploaded' && hasExamCert) return false
     }
     return true
-  })
+  }).slice().sort((a, b) => (a.student_name || '').localeCompare(b.student_name || ''))
 })
 
 const formatDate = (dateStr) => {
@@ -1141,7 +1146,8 @@ const submitPayment = async () => {
         amount: parseInt(paymentForm.value.amount, 10),
         method: paymentForm.value.method,
         notes: paymentForm.value.notes.trim() || null,
-        status: 'accepted'
+        status: 'accepted',
+        branch: branchStore.activeBranchId ?? null,
       }
       await api.post('/payments/', payload)
     }

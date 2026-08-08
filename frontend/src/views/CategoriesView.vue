@@ -193,9 +193,11 @@ import { useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 // ── State ───────────────────────────────────────────
 const categories = ref([])
@@ -375,6 +377,7 @@ const saveCategory = async () => {
       name: nameTrimmed,
       price: parseInt(newCategory.value.price),
       duration: parseFloat(newCategory.value.duration),
+      branch: branchStore.activeBranchId ?? null,
     }
     await api.post('/categories/', payload)
     closeModal()

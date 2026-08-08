@@ -373,7 +373,7 @@ const savePlace = async () => {
     if (isEditing.value) {
       await api.patch(`/learning-places/${editingId.value}/`, payload)
     } else {
-      await api.post('/learning-places/', payload)
+      await api.post('/learning-places/', { ...payload, branch: branchStore.activeBranchId ?? null })
     }
     closePlaceModal()
     await fetchPlaces()

@@ -828,6 +828,7 @@ async function submitStartGroup() {
       category: parseInt(startGroupCategoryId.value, 10),
       status: 'started',
       student_ids: selectedWaitingIds.value,
+      branch: branchStore.activeBranchId ?? null,
     }
     await api.post('/groups/', payload)
     closeStartGroupModal()

@@ -8,11 +8,11 @@
         <p class="page-sub-title">{{ rolePageSub }}</p>
       </div>
       <div style="display: flex; align-items: center; gap: 14px;">
-        <label v-if="authStore.isSuperuser" class="show-inactive-toggle">
+        <label v-if="authStore.canManageUsers" class="show-inactive-toggle">
           <input type="checkbox" v-model="showInactive" />
           O'chirilganlarni ko'rsatish
         </label>
-        <button v-if="authStore.isSuperuser" class="btn-add" @click="openCreateModal">
+        <button v-if="authStore.canAddUsers" class="btn-add" @click="openCreateModal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16" style="margin-right: 6px;">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -46,7 +46,7 @@
               <th>Pasport</th>
               <th>Qo'shilgan sana</th>
               <th v-if="showInactive">Holati</th>
-              <th v-if="authStore.isSuperuser" style="text-align: center; width: 100px;">Amallar</th>
+              <th v-if="authStore.canChangeUsers || authStore.canDeleteUsers" style="text-align: center; width: 100px;">Amallar</th>
             </tr>
             <tr class="col-filter-row">
               <th></th>
@@ -83,7 +83,7 @@
                 </div>
               </th>
               <th v-if="showInactive"></th>
-              <th v-if="authStore.isSuperuser"></th>
+              <th v-if="authStore.canChangeUsers || authStore.canDeleteUsers"></th>
             </tr>
           </thead>
           <tbody>
@@ -118,15 +118,15 @@
                   {{ u.is_active === false ? 'Nofaol' : 'Faol' }}
                 </span>
               </td>
-              <td v-if="authStore.isSuperuser" style="text-align: center;" @click.stop>
+              <td v-if="authStore.canChangeUsers || authStore.canDeleteUsers" style="text-align: center;" @click.stop>
                 <div class="action-btn-group">
-                  <button class="btn-action btn-edit" @click.stop="openEditModal(u)" title="Tahrirlash">
+                  <button v-if="authStore.canChangeUsers && (authStore.isSuperuser || (u.role !== 'superuser' && !u.is_superuser))" class="btn-action btn-edit" @click.stop="openEditModal(u)" title="Tahrirlash">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button v-if="u.is_active !== false" class="btn-action btn-delete" @click.stop="openDeleteModal(u)" title="O'chirish (is_active=false)">
+                  <button v-if="u.is_active !== false && authStore.canDeleteUsers" class="btn-action btn-delete" @click.stop="openDeleteModal(u)" title="O'chirish (is_active=false)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -311,7 +311,7 @@
           </div>
 
           <select v-if="isEditing" v-model="userForm.role" class="form-input">
-            <option v-for="r in roleOptions" :key="r.key" :value="r.key">{{ r.title }}</option>
+            <option v-for="r in visibleRoleOptions" :key="r.key" :value="r.key">{{ r.title }}</option>
           </select>
 
           <div v-else class="role-cards-grid">
@@ -531,7 +531,7 @@ function setDateJoinedSort(direction) {
 }
 const filterRole = computed(() => route.query.role || '')
 const showInactive = ref(false)
-const tableColspan = computed(() => 7 + (showInactive.value ? 1 : 0) + (authStore.isSuperuser ? 1 : 0))
+const tableColspan = computed(() => 7 + (showInactive.value ? 1 : 0) + ((authStore.canChangeUsers || authStore.canDeleteUsers) ? 1 : 0))
 
 // ── Row-fetch-count selector ──────────────────────────────────
 // fetchUsers always pulls the entire scope (see page_size: 100000 below) so
@@ -633,13 +633,19 @@ const createButtonLabel = computed(() => {
   return opt ? `Yangi ${opt.title}` : 'Yangi Foydalanuvchi'
 })
 
+// Only a real superuser may create/promote a superuser account — even an
+// admin granted add/change permission never sees this option.
+const visibleRoleOptions = computed(() => (
+  authStore.isSuperuser ? roleOptions : roleOptions.filter(r => r.key !== 'superuser')
+))
+
 // When creating via a navlink (filterRole is set), show only that role card.
 // When editing or no role filter is active, show all options.
 const modalRoleOptions = computed(() => {
   if (!isEditing.value && filterRole.value) {
-    return roleOptions.filter(r => r.key === filterRole.value)
+    return visibleRoleOptions.value.filter(r => r.key === filterRole.value)
   }
-  return roleOptions
+  return visibleRoleOptions.value
 })
 
 const isRoleLocked = computed(() => !isEditing.value && filterRole.value !== '')
@@ -694,6 +700,12 @@ const filteredUsers = computed(() => {
     list = list.slice().sort((a, b) => {
       const d = (a.date_joined || '').localeCompare(b.date_joined || '')
       return dateJoinedSort.value === 'desc' ? -d : d
+    })
+  } else {
+    list = list.slice().sort((a, b) => {
+      const nameA = a.full_name || `${a.first_name || ''} ${a.last_name || ''}`.trim()
+      const nameB = b.full_name || `${b.first_name || ''} ${b.last_name || ''}`.trim()
+      return nameA.localeCompare(nameB)
     })
   }
 
@@ -824,8 +836,8 @@ function onUserFileChange(e) {
 
 // Modal logic
 const openCreateModal = () => {
-  if (!authStore.isSuperuser) {
-    alert("Faqat superuser foydalanuvchi yaratishi mumkin.")
+  if (!authStore.canAddUsers) {
+    alert("Foydalanuvchi yaratishga ruxsatingiz yo'q.")
     return
   }
   isEditing.value = false
@@ -857,8 +869,12 @@ const openCreateModal = () => {
 }
 
 const openEditModal = (u) => {
-  if (!authStore.isSuperuser) {
-    alert("Faqat superuser foydalanuvchini tahrirlashi mumkin.")
+  if (!authStore.canChangeUsers) {
+    alert("Foydalanuvchini tahrirlashga ruxsatingiz yo'q.")
+    return
+  }
+  if (!authStore.isSuperuser && (u.role === 'superuser' || u.is_superuser)) {
+    alert("Superuser hisobini faqat superuser tahrirlashi mumkin.")
     return
   }
   isEditing.value = true
@@ -903,8 +919,12 @@ const closeUserModal = () => {
 }
 
 const saveUser = async () => {
-  if (!authStore.isSuperuser) {
-    modalError.value = "Faqat superuser foydalanuvchini saqlashi mumkin."
+  if (isEditing.value ? !authStore.canChangeUsers : !authStore.canAddUsers) {
+    modalError.value = "Foydalanuvchini saqlashga ruxsatingiz yo'q."
+    return
+  }
+  if (!authStore.isSuperuser && userForm.value.role === 'superuser') {
+    modalError.value = "Superuser hisobini faqat superuser yaratishi/tahrirlashi mumkin."
     return
   }
 
@@ -1002,7 +1022,7 @@ const saveUser = async () => {
 
 // Delete logic
 const openDeleteModal = (u) => {
-  if (!authStore.isSuperuser) {
+  if (!authStore.canDeleteUsers) {
     alert("Faqat superuser foydalanuvchini o'chirishi mumkin.")
     return
   }

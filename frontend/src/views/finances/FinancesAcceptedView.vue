@@ -387,7 +387,7 @@
               <td>{{ p.notes || '-' }}</td>
               <td style="text-align: right;">
                 <div class="row-actions">
-                  <template v-if="authStore.isSuperuser">
+                  <template v-if="authStore.isAdminOrSuperuser">
                     <button class="btn-action-edit" @click="openEditModal(p)" title="Tahrirlash">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>

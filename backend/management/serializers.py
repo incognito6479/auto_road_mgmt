@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
-from django.db.models import Sum
+from django.db.models import Sum, Q
 
 from datetime import timedelta
 from management.models import Branch, Category, User, Enrollment, Payment, Group, LearningPlace, Agent, Holidays, Car, CarAssignmentHistory, CarWash, DrivingLessons, AutodromeAccessGrant, Notification, TeacherReview, StudentCertificate, Attendance
@@ -210,6 +210,32 @@ class UserSerializer(serializers.ModelSerializer):
         required=False,
         style={"input_type": "password"},
     )
+    # User-account management is superuser-only by default. Adding/editing
+    # non-superuser accounts (teacher/instructor/mechanic/admin) can be
+    # opted in per-admin via Django's built-in permission system — a
+    # superuser grants management.add_user/change_user to a specific admin
+    # via /admin/, and has_perm() already returns True unconditionally for
+    # actual superusers too, so one check covers both. Deleting a user is
+    # NEVER permission-based — only a real superuser may deactivate an
+    # account, regardless of what's granted in /admin/.
+    can_add_users = serializers.SerializerMethodField()
+    can_change_users = serializers.SerializerMethodField()
+    can_delete_users = serializers.SerializerMethodField()
+
+    def get_can_add_users(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+        return bool(user and user.is_authenticated and user.has_perm("management.add_user"))
+
+    def get_can_change_users(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+        return bool(user and user.is_authenticated and user.has_perm("management.change_user"))
+
+    def get_can_delete_users(self, obj):
+        request = self.context.get("request")
+        user = request.user if request else None
+        return bool(user and user.is_authenticated and (user.is_superuser or user.role == User.Role.SUPERUSER))
 
     full_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     phone2 = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -249,6 +275,9 @@ class UserSerializer(serializers.ModelSerializer):
             "is_active",
             "is_staff",
             "is_superuser",
+            "can_add_users",
+            "can_change_users",
+            "can_delete_users",
             "date_joined",
         ]
         read_only_fields = ["id", "is_active", "date_joined", "certificate_added_date"]
@@ -392,10 +421,16 @@ class StudentSerializer(serializers.ModelSerializer):
         return enrollment.coordinator.full_name if (enrollment and enrollment.coordinator) else None
 
     def get_agent(self, obj):
+        request = self.context.get("request")
+        if request and getattr(request.user, "role", None) == User.Role.STUDENT:
+            return None
         enrollment = get_current_student_enrollment(obj)
         return enrollment.agent_id if enrollment else None
 
     def get_agent_name(self, obj):
+        request = self.context.get("request")
+        if request and getattr(request.user, "role", None) == User.Role.STUDENT:
+            return None
         enrollment = get_current_student_enrollment(obj)
         return enrollment.agent.full_name if (enrollment and enrollment.agent) else None
 
@@ -751,6 +786,7 @@ class AgentSerializer(serializers.ModelSerializer):
         if user:
             attrs["full_name"] = user.full_name or ""
             attrs["phone"] = user.phone
+            attrs["phone2"] = user.phone2 or ""
         else:
             full_name = attrs.get("full_name", getattr(self.instance, "full_name", None))
             phone = attrs.get("phone", getattr(self.instance, "phone", None))
@@ -800,6 +836,18 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             "is_active", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "is_active", "created_at", "updated_at"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Referral/agent identity is never shown to the student it's attached
+        # to — hide it here rather than only in the frontend, since this
+        # serializer is reachable directly via a student's own enrollments.
+        request = self.context.get("request")
+        if request and getattr(request.user, "role", None) == User.Role.STUDENT:
+            data["agent"] = None
+            data["agent_name"] = None
+            data["agent_phone"] = None
+        return data
 
     def get_instructor_name(self, obj):
         if obj.instructor:
@@ -1191,6 +1239,14 @@ class TeacherReviewSerializer(serializers.ModelSerializer):
     def validate_teacher(self, value):
         if value.role not in (User.Role.INSTRUCTOR, User.Role.COORDINATOR):
             raise serializers.ValidationError("Faqat instruktor yoki o'qituvchiga sharh qoldirish mumkin.")
+        request = self.context.get("request")
+        user = request.user if request else None
+        if user and getattr(user, "role", None) == User.Role.STUDENT:
+            is_assigned = Enrollment.objects.filter(student=user, is_active=True).filter(
+                Q(instructor=value) | Q(coordinator=value)
+            ).exists()
+            if not is_assigned:
+                raise serializers.ValidationError("Faqat o'zingizning instruktor yoki o'qituvchingizga sharh qoldira olasiz.")
         return value
 
 

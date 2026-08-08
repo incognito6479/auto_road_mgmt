@@ -156,6 +156,7 @@
               <thead>
                 <tr>
                   <th>O'quvchi F.I.SH.</th>
+                  <th>Avtomaktab</th>
                   <th>Kategoriya</th>
                   <th>Guruh</th>
                   <th>Guruh boshlanishi</th>
@@ -175,6 +176,7 @@
                   <th>
                     <input v-model="filterStudentName" class="col-filter-input" type="text" placeholder="Ism bo'yicha qidirish..." />
                   </th>
+                  <th></th>
                   <th>
                     <div class="select-wrap-relative">
                       <select v-model="filterCategory" class="col-filter-select">
@@ -334,7 +336,7 @@
               </thead>
               <tbody>
                 <tr v-if="paginatedEnrollmentsWithBonus.length === 0">
-                  <td colspan="15" class="td-empty">Filtrlarga mos o'quvchi topilmadi</td>
+                  <td colspan="16" class="td-empty">Filtrlarga mos o'quvchi topilmadi</td>
                 </tr>
                 <tr v-for="item in paginatedEnrollmentsWithBonus" :key="item.id" class="table-row">
                   <td class="td-name">
@@ -342,6 +344,7 @@
                       {{ item.student_name || 'Noma\'lum' }}
                     </router-link>
                   </td>
+                  <td>{{ item.branch_name || '-' }}</td>
                   <td><span class="cat-badge">{{ item.category_name || '-' }}</span></td>
                   <td>
                     <span v-if="item.group" class="link-value" @click="goGroup(item.group)">{{ item.group_name || '-' }}</span>
@@ -370,7 +373,7 @@
                   </td>
                   <td>
                     <button
-                      v-if="!item.bonusPayment && authStore.isStaff"
+                      v-if="!item.bonusPayment && authStore.canPayBonus"
                       class="btn-pay-bonus"
                       @click="openPayBonusModal(item)"
                     >
@@ -666,11 +669,13 @@ import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { useBranchStore } from '@/stores/branch'
 import { formatMoney, formatPhone, formatDate } from '@/utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 const agent = ref(null)
 const loading = ref(true)
@@ -1063,7 +1068,8 @@ async function submitBonusPayment() {
       amount: payForm.value.amount,
       method: payForm.value.method,
       status: 'bonus',
-      notes: payForm.value.notes || `Bonus payment for ${selectedEnrollment.value.student_name}`
+      notes: payForm.value.notes || `Bonus payment for ${selectedEnrollment.value.student_name}`,
+      branch: branchStore.activeBranchId ?? null,
     })
 
     closePayModal()
