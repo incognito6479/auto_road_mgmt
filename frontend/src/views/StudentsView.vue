@@ -1214,10 +1214,10 @@ const goToStudentDetail = (id) => {
 
 // ── Filter state ─────────────────────────────────────────────
 const filterStatus = ref('Faol')
-// Persisted so revisiting this view (e.g. back from a student's detail
-// page) restores the last category filter instead of re-loading the
-// full ~6k-row "faol" tab unfiltered.
-const filterCategory = ref(localStorage.getItem('students_filter_category') || '')
+// Defaults to "Barchasi" (all categories) on every visit — category is
+// now server-side paginated (page_size=50 by default), so this no longer
+// means serializing thousands of rows in one response like it used to.
+const filterCategory = ref('')
 const filterName = ref('')
 const filterPhone = ref('')
 const filterJshshr = ref('')
@@ -1683,12 +1683,7 @@ watch(activeTab, () => {
   currentPage.value = 1
   fetchStudents()
 })
-watch(filterCategory, (val) => {
-  if (val) {
-    localStorage.setItem('students_filter_category', val)
-  } else {
-    localStorage.removeItem('students_filter_category')
-  }
+watch(filterCategory, () => {
   currentPage.value = 1
   fetchStudents()
 })
@@ -1811,15 +1806,7 @@ onMounted(async () => {
     await authStore.fetchCurrentUser()
   }
   await fetchCategories()
-  // No persisted category yet (first-ever visit) — default to the first
-  // one from the DB so the initial "faol" tab load is scoped server-side
-  // from the start instead of pulling all ~6k rows unfiltered. Setting
-  // this triggers the filterCategory watcher's own fetchStudents() call.
-  if (!filterCategory.value && categories.value.length > 0) {
-    filterCategory.value = categories.value[0].name
-  } else {
-    fetchStudents()
-  }
+  fetchStudents()
   // Fetched here (not just when the "add student" modal opens) so the edit
   // modal's instructor/coordinator/agent selects always have options, even
   // if the user opens "edit" without ever opening "add" first.
