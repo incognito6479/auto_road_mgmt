@@ -13,7 +13,7 @@ from urllib.parse import quote
 from celery.result import AsyncResult
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Q, OuterRef, Subquery, F, Sum, Count, Prefetch, IntegerField
+from django.db.models import Q, OuterRef, Subquery, F, Sum, Count, Prefetch, IntegerField, ExpressionWrapper
 from django.db.models.functions import TruncMonth, Coalesce
 from django.http import HttpResponse
 from django.utils import timezone
@@ -399,6 +399,13 @@ class UserViewSet(SoftDeleteModelViewSet):
     serializer_class = UserSerializer
     pagination_class = StandardPagination
 
+    ORDERING_FIELDS = {
+        "date_joined": F("date_joined").asc(nulls_last=True),
+        "-date_joined": F("date_joined").desc(nulls_last=True),
+        "full_name": F("full_name").asc(nulls_last=True),
+        "-full_name": F("full_name").desc(nulls_last=True),
+    }
+
     def get_queryset(self):
         # Default (no ?status=) keeps the class queryset — active users only.
         # ?status=inactive / ?status=all opts into seeing soft-deleted users,
@@ -413,9 +420,17 @@ class UserViewSet(SoftDeleteModelViewSet):
         qs = qs.select_related("branch")
         role = self.request.query_params.get("role")
         search = self.request.query_params.get("search")
+        date_joined_from = self.request.query_params.get("date_joined_from")
+        date_joined_to = self.request.query_params.get("date_joined_to")
+        ordering = self.request.query_params.get("ordering")
 
         if role:
-            qs = qs.filter(role=role)
+            # The "Adminlar" tab also shows superuser accounts, same as the
+            # frontend's own role-filter used to do client-side.
+            if role == User.Role.ADMIN:
+                qs = qs.filter(Q(role=User.Role.ADMIN) | Q(is_superuser=True))
+            else:
+                qs = qs.filter(role=role)
         if search:
             qs = qs.filter(
                 Q(full_name__icontains=search) |
@@ -423,7 +438,18 @@ class UserViewSet(SoftDeleteModelViewSet):
                 Q(last_name__icontains=search) |
                 Q(phone__icontains=search)
             )
-        return filter_by_branch(qs, self.request, "branch")
+        if date_joined_from:
+            qs = qs.filter(date_joined__date__gte=date_joined_from)
+        if date_joined_to:
+            qs = qs.filter(date_joined__date__lte=date_joined_to)
+
+        qs = filter_by_branch(qs, self.request, "branch")
+
+        # UsersView defaults to alphabetical-by-name when no explicit sort
+        # (e.g. the date-joined column sort) is active.
+        if ordering in self.ORDERING_FIELDS:
+            return qs.order_by(self.ORDERING_FIELDS[ordering], "-updated_at")
+        return qs.order_by(F("full_name").asc(nulls_last=True), "-updated_at")
 
     @action(detail=False, methods=["get"])
     def me(self, request):
@@ -456,14 +482,18 @@ class UserViewSet(SoftDeleteModelViewSet):
     # True unconditionally for real superusers, so one check covers both)
     # — a superuser grants it via /admin/ (Users -> that admin -> User
     # permissions -> add/change "user"). Regardless of that grant, an
-    # admin can never create/edit a SUPERUSER-role account, and deleting a
-    # user is never permission-based — only a real superuser may do that.
+    # admin can only ever create/edit teacher (coordinator)/instructor/
+    # mechanic accounts — never ADMIN or SUPERUSER-role accounts — and
+    # deleting a user is never permission-based — only a real superuser
+    # may do that.
+    PRIVILEGED_ROLES = (User.Role.ADMIN, User.Role.SUPERUSER)
+
     @staticmethod
-    def _requests_superuser(request):
+    def _requests_privileged_role(request):
         data = request.data
         role = data.get("role") if hasattr(data, "get") else None
         is_super_flag = data.get("is_superuser") if hasattr(data, "get") else None
-        return role == User.Role.SUPERUSER or is_super_flag in (True, "true", "True")
+        return role in UserViewSet.PRIVILEGED_ROLES or is_super_flag in (True, "true", "True")
 
     def create(self, request, *args, **kwargs):
         if not (request.user and request.user.is_authenticated and request.user.has_perm("management.add_user")):
@@ -471,9 +501,9 @@ class UserViewSet(SoftDeleteModelViewSet):
                 {"detail": "Faqat superuser (yoki shunga ruxsat berilgan admin) foydalanuvchi yaratishi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        if not is_superuser(request.user) and self._requests_superuser(request):
+        if not is_superuser(request.user) and self._requests_privileged_role(request):
             return Response(
-                {"detail": "Superuser hisobini faqat superuser yaratishi mumkin."},
+                {"detail": "Admin faqat o'qituvchi, instruktor yoki mexanik hisobi yaratishi mumkin — admin/superuser hisobini faqat superuser yaratishi mumkin."},
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().create(request, *args, **kwargs)
@@ -486,9 +516,9 @@ class UserViewSet(SoftDeleteModelViewSet):
             )
         if not is_superuser(request.user):
             target = self.get_object()
-            if target.is_superuser or target.role == User.Role.SUPERUSER or self._requests_superuser(request):
+            if target.is_superuser or target.role in self.PRIVILEGED_ROLES or self._requests_privileged_role(request):
                 return Response(
-                    {"detail": "Superuser hisobini faqat superuser tahrirlashi mumkin."},
+                    {"detail": "Admin faqat o'qituvchi, instruktor yoki mexanik hisobini tahrirlashi mumkin — admin/superuser hisobini faqat superuser tahrirlashi mumkin."},
                     status=status.HTTP_403_FORBIDDEN
                 )
         return super().update(request, *args, **kwargs)
@@ -501,9 +531,9 @@ class UserViewSet(SoftDeleteModelViewSet):
             )
         if not is_superuser(request.user):
             target = self.get_object()
-            if target.is_superuser or target.role == User.Role.SUPERUSER or self._requests_superuser(request):
+            if target.is_superuser or target.role in self.PRIVILEGED_ROLES or self._requests_privileged_role(request):
                 return Response(
-                    {"detail": "Superuser hisobini faqat superuser tahrirlashi mumkin."},
+                    {"detail": "Admin faqat o'qituvchi, instruktor yoki mexanik hisobini tahrirlashi mumkin — admin/superuser hisobini faqat superuser tahrirlashi mumkin."},
                     status=status.HTTP_403_FORBIDDEN
                 )
         return super().partial_update(request, *args, **kwargs)
@@ -570,6 +600,10 @@ class StudentViewSet(SoftDeleteModelViewSet):
         "-birth_date": F("birth_date").desc(nulls_last=True),
         "date_joined": F("date_joined").asc(nulls_last=True),
         "-date_joined": F("date_joined").desc(nulls_last=True),
+        "full_name": F("full_name").asc(nulls_last=True),
+        "-full_name": F("full_name").desc(nulls_last=True),
+        "payment_amount": F("student_payment_amount_agg").asc(nulls_last=True),
+        "-payment_amount": F("student_payment_amount_agg").desc(nulls_last=True),
     }
 
     def get_queryset(self):
@@ -671,6 +705,32 @@ class StudentViewSet(SoftDeleteModelViewSet):
         queryset = filter_by_branch(queryset, self.request, "branch")
         queryset = queryset.distinct()
 
+        # Computed here (rather than after the ordering block below) so
+        # "payment_amount"/"-payment_amount" ordering can reference this
+        # annotation — StudentSerializer.get_payment_amount was the one
+        # remaining per-row query after the prefetch further down (one
+        # Payment aggregate per student) — same fix as
+        # get_current_student_enrollment: compute it once for the whole
+        # list instead of once per row. Two-step annotate
+        # (current_enrollment_id, then a Subquery keyed off it) rather
+        # than one nested Subquery, since OuterRef can't reach past an
+        # intermediate Subquery's own OuterRef.
+        current_enrollment_for_payment = Enrollment.objects.filter(
+            student=OuterRef("pk"), is_active=True
+        ).order_by("-created_at", "-id")
+        queryset = queryset.annotate(
+            current_enrollment_id_for_payment=Subquery(current_enrollment_for_payment.values("id")[:1])
+        )
+        paid_amount_sq = (
+            Payment.objects.filter(enrollment_id=OuterRef("current_enrollment_id_for_payment"), is_active=True)
+            .values("enrollment_id")
+            .annotate(total=Sum("amount"))
+            .values("total")
+        )
+        queryset = queryset.annotate(
+            student_payment_amount_agg=Coalesce(Subquery(paid_amount_sq), 0, output_field=IntegerField())
+        )
+
         if ordering in self.ORDERING_FIELDS:
             # Same "current enrollment" definition as get_current_student_enrollment
             # in serializers.py (latest active enrollment) — so the group dates
@@ -703,29 +763,6 @@ class StudentViewSet(SoftDeleteModelViewSet):
             Prefetch("enrollments", queryset=current_enrollments_qs, to_attr="current_enrollment_list")
         )
 
-        # StudentSerializer.get_payment_amount was the one remaining
-        # per-row query after the prefetch above (one Payment aggregate per
-        # student) — same fix as get_current_student_enrollment: compute it
-        # once for the whole list instead of once per row. Two-step
-        # annotate (current_enrollment_id, then a Subquery keyed off it)
-        # rather than one nested Subquery, since OuterRef can't reach past
-        # an intermediate Subquery's own OuterRef.
-        current_enrollment_for_payment = Enrollment.objects.filter(
-            student=OuterRef("pk"), is_active=True
-        ).order_by("-created_at", "-id")
-        queryset = queryset.annotate(
-            current_enrollment_id_for_payment=Subquery(current_enrollment_for_payment.values("id")[:1])
-        )
-        paid_amount_sq = (
-            Payment.objects.filter(enrollment_id=OuterRef("current_enrollment_id_for_payment"), is_active=True)
-            .values("enrollment_id")
-            .annotate(total=Sum("amount"))
-            .values("total")
-        )
-        queryset = queryset.annotate(
-            student_payment_amount_agg=Coalesce(Subquery(paid_amount_sq), 0, output_field=IntegerField())
-        )
-
         return queryset
 
 
@@ -751,6 +788,8 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
         "-group_ends_at": F("group__ends_at").desc(nulls_last=True),
         "paid_amount": F("paid_amount_agg").asc(nulls_last=True),
         "-paid_amount": F("paid_amount_agg").desc(nulls_last=True),
+        "certificate_added_date": F("student__certificate_added_date").asc(nulls_last=True),
+        "-certificate_added_date": F("student__certificate_added_date").desc(nulls_last=True),
     }
 
     def get_queryset(self):
@@ -775,6 +814,11 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
         group_end_from = self.request.query_params.get("group_end_from")
         group_end_to = self.request.query_params.get("group_end_to")
         ordering = self.request.query_params.get("ordering")
+        certif = self.request.query_params.get("certif")
+        cert_date_from = self.request.query_params.get("cert_date_from")
+        cert_date_to = self.request.query_params.get("cert_date_to")
+        coordinator_name = self.request.query_params.get("coordinator_name")
+        has_coordinator = self.request.query_params.get("has_coordinator")
 
         if student:
             queryset = queryset.filter(student_id=student)
@@ -804,6 +848,24 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(enrolled_amount=enrolled_amount)
         if has_debt and has_debt.lower() in ("1", "true", "yes"):
             queryset = queryset.filter(enrolled_free=False, enrolled_amount__gt=F("paid_amount_agg"))
+        elif has_debt and has_debt.lower() in ("0", "false", "no", "none"):
+            queryset = queryset.exclude(enrolled_free=False, enrolled_amount__gt=F("paid_amount_agg"))
+        if certif:
+            queryset = queryset.filter(
+                Q(student__certificate_series__icontains=certif) |
+                Q(student__certificate_number__icontains=certif)
+            )
+        if cert_date_from:
+            queryset = queryset.filter(student__certificate_added_date__date__gte=cert_date_from)
+        if cert_date_to:
+            queryset = queryset.filter(student__certificate_added_date__date__lte=cert_date_to)
+        if coordinator_name:
+            queryset = queryset.filter(coordinator__full_name__icontains=coordinator_name)
+        if has_coordinator is not None:
+            if has_coordinator.lower() in ("1", "true", "yes"):
+                queryset = queryset.filter(coordinator__isnull=False)
+            else:
+                queryset = queryset.filter(coordinator__isnull=True)
         if group_start_from:
             queryset = queryset.filter(group__started_at__gte=group_start_from)
         if group_start_to:
@@ -838,6 +900,25 @@ class EnrollmentViewSet(SoftDeleteModelViewSet):
             total=Sum("debt_amount_agg"), count=Count("id")
         )
         return Response({"total": agg["total"] or 0, "count": agg["count"] or 0})
+
+    @action(detail=False, methods=["get"], url_path="metrics-summary")
+    def metrics_summary(self, request):
+        """
+        Aggregate count/paid-amount/active-count/distinct-staff for the
+        current filter set (same filters as the list endpoint) — pages
+        whose metric cards need to reflect every matching row, not just
+        the current page, once the list itself is paginated.
+        """
+        qs = self.get_queryset()
+        total_paid = qs.aggregate(total=Sum("paid_amount_agg"))["total"] or 0
+        not_canceled = qs.exclude(status=Enrollment.Status.CANCELED)
+        return Response({
+            "count": qs.count(),
+            "active_count": qs.filter(status=Enrollment.Status.ENROLLED).count(),
+            "total_paid": total_paid,
+            "distinct_coordinators": not_canceled.exclude(coordinator__isnull=True).values("coordinator").distinct().count(),
+            "distinct_instructors": not_canceled.exclude(instructor__isnull=True).values("instructor").distinct().count(),
+        })
 
     # Enrollment write access wasn't restricted at all before this — since
     # get_queryset only narrows by explicit filter params (never by
@@ -1469,9 +1550,30 @@ class LearningPlaceViewSet(SoftDeleteModelViewSet):
     serializer_class = LearningPlaceSerializer
     pagination_class = StandardPagination
 
+    ORDERING_FIELDS = {
+        "created_at": F("created_at").asc(nulls_last=True),
+        "-created_at": F("created_at").desc(nulls_last=True),
+    }
+
     def get_queryset(self):
         qs = super().get_queryset()
-        return filter_by_branch(qs, self.request, "branch")
+        name = self.request.query_params.get("name")
+        date_from = self.request.query_params.get("date_from")
+        date_to = self.request.query_params.get("date_to")
+        ordering = self.request.query_params.get("ordering")
+
+        if name:
+            qs = qs.filter(place_name__icontains=name.strip())
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        qs = filter_by_branch(qs, self.request, "branch")
+
+        if ordering in self.ORDERING_FIELDS:
+            qs = qs.order_by(self.ORDERING_FIELDS[ordering], "-updated_at")
+        return qs
 
     def create(self, request, *args, **kwargs):
         if not is_admin_or_superuser(request.user):
@@ -1527,7 +1629,10 @@ class AgentViewSet(SoftDeleteModelViewSet):
         if phone:
             phone_cleaned = re.sub(r"\D", "", phone)
             qs = qs.filter(Q(phone__icontains=phone_cleaned) | Q(phone2__icontains=phone_cleaned))
-        return filter_by_branch(qs, self.request, "branch")
+        qs = filter_by_branch(qs, self.request, "branch")
+        # AgentsView always sorts alphabetically by name — no sort toggle in
+        # the UI, so this is unconditional rather than an `ordering` param.
+        return qs.order_by("full_name")
 
     # Agents (recruiter identity/phone) are never visible to students —
     # not in a list, not a single record, regardless of branch scoping.
@@ -1578,12 +1683,28 @@ class CarViewSet(SoftDeleteModelViewSet):
     serializer_class = CarSerializer
     pagination_class = StandardPagination
 
+    # `oil_remaining` isn't a real column — it's oil_change_interval_km
+    # minus (mileage - oil_change_mileage), matching the frontend's own
+    # oilRemaining() computation exactly, expressed as a queryset
+    # annotation so it can be ordered on server-side.
+    ORDERING_FIELDS = {
+        "policy_date": F("policy_date").asc(nulls_last=True),
+        "-policy_date": F("policy_date").desc(nulls_last=True),
+        "tech_inspection_date": F("tech_inspection_date").asc(nulls_last=True),
+        "-tech_inspection_date": F("tech_inspection_date").desc(nulls_last=True),
+        "last_washed_at": F("last_washed_at").asc(nulls_last=True),
+        "-last_washed_at": F("last_washed_at").desc(nulls_last=True),
+        "oil_remaining": F("oil_remaining_calc").asc(nulls_last=True),
+        "-oil_remaining": F("oil_remaining_calc").desc(nulls_last=True),
+    }
+
     def get_queryset(self):
         queryset = super().get_queryset()
         car_name = self.request.query_params.get("car_name") or self.request.query_params.get("search")
         status_param = self.request.query_params.get("status")
         instructor_param = self.request.query_params.get("instructor")
         instructor_name = self.request.query_params.get("instructor_name")
+        ordering = self.request.query_params.get("ordering")
         if car_name:
             queryset = queryset.filter(car_name__icontains=car_name)
         if status_param:
@@ -1592,6 +1713,16 @@ class CarViewSet(SoftDeleteModelViewSet):
             queryset = queryset.filter(instructor_id=instructor_param)
         if instructor_name:
             queryset = queryset.filter(instructor__full_name__icontains=instructor_name)
+
+        if ordering in self.ORDERING_FIELDS:
+            if ordering.lstrip("-") == "oil_remaining":
+                queryset = queryset.annotate(
+                    oil_remaining_calc=ExpressionWrapper(
+                        F("oil_change_interval_km") - (F("mileage") - F("oil_change_mileage")),
+                        output_field=IntegerField(),
+                    )
+                )
+            queryset = queryset.order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-created_at")
         return queryset
 
     # Matches canEditCars in the frontend's auth store (admin/superuser/
@@ -1717,12 +1848,40 @@ class DrivingLessonsViewSet(SoftDeleteModelViewSet):
     serializer_class = DrivingLessonsSerializer
     pagination_class = StandardPagination
 
+    ORDERING_FIELDS = {
+        "lesson_date": F("lesson_date").asc(nulls_last=True),
+        "-lesson_date": F("lesson_date").desc(nulls_last=True),
+        "group_started_at": F("current_group_started_at").asc(nulls_last=True),
+        "-group_started_at": F("current_group_started_at").desc(nulls_last=True),
+        "group_ends_at": F("current_group_ends_at").asc(nulls_last=True),
+        "-group_ends_at": F("current_group_ends_at").desc(nulls_last=True),
+    }
+
     def get_queryset(self):
-        qs = super().get_queryset()
+        # DrivingLessonsSerializer's group/group_name/group_started_at/
+        # group_ends_at fields all resolve to get_current_student_enrollment
+        # (obj.student) — without this prefetch, every row on a page
+        # independently re-queries its student's enrollments.
+        current_enrollments_qs = Enrollment.objects.filter(is_active=True).select_related("group").order_by("-created_at", "-id")
+        qs = super().get_queryset().select_related("student", "instructor", "car", "branch").prefetch_related(
+            Prefetch("student__enrollments", queryset=current_enrollments_qs, to_attr="current_enrollment_list")
+        )
         student = self.request.query_params.get("student")
         instructor = self.request.query_params.get("instructor")
         car = self.request.query_params.get("car")
         lesson_type = self.request.query_params.get("lesson_type")
+        student_name = self.request.query_params.get("student_name")
+        instructor_name = self.request.query_params.get("instructor_name")
+        car_name = self.request.query_params.get("car_name")
+        lesson_date_from = self.request.query_params.get("lesson_date_from")
+        lesson_date_to = self.request.query_params.get("lesson_date_to")
+        group_name = self.request.query_params.get("group_name")
+        group_start_from = self.request.query_params.get("group_start_from")
+        group_start_to = self.request.query_params.get("group_start_to")
+        group_end_from = self.request.query_params.get("group_end_from")
+        group_end_to = self.request.query_params.get("group_end_to")
+        ordering = self.request.query_params.get("ordering")
+
         if student:
             qs = qs.filter(student_id=student)
         if instructor:
@@ -1731,7 +1890,47 @@ class DrivingLessonsViewSet(SoftDeleteModelViewSet):
             qs = qs.filter(car_id=car)
         if lesson_type:
             qs = qs.filter(lesson_type=lesson_type)
-        return filter_by_branch(qs, self.request, "branch")
+        if student_name:
+            qs = qs.filter(student__full_name__icontains=student_name)
+        if instructor_name:
+            qs = qs.filter(instructor__full_name__icontains=instructor_name)
+        if car_name:
+            qs = qs.filter(car__car_name__icontains=car_name)
+        if lesson_date_from:
+            qs = qs.filter(lesson_date__date__gte=lesson_date_from)
+        if lesson_date_to:
+            qs = qs.filter(lesson_date__date__lte=lesson_date_to)
+
+        # DrivingLessons has no direct group FK — a lesson's "group" is the
+        # student's group via their current (latest active) enrollment,
+        # same definition used everywhere else in this codebase. A student
+        # with multiple concurrent enrollments only ever matches their most
+        # recent one here, same as get_current_student_enrollment.
+        if group_name or group_start_from or group_start_to or group_end_from or group_end_to or ordering in ("group_started_at", "-group_started_at", "group_ends_at", "-group_ends_at"):
+            current_enrollment = Enrollment.objects.filter(
+                student=OuterRef("student"), is_active=True
+            ).order_by("-created_at", "-id")
+            qs = qs.annotate(
+                current_group_name=Subquery(current_enrollment.values("group__name")[:1]),
+                current_group_started_at=Subquery(current_enrollment.values("group__started_at")[:1]),
+                current_group_ends_at=Subquery(current_enrollment.values("group__ends_at")[:1]),
+            )
+            if group_name:
+                qs = qs.filter(current_group_name__icontains=group_name)
+            if group_start_from:
+                qs = qs.filter(current_group_started_at__gte=group_start_from)
+            if group_start_to:
+                qs = qs.filter(current_group_started_at__lte=group_start_to)
+            if group_end_from:
+                qs = qs.filter(current_group_ends_at__gte=group_end_from)
+            if group_end_to:
+                qs = qs.filter(current_group_ends_at__lte=group_end_to)
+
+        qs = filter_by_branch(qs, self.request, "branch")
+
+        if ordering in self.ORDERING_FIELDS:
+            qs = qs.order_by(self.ORDERING_FIELDS[ordering], "-updated_at", "-created_at")
+        return qs
 
     # Matches canAddDrivingLesson in the frontend's auth store: a student
     # may confirm a lesson for *themselves* only, admin/superuser for
@@ -1900,6 +2099,22 @@ class NotificationViewSet(SoftDeleteModelViewSet):
         qs = filter_by_branch(qs, request, "branch")
         count = qs.count()
         return Response({"unread_count": count})
+
+    @action(detail=False, methods=["get"])
+    def total_count(self, request):
+        """Returns the total notification count regardless of type/read state — for the 'Jami Bildirishnomalar' metric card, now that the main list is paginated per-type."""
+        user = request.user if request.user and request.user.is_authenticated else None
+        qs = Notification.objects.filter(is_active=True)
+        if user:
+            if is_admin_or_superuser(user):
+                qs = qs.filter(Q(user=user) | Q(user__isnull=True))
+            else:
+                qs = qs.filter(user=user)
+        else:
+            qs = qs.none()
+        qs = filter_by_branch(qs, request, "branch")
+        count = qs.count()
+        return Response({"total_count": count})
 
     @action(detail=True, methods=["post"])
     def mark_as_read(self, request, pk=None):

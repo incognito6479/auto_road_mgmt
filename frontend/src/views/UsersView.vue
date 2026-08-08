@@ -24,7 +24,7 @@
 
     <!-- Table Container -->
     <div class="table-card">
-      <div v-if="loading" class="state-container">
+      <div v-if="initialLoading" class="state-container">
         <div class="spinner"></div>
         <p class="state-text">Foydalanuvchilar yuklanmoqda...</p>
       </div>
@@ -87,10 +87,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedUsers.length === 0">
+            <tr v-if="users.length === 0">
               <td :colspan="tableColspan" class="td-empty">Foydalanuvchilar topilmadi.</td>
             </tr>
-            <tr v-for="u in displayedUsers" :key="u.id" class="table-row clickable" :class="{ 'row-inactive': u.is_active === false }" @click="goToUserDetail(u.id)">
+            <tr v-for="u in users" :key="u.id" class="table-row clickable" :class="{ 'row-inactive': u.is_active === false }" @click="goToUserDetail(u.id)">
               <td class="td-id">#{{ u.id }}</td>
               <td class="td-name">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -140,9 +140,9 @@
       </div>
 
       <!-- Pagination controls -->
-      <div v-if="!loading && !error" class="pagination-bar">
+      <div v-if="!initialLoading && !error" class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredUsers.length }}</strong> tadan <strong>{{ displayedUsers.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ users.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -508,6 +508,7 @@ import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
 const branchStore = useBranchStore()
@@ -515,6 +516,11 @@ const route = useRoute()
 const router = useRouter()
 const users = ref([])
 const loading = ref(false)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole table — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 const error = ref('')
 
 function goToUserDetail(id) {
@@ -528,23 +534,27 @@ const dateJoinedFrom = ref('')
 const dateJoinedTo = ref('')
 function setDateJoinedSort(direction) {
   dateJoinedSort.value = dateJoinedSort.value === direction ? '' : direction
+  currentPage.value = 1
+  fetchUsers()
 }
 const filterRole = computed(() => route.query.role || '')
 const showInactive = ref(false)
 const tableColspan = computed(() => 7 + (showInactive.value ? 1 : 0) + ((authStore.canChangeUsers || authStore.canDeleteUsers) ? 1 : 0))
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// fetchUsers always pulls the entire scope (see page_size: 100000 below) so
-// every filter below sees every row, not just whatever page happened to be
-// loaded. pageSizeOption instead controls how many of the *filtered* rows
-// show per page (see displayedUsers/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchUsers) — the table only ever holds
+// the current page's rows, not the whole scope.
 const pageSizeOption = ref('50')
 const currentPage = ref(1)
+const totalCount = ref(0)
 
-// Only the showInactive toggle needs a backend round trip (it changes the
-// dataset scope); role and name filters below are purely client-side.
-watch(showInactive, () => { fetchUsers() })
-watch(pageSizeOption, () => { currentPage.value = 1 })
+watch(showInactive, () => { currentPage.value = 1; fetchUsers() })
+watch(pageSizeOption, () => { currentPage.value = 1; fetchUsers() })
+watch(filterRole, () => { currentPage.value = 1; fetchUsers() })
+watch([dateJoinedFrom, dateJoinedTo], () => { currentPage.value = 1; fetchUsers() })
+const debouncedRefetch = debounce(() => { currentPage.value = 1; fetchUsers() }, 400)
+watch(filterFullName, debouncedRefetch)
 
 // Role page title/subtitle mapping
 const roleMeta = {
@@ -633,10 +643,11 @@ const createButtonLabel = computed(() => {
   return opt ? `Yangi ${opt.title}` : 'Yangi Foydalanuvchi'
 })
 
-// Only a real superuser may create/promote a superuser account — even an
-// admin granted add/change permission never sees this option.
+// Only a real superuser may create/promote an admin or superuser account —
+// even an admin granted add/change permission never sees these options,
+// and can only manage teacher (coordinator)/instructor/mechanic accounts.
 const visibleRoleOptions = computed(() => (
-  authStore.isSuperuser ? roleOptions : roleOptions.filter(r => r.key !== 'superuser')
+  authStore.isSuperuser ? roleOptions : roleOptions.filter(r => r.key !== 'superuser' && r.key !== 'admin')
 ))
 
 // When creating via a navlink (filterRole is set), show only that role card.
@@ -656,84 +667,52 @@ const deletingUser = ref(null)
 const deleting = ref(false)
 const deleteError = ref('')
 
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
 const fetchUsers = async () => {
+  const token = ++fetchToken
   loading.value = true
   error.value = ''
   try {
-    // Role filtering is done client-side over the fetched user list (see
-    // filteredUsers below) — only the showInactive scope is sent to the
-    // backend; the fetch always pulls the entire scope regardless of the
-    // row-fetch-count selector.
-    const response = await api.get('/users/', { params: { page: 1, page_size: 100000, status: showInactive.value ? 'all' : undefined } })
-    if (Array.isArray(response.data)) {
-      users.value = response.data
-    } else {
-      users.value = response.data.results || []
+    // No branch param here on purpose: this is staff/account management,
+    // not branch-scoped operational data, and the backend already
+    // restricts admins to their own branch regardless — filtering by the
+    // navbar's (unrelated) branch selection on top of that only hid staff
+    // from superusers, e.g. the one admin account disappearing entirely
+    // whenever a different branch happened to be selected.
+    const params = {
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+      status: showInactive.value ? 'all' : undefined,
     }
+    if (filterRole.value) params.role = filterRole.value
+    if (filterFullName.value.trim()) params.search = filterFullName.value.trim()
+    if (dateJoinedFrom.value) params.date_joined_from = dateJoinedFrom.value
+    if (dateJoinedTo.value) params.date_joined_to = dateJoinedTo.value
+    params.ordering = dateJoinedSort.value ? (dateJoinedSort.value === 'desc' ? '-date_joined' : 'date_joined') : 'full_name'
+
+    const response = await api.get('/users/', { params })
+    if (token !== fetchToken) return
+    const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
+    users.value = rawList
+    totalCount.value = response.data.count ?? rawList.length
   } catch (err) {
     console.error(err)
     error.value = "Foydalanuvchilar ro'yxatini yuklashda xatolik yuz berdi."
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
   }
 }
 
-const filteredUsers = computed(() => {
-  // No branch filtering here on purpose: this is staff/account management,
-  // not branch-scoped operational data, and the backend already restricts
-  // admins to their own branch regardless — filtering by the navbar's
-  // (unrelated) branch selection on top of that only hid staff from
-  // superusers, e.g. the one admin account disappearing entirely whenever
-  // a different branch happened to be selected.
-  let list = users.value.filter(u => {
-    const role = filterRole.value
-    // admin filter also includes superusers
-    const matchRole = !role ||
-      u.role === role ||
-      (role === 'superuser' && u.is_superuser) ||
-      (role === 'admin' && (u.role === 'admin' || u.is_superuser))
-    const q = filterFullName.value.toLowerCase().trim()
-    const fullName = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase()
-    const matchSearch = !q || fullName.includes(q)
-    return matchRole && matchSearch
-  })
-
-  if (dateJoinedFrom.value) list = list.filter(u => u.date_joined && u.date_joined.slice(0, 10) >= dateJoinedFrom.value)
-  if (dateJoinedTo.value) list = list.filter(u => u.date_joined && u.date_joined.slice(0, 10) <= dateJoinedTo.value)
-
-  if (dateJoinedSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.date_joined || '').localeCompare(b.date_joined || '')
-      return dateJoinedSort.value === 'desc' ? -d : d
-    })
-  } else {
-    list = list.slice().sort((a, b) => {
-      const nameA = a.full_name || `${a.first_name || ''} ${a.last_name || ''}`.trim()
-      const nameB = b.full_name || `${b.first_name || ''} ${b.last_name || ''}`.trim()
-      return nameA.localeCompare(nameB)
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption purely controls how many of the *filtered* rows show per
-// page — currentPage is clamped here so it self-corrects the moment a
-// filter shrinks the result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredUsers.value.length / displayPageSize.value))
-})
-const displayedUsers = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredUsers.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredUsers.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchUsers()
 }
 
 const getUserFullName = (u) => {
@@ -1089,8 +1068,8 @@ onMounted(async () => {
   })
 })
 
-// Role filter is client-side (see filteredUsers); just clear the name
-// search when the nav-link role filter changes.
+// Clear the name search when the nav-link role filter changes (the
+// filterRole watcher above already triggers the actual refetch).
 watch(() => route.query.role, () => {
   filterFullName.value = ''
 })

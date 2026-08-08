@@ -19,12 +19,12 @@
     <div class="table-section-card margin-top">
       <div class="toolbar-bar">
         <div class="total-count">
-          Jami: <strong>{{ filteredEnrollments.length }}</strong> ta sertifikat
+          Jami: <strong>{{ totalCount }}</strong> ta sertifikat
         </div>
       </div>
 
       <div class="table-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Sertifikatlar yuklanmoqda...</span>
         </div>
@@ -162,10 +162,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedEnrollments.length === 0">
+            <tr v-if="enrollments.length === 0">
               <td :colspan="authStore.isAdminOrSuperuser ? 14 : 13" class="td-empty">Filtrlarga mos sertifikat topilmadi</td>
             </tr>
-            <tr v-for="e in displayedEnrollments" :key="e.id" class="table-row clickable-row" @click="goStudent(e.student)">
+            <tr v-for="e in enrollments" :key="e.id" class="table-row clickable-row" @click="goStudent(e.student)">
               <td class="td-name">{{ e.student_name || 'Noma\'lum' }}</td>
               <td class="td-cert">
                 <div class="cert-main">{{ e.student_certificate_series || '' }} {{ e.student_certificate_number }}</div>
@@ -222,7 +222,7 @@
 
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredEnrollments.length }}</strong> tadan <strong>{{ displayedEnrollments.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ enrollments.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -417,14 +417,22 @@ import { useAuthStore } from '@/stores/auth'
 import { formatMoney, formatDate } from '@/utils/formatters'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
 import { useGroupSelect } from '@/composables/useGroupSelect'
+import { useBranchStore } from '@/stores/branch'
+import { debounce } from '@/utils/debounce'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const branchStore = useBranchStore()
 
 const enrollments = ref([])
 const groups = ref([])
 const categories = ref([])
 const loading = ref(true)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole table — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 
 const groupsById = computed(() => {
   const map = {}
@@ -455,6 +463,8 @@ function setSort(field, dir) {
   const target = sortRefs[field]
   Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
   target.value = target.value === dir ? '' : dir
+  currentPage.value = 1
+  fetchEnrollments()
 }
 
 const getDebt = (e) => {
@@ -464,96 +474,22 @@ const getDebt = (e) => {
   return Math.max(0, contract - paid)
 }
 
-// All header filters (student name, certificate, category, group name,
-// group start/end date ranges, debt, sort) run entirely on the client
-// against the already-fetched `enrollments` list — no per-keystroke or
-// per-filter network round trip, so there's no debounce delay and no
-// input re-render to steal focus/cursor position. Only the row-fetch-count
-// selector triggers a new backend request (see watch below).
-const filteredEnrollments = computed(() => {
-  const name = filterStudentName.value.toLowerCase().trim()
-  const certif = filterCertif.value.toLowerCase().trim()
-  const group = filterGroupName.value.toLowerCase().trim()
-
-  let list = enrollments.value.filter(e => {
-    if (name && !(e.student_name || '').toLowerCase().includes(name)) return false
-    if (certif && !`${e.student_certificate_series || ''}${e.student_certificate_number || ''}`.toLowerCase().includes(certif)) return false
-    if (filterCategory.value && String(e.category) !== String(filterCategory.value)) return false
-    if (group && !(e.group_name || '').toLowerCase().includes(group)) return false
-    if (filterDebt.value === 'has' && getDebt(e) <= 0) return false
-    if (filterDebt.value === 'none' && getDebt(e) > 0) return false
-    // student_certificate_added_date is a full timestamp, not a bare date —
-    // slice before comparing to the plain YYYY-MM-DD filter value, otherwise
-    // records from the selected "to" day itself get wrongly excluded.
-    if (certDateFrom.value && !(e.student_certificate_added_date && e.student_certificate_added_date.slice(0, 10) >= certDateFrom.value)) return false
-    if (certDateTo.value && !(e.student_certificate_added_date && e.student_certificate_added_date.slice(0, 10) <= certDateTo.value)) return false
-
-    const g = groupsById.value[e.group]
-    if (groupStartFrom.value && !(g && g.started_at && g.started_at >= groupStartFrom.value)) return false
-    if (groupStartTo.value && !(g && g.started_at && g.started_at <= groupStartTo.value)) return false
-    if (groupEndFrom.value && !(g && g.ends_at && g.ends_at >= groupEndFrom.value)) return false
-    if (groupEndTo.value && !(g && g.ends_at && g.ends_at <= groupEndTo.value)) return false
-
-    return true
-  })
-
-  const field = groupStartSort.value ? 'started_at' : (groupEndSort.value ? 'ends_at' : null)
-  if (field) {
-    const dir = (groupStartSort.value || groupEndSort.value) === 'asc' ? 1 : -1
-    list = list.slice().sort((a, b) => {
-      const ga = groupsById.value[a.group]
-      const gb = groupsById.value[b.group]
-      const ta = ga && ga[field] ? new Date(ga[field]).getTime() : null
-      const tb = gb && gb[field] ? new Date(gb[field]).getTime() : null
-      if (ta === null && tb === null) return 0
-      if (ta === null) return 1
-      if (tb === null) return -1
-      return (ta - tb) * dir
-    })
-  } else if (certDateSort.value) {
-    const dir = certDateSort.value === 'asc' ? 1 : -1
-    list = list.slice().sort((a, b) => {
-      const ta = a.student_certificate_added_date ? new Date(a.student_certificate_added_date).getTime() : null
-      const tb = b.student_certificate_added_date ? new Date(b.student_certificate_added_date).getTime() : null
-      if (ta === null && tb === null) return 0
-      if (ta === null) return 1
-      if (tb === null) return -1
-      return (ta - tb) * dir
-    })
-  }
-
-  return list
-})
-
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: pick how many rows to pull from
-// the backend in one shot, then filter/sort them instantly on the client
-// (see displayedEnrollments below) instead of round-tripping per filter
-// change. Filtering has to see every row — not just whatever page happened
-// to be fetched — so the fetch itself always pulls everything;
-// pageSizeOption instead controls how many of the *filtered* results are
-// shown per page (see displayedEnrollments/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchEnrollments) — the table only ever
+// holds the current page's rows.
 const pageSizeOption = ref('50')
 const totalCount = ref(0) // total certificate-bearing enrollments, per backend
 const currentPage = ref(1)
 
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here so it self-corrects the moment a
-// filter shrinks the result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredEnrollments.value.length / displayPageSize.value))
-})
-const displayedEnrollments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredEnrollments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredEnrollments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchEnrollments()
 }
 
 function goStudent(studentId) {
@@ -593,31 +529,67 @@ function ensureGroupsLoaded() {
   return groupsLoadPromise
 }
 
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
 async function fetchEnrollments() {
+  const token = ++fetchToken
   loading.value = true
   try {
+    const params = {
+      has_certificate: 'true',
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (filterStudentName.value.trim()) params.student_name = filterStudentName.value.trim()
+    if (filterCertif.value.trim()) params.certif = filterCertif.value.trim()
+    if (filterCategory.value) params.category = filterCategory.value
+    if (filterGroupName.value.trim()) params.group_name = filterGroupName.value.trim()
+    if (filterDebt.value === 'has') params.has_debt = 'true'
+    else if (filterDebt.value === 'none') params.has_debt = 'false'
+    if (certDateFrom.value) params.cert_date_from = certDateFrom.value
+    if (certDateTo.value) params.cert_date_to = certDateTo.value
+    if (groupStartFrom.value) params.group_start_from = groupStartFrom.value
+    if (groupStartTo.value) params.group_start_to = groupStartTo.value
+    if (groupEndFrom.value) params.group_end_from = groupEndFrom.value
+    if (groupEndTo.value) params.group_end_to = groupEndTo.value
+    if (groupStartSort.value) params.ordering = groupStartSort.value === 'desc' ? '-group_started_at' : 'group_started_at'
+    else if (groupEndSort.value) params.ordering = groupEndSort.value === 'desc' ? '-group_ends_at' : 'group_ends_at'
+    else if (certDateSort.value) params.ordering = certDateSort.value === 'desc' ? '-certificate_added_date' : 'certificate_added_date'
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+
     // Awaited alongside groups so the table doesn't reveal itself (and
     // read groupsById) before group start/end data actually exists —
     // otherwise those columns render as "-" and pop in once the separate
     // /groups/ request finishes a moment later.
-    // Always the full dataset — filtering/sorting/pagination above all
-    // need to see every row, not just one page of them.
     const [res] = await Promise.all([
-      api.get('/enrollments/', { params: { has_certificate: 'true', page: 1, page_size: 100000 } }),
+      api.get('/enrollments/', { params }),
       ensureGroupsLoaded(),
     ])
+    if (token !== fetchToken) return
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     enrollments.value = rawList
     totalCount.value = res.data.count ?? rawList.length
   } catch (err) { console.error(err) }
-  finally { loading.value = false }
+  finally { if (token === fetchToken) { loading.value = false; initialLoading.value = false } }
 }
 
-// Only fetchEnrollments (on mount) needs a backend round trip; every
-// filter above is purely client-side, and pageSizeOption now only controls
-// how many of the filtered rows show per page.
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchEnrollments()
+})
+watch([filterCategory, filterDebt, certDateFrom, certDateTo, groupStartFrom, groupStartTo, groupEndFrom, groupEndTo], () => {
+  currentPage.value = 1
+  fetchEnrollments()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchEnrollments()
+}, 400)
+watch([filterStudentName, filterCertif, filterGroupName], debouncedRefetch)
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchEnrollments()
 })
 
 // ── Add modal (group -> student cascade) ────────────────

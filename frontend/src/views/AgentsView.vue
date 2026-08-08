@@ -18,13 +18,13 @@
       <!-- Total count -->
       <div class="table-toolbar">
         <div class="total-count">
-          Jami: <strong>{{ totalAgents }}</strong> ta agent
+          Jami: <strong>{{ totalCount }}</strong> ta agent
         </div>
       </div>
 
       <!-- Data Table -->
       <div class="table-card">
-        <div v-if="loading" class="state-container">
+        <div v-if="initialLoading" class="state-container">
           <div class="spinner"></div>
           <p class="state-text">Agentlar yuklanmoqda...</p>
         </div>
@@ -50,10 +50,10 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-if="displayedAgents.length === 0">
+              <tr v-if="agents.length === 0">
                 <td :colspan="authStore.isAdminOrSuperuser ? 4 : 3" class="td-empty">Agentlar topilmadi.</td>
               </tr>
-              <tr v-for="agent in displayedAgents" :key="agent.id" class="table-row clickable-row" @click="goToAgentDetail(agent.id)">
+              <tr v-for="agent in agents" :key="agent.id" class="table-row clickable-row" @click="goToAgentDetail(agent.id)">
                 <td class="td-name">
                   <div class="agent-user-cell">
                     <div class="agent-avatar">
@@ -93,7 +93,7 @@
 
         <div class="pagination-bar">
           <span class="pagination-info">
-            Jami: <strong>{{ filteredAgents.length }}</strong> tadan <strong>{{ displayedAgents.length }}</strong> ko'rsatilmoqda
+            Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ agents.length }}</strong> ko'rsatilmoqda
           </span>
           <div class="pagination-actions">
             <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -253,6 +253,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { formatPhone } from '@/utils/formatters'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
 const branchStore = useBranchStore()
@@ -265,65 +266,31 @@ function goToAgentDetail(id) {
 
 const agents = ref([])
 const loading = ref(false)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/page refetch unmounted the whole table — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 const saving = ref(false)
 const filterName = ref('')
 const filterPhone = ref('')
-const totalAgents = ref(0)
+const totalCount = ref(0)
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: pick how many rows to pull from
-// the backend in one shot, then filter/sort them instantly on the client
-// (see displayedAgents below) instead of round-tripping per filter change.
-// Filtering has to see every row — not just whatever page happened to be
-// fetched — so the fetch itself always pulls everything; pageSizeOption
-// instead controls how many of the *filtered* results are shown per page
-// (see displayedAgents/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting (always
+// alphabetical by name) and pagination are all done server-side (see
+// fetchAgents) — the table only ever holds the current page's rows.
 const pageSizeOption = ref('50')
 const currentPage = ref(1)
 
-// All header filters (name, phone) run entirely on the client against the
-// already-fetched `agents` list — no per-keystroke network round trip, so
-// there's no debounce delay and no input re-render to steal focus/cursor
-// position, AND they see every fetched row, not just whatever page happened
-// to be fetched.
-const filteredAgents = computed(() => {
-  let list = agents.value.filter(a => branchStore.isBranchMatch(a))
-
-  if (filterName.value.trim()) {
-    const q = filterName.value.trim().toLowerCase()
-    list = list.filter(a => (a.full_name || '').toLowerCase().includes(q))
-  }
-  if (filterPhone.value.trim()) {
-    const q = filterPhone.value.replace(/\D/g, '')
-    if (q) {
-      list = list.filter(a => {
-        const p1 = (a.phone || '').replace(/\D/g, '')
-        const p2 = (a.phone2 || '').replace(/\D/g, '')
-        return p1.includes(q) || p2.includes(q)
-      })
-    }
-  }
-
-  return list.slice().sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here so it self-corrects the moment a
-// filter shrinks the result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredAgents.value.length / displayPageSize.value))
-})
-const displayedAgents = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredAgents.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredAgents.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchAgents()
 }
 
 const agentModal = ref(null)
@@ -411,32 +378,51 @@ function handleTeacherOutsideClick(e) {
   teacherDropdownOpen.value = false
 }
 
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
 const fetchAgents = async () => {
+  const token = ++fetchToken
   loading.value = true
   try {
-    // Always the full dataset — filtering/sorting/pagination above all
-    // need to see every row, not just one page of them.
-    const params = { page: 1, page_size: 100000 }
+    const params = {
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+      // AgentsView always sorts alphabetically by name — no sort toggle.
+      ordering: 'full_name',
+    }
+    if (filterName.value.trim()) params.name = filterName.value.trim()
+    if (filterPhone.value.trim()) params.phone = filterPhone.value.trim()
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+
     const res = await api.get('/agents/', { params })
+    if (token !== fetchToken) return
     if (Array.isArray(res.data)) {
       agents.value = res.data
-      totalAgents.value = res.data.length
+      totalCount.value = res.data.length
     } else {
       agents.value = res.data.results || []
-      totalAgents.value = res.data.count || 0
+      totalCount.value = res.data.count || 0
     }
   } catch (err) {
     console.error('Failed to fetch agents:', err)
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
   }
 }
 
-// Only fetchAgents (on mount) needs a backend round trip; every filter
-// above (name, phone) is purely client-side, and pageSizeOption now only
-// controls how many of the filtered rows show per page.
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchAgents()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchAgents()
+}, 400)
+watch([filterName, filterPhone], debouncedRefetch)
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchAgents()
 })
 
 const openCreateModal = () => {

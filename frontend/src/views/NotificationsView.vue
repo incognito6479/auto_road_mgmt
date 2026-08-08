@@ -29,7 +29,7 @@
         <div class="card-metric-icon">🔔</div>
         <div>
           <span class="metric-lbl">Jami Bildirishnomalar</span>
-          <h4 class="metric-val text-blue">{{ notifications.length }} ta</h4>
+          <h4 class="metric-val text-blue">{{ totalNotifCount }} ta</h4>
         </div>
       </div>
 
@@ -93,18 +93,18 @@
 
       <!-- Notifications List -->
       <div class="notifications-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Bildirishnomalar yuklanmoqda...</span>
         </div>
 
-        <div v-else-if="filteredNotifications.length === 0" class="empty-state">
+        <div v-else-if="notifications.length === 0" class="empty-state">
           <p>Bildirishnomalar mavjud emas</p>
         </div>
 
         <div v-else class="notif-cards-list">
           <div
-            v-for="item in displayedNotifications"
+            v-for="item in notifications"
             :key="item.id"
             class="notif-card-item clickable"
             :class="{ 'unread-card': !item.is_read }"
@@ -143,9 +143,9 @@
           </div>
         </div>
 
-        <div v-if="filteredNotifications.length > 0" class="pagination-bar">
+        <div v-if="!initialLoading && totalCount > 0" class="pagination-bar">
           <span class="pagination-info">
-            Jami: <strong>{{ filteredNotifications.length }}</strong> tadan <strong>{{ displayedNotifications.length }}</strong> ko'rsatilmoqda
+            Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ notifications.length }}</strong> ko'rsatilmoqda
           </span>
           <div class="pagination-actions">
             <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -179,77 +179,95 @@ const router = useRouter()
 const branchStore = useBranchStore()
 const notifications = ref([])
 const loading = ref(true)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every tab/page refetch unmounted the whole list via v-if.
+const initialLoading = ref(true)
 const markingAllRead = ref(false)
 const markingReadIds = ref(new Set())
 const activeStatusFilter = ref('')
 
-const unreadCount = computed(() => notifications.value.filter(n => !n.is_read && branchStore.isBranchMatch(n)).length)
-
-const filteredNotifications = computed(() => {
-  return notifications.value.filter(n => {
-    if (!branchStore.isBranchMatch(n)) return false
-    if (!activeStatusFilter.value) return true
-    return n.status === activeStatusFilter.value
-  })
-})
+// The metric cards used to be derived from the full client-held array —
+// now that the list itself is paginated per-type, they're fetched from
+// dedicated aggregate endpoints instead (unread_count already existed;
+// total_count was added alongside this conversion).
+const unreadCount = ref(0)
+const totalNotifCount = ref(0)
+async function fetchMetrics() {
+  try {
+    const params = {}
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+    const [unreadRes, totalRes] = await Promise.all([
+      api.get('/notifications/unread_count/', { params }),
+      api.get('/notifications/total_count/', { params }),
+    ])
+    unreadCount.value = unreadRes.data.unread_count || 0
+    totalNotifCount.value = totalRes.data.total_count || 0
+  } catch (err) {
+    console.error("Bildirishnoma statistikasini yuklashda xatolik:", err)
+  }
+}
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: fetch always pulls every
-// notification (see fetchNotifications below) — activeStatusFilter is a
-// purely client-side type tab, not a backend query param, so there's no
-// scope to narrow. Filtering runs client-side against the full set
-// (filteredNotifications), and pageSizeOption instead controls how many of
-// the *filtered* results are shown per page (see
-// displayedNotifications/changePage below).
+// Controls the page_size sent to the backend. Filtering (status tab) and
+// pagination are all done server-side (see fetchNotifications) — the list
+// only ever holds the current page's rows.
 const pageSizeOption = ref('50')
 const totalCount = ref(0)
 const currentPage = ref(1)
 
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
 async function fetchNotifications() {
+  const token = ++fetchToken
   loading.value = true
   try {
-    // Always the full dataset — filtering/sorting/pagination below all
-    // need to see every row, not just one page of them.
-    const res = await api.get('/notifications/', { params: { page: 1, page_size: 100000 } })
+    const params = {
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (activeStatusFilter.value) params.status = activeStatusFilter.value
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+
+    const res = await api.get('/notifications/', { params })
+    if (token !== fetchToken) return
     const rawList = res.data.results ? res.data.results : (Array.isArray(res.data) ? res.data : [])
     notifications.value = rawList
     totalCount.value = res.data.count ?? rawList.length
   } catch (err) {
     console.error("Bildirishnomalarni yuklashda xatolik:", err)
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
   }
 }
 
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredNotifications.value.length / displayPageSize.value))
-})
-const displayedNotifications = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredNotifications.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredNotifications.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchNotifications()
 }
 
-// The status-type tab is purely client-side, so nothing ever needs a
-// refetch after the initial load — the row-fetch-count selector only
-// resets the display page.
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchNotifications()
+})
+watch(activeStatusFilter, () => {
+  currentPage.value = 1
+  fetchNotifications()
+})
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchNotifications()
+  fetchMetrics()
 })
 
 onMounted(() => {
   fetchNotifications()
+  fetchMetrics()
 })
 
 async function markSingleAsRead(id) {
@@ -258,7 +276,10 @@ async function markSingleAsRead(id) {
   try {
     await api.post(`/notifications/${id}/mark_as_read/`)
     const item = notifications.value.find(n => n.id === id)
-    if (item) item.is_read = true
+    if (item && !item.is_read) {
+      item.is_read = true
+      unreadCount.value = Math.max(0, unreadCount.value - 1)
+    }
   } catch (err) {
     console.error("O'qilgan deb belgilashda xatolik:", err)
   } finally {
@@ -274,6 +295,7 @@ async function markAllAsRead() {
   try {
     await api.post('/notifications/mark_all_read/')
     notifications.value.forEach(n => { n.is_read = true })
+    unreadCount.value = 0
   } catch (err) {
     console.error("Barchasini o'qilgan deb belgilashda xatolik:", err)
   } finally {

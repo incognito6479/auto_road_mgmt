@@ -20,7 +20,7 @@
     <!-- Table Section -->
     <div class="table-section-card margin-top">
       <div class="table-container">
-        <div v-if="loading" class="state-box">
+        <div v-if="initialLoading" class="state-box">
           <div class="spinner"></div>
           <span>Avtomobillar ro'yxati yuklanmoqda...</span>
         </div>
@@ -98,10 +98,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedCars.length === 0">
+            <tr v-if="cars.length === 0">
               <td colspan="9" class="td-empty">Avtomobillar topilmadi</td>
             </tr>
-            <tr v-for="car in displayedCars" :key="car.id" class="table-row clickable" @click="goToCarDetail(car.id)" style="cursor: pointer;">
+            <tr v-for="car in cars" :key="car.id" class="table-row clickable" @click="goToCarDetail(car.id)" style="cursor: pointer;">
               <!-- Car Title -->
               <td class="td-name">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -181,7 +181,7 @@
 
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredCars.length }}</strong> tadan <strong>{{ displayedCars.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ cars.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -416,11 +416,17 @@ import AppLayout from '@/components/AppLayout.vue'
 import FileSelectInput from '@/components/FileSelectInput.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { debounce } from '@/utils/debounce'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const cars = ref([])
 const loading = ref(true)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole table — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 
 function goToCarDetail(id) {
   if (id) router.push(`/vehicles/${id}`)
@@ -501,44 +507,17 @@ function onInstructorBlur() {
 }
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: pick how many rows to pull from
-// the backend in one shot, then filter/sort them instantly on the client
-// (see displayedCars below) instead of round-tripping per filter change.
-// Filtering has to see every row — not just whatever page happened to be
-// fetched — so the fetch itself always pulls everything; pageSizeOption
-// instead controls how many of the *filtered* results are shown per page
-// (see displayedCars/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchCars) — the table only ever holds
+// the current page's rows, not the whole scoped table.
 const pageSizeOption = ref('50')
 const totalCount = ref(0) // total rows, per backend
 const currentPage = ref(1)
 
-async function fetchCars() {
-  loading.value = true
-  try {
-    // Always the full dataset — filtering/sorting/pagination above all
-    // need to see every row, not just one page of them.
-    const params = { page: 1, page_size: 100000 }
-    const res = await api.get('/cars/', { params })
-    cars.value = res.data.results || res.data || []
-    totalCount.value = res.data.count ?? cars.value.length
-  } catch (err) {
-    console.error("Avtomobillarni yuklashda xatolik:", err)
-  } finally {
-    loading.value = false
-  }
-}
-
-// Only fetchCars (on mount) needs a backend round trip; every filter below
-// (name search, status, instructor, sort) is purely client-side against
-// the already-fetched `cars` list, and pageSizeOption now only controls
-// how many of the filtered rows show per page.
-watch(pageSizeOption, () => {
-  currentPage.value = 1
-})
-
 // ── Column-header days-left sorting ───────────────────
 const sortColumn = ref('')
 const sortDir = ref('')
+const SORT_ORDERING_MAP = { policy: 'policy_date', tech: 'tech_inspection_date', oil: 'oil_remaining', washed: 'last_washed_at' }
 function setSort(column, dir) {
   if (sortColumn.value === column && sortDir.value === dir) {
     sortColumn.value = ''
@@ -547,6 +526,8 @@ function setSort(column, dir) {
     sortColumn.value = column
     sortDir.value = dir
   }
+  currentPage.value = 1
+  fetchCars()
 }
 function daysUntil(dateStr) {
   const today = new Date()
@@ -555,63 +536,60 @@ function daysUntil(dateStr) {
   target.setHours(0, 0, 0, 0)
   return Math.ceil((target - today) / (1000 * 60 * 60 * 24))
 }
-function sortValue(car, column) {
-  if (column === 'policy') return car.policy_date ? daysUntil(car.policy_date) : null
-  if (column === 'tech') return car.tech_inspection_date ? daysUntil(car.tech_inspection_date) : null
-  if (column === 'oil') return oilRemaining(car)
-  if (column === 'washed') return car.last_washed_at ? new Date(car.last_washed_at).getTime() : null
-  return null
+
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
+async function fetchCars() {
+  const token = ++fetchToken
+  loading.value = true
+  try {
+    const params = {
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (searchQuery.value.trim()) params.car_name = searchQuery.value.trim()
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterInstructor.value.trim()) params.instructor_name = filterInstructor.value.trim()
+    if (sortColumn.value && sortDir.value) {
+      const field = SORT_ORDERING_MAP[sortColumn.value]
+      params.ordering = (sortDir.value === 'desc' ? '-' : '') + field
+    }
+
+    const res = await api.get('/cars/', { params })
+    if (token !== fetchToken) return
+    cars.value = res.data.results || res.data || []
+    totalCount.value = res.data.count ?? cars.value.length
+  } catch (err) {
+    console.error("Avtomobillarni yuklashda xatolik:", err)
+  } finally {
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
+  }
 }
-// All header filters (name search, status, instructor) and the days-left
-// sort run entirely on the client against the already-fetched `cars`
-// list — no per-keystroke or per-filter network round trip, so there's no
-// debounce delay and no input re-render to steal focus/cursor position,
-// AND they see every fetched row, not just whatever page happened to be
-// fetched.
-const filteredCars = computed(() => {
-  let list = [...cars.value]
 
-  if (searchQuery.value.trim()) {
-    const q = searchQuery.value.trim().toLowerCase()
-    list = list.filter(c => (c.car_name || '').toLowerCase().includes(q))
-  }
-  if (filterStatus.value) {
-    list = list.filter(c => c.status === filterStatus.value)
-  }
-  if (filterInstructor.value.trim()) {
-    const q = filterInstructor.value.trim().toLowerCase()
-    list = list.filter(c => (c.instructor_name || '').toLowerCase().includes(q))
-  }
-
-  if (!sortColumn.value || !sortDir.value) return list
-  return list.sort((a, b) => {
-    const va = sortValue(a, sortColumn.value)
-    const vb = sortValue(b, sortColumn.value)
-    if (va == null && vb == null) return 0
-    if (va == null) return 1
-    if (vb == null) return -1
-    return sortDir.value === 'asc' ? va - vb : vb - va
-  })
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here so it self-corrects the moment a
-// filter shrinks the result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredCars.value.length / displayPageSize.value))
-})
-const displayedCars = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredCars.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredCars.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchCars()
 }
+
+watch(pageSizeOption, () => {
+  currentPage.value = 1
+  fetchCars()
+})
+watch(filterStatus, () => {
+  currentPage.value = 1
+  fetchCars()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchCars()
+}, 400)
+watch([searchQuery, filterInstructor], debouncedRefetch)
 
 onMounted(() => {
   fetchCars()

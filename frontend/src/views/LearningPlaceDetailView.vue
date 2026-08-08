@@ -16,7 +16,7 @@
       </div>
     </div>
 
-    <div v-if="loading" class="state-box">
+    <div v-if="initialLoading" class="state-box">
       <div class="spinner"></div>
       <span>Yuklanmoqda...</span>
     </div>
@@ -106,7 +106,7 @@
         <div class="toolbar-bar">
           <h3 class="section-title">O'quvchilar Ro'yxati</h3>
           <div class="total-count">
-            Jami: <strong>{{ filteredEnrollments.length }}</strong> ta
+            Jami: <strong>{{ totalCount }}</strong> ta
           </div>
         </div>
 
@@ -224,7 +224,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="e in displayedEnrollments" :key="e.id" class="table-row">
+              <tr v-for="e in enrollments" :key="e.id" class="table-row">
                 <td class="td-name">
                   <div class="student-name-link" @click="goStudent(e.student)">{{ e.student_name || "Noma'lum" }}</div>
                 </td>
@@ -263,9 +263,9 @@
           </table>
         </div>
 
-        <div v-if="filteredEnrollments.length > 0" class="pagination-bar">
+        <div v-if="!initialLoading && totalCount > 0" class="pagination-bar">
           <span class="pagination-info">
-            Jami: <strong>{{ filteredEnrollments.length }}</strong> tadan <strong>{{ displayedEnrollments.length }}</strong> ko'rsatilmoqda
+            Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ enrollments.length }}</strong> ko'rsatilmoqda
           </span>
           <div class="pagination-actions">
             <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -294,6 +294,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { formatMoney, formatDate } from '@/utils/formatters'
+import { debounce } from '@/utils/debounce'
 
 const route = useRoute()
 const router = useRouter()
@@ -302,6 +303,12 @@ const place = ref(null)
 const enrollments = ref([])
 const groups = ref([])
 const loading = ref(true)
+// Only gates the initial full-page spinner (info card, metrics, and table
+// all stay mounted across refetches now). Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole page — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 
 const groupsById = computed(() => {
   const map = {}
@@ -322,11 +329,9 @@ const groupEndFrom = ref('')
 const groupEndTo = ref('')
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: fetch always pulls every
-// enrollment for this learning place (see fetchAll below), filtering runs
-// client-side against the full set (filteredEnrollments), and
-// pageSizeOption instead controls how many of the *filtered* results are
-// shown per page (see displayedEnrollments/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchEnrollments) — the table only ever
+// holds the current page's rows.
 const pageSizeOption = ref('50')
 const totalCount = ref(0)
 const currentPage = ref(1)
@@ -336,6 +341,9 @@ function setSort(field, dir) {
   const other = field === 'groupStart' ? groupEndSort : groupStartSort
   other.value = ''
   target.value = target.value === dir ? '' : dir
+  currentPage.value = 1
+  fetchEnrollments()
+  fetchMetrics()
 }
 
 const getDebt = (e) => {
@@ -345,98 +353,84 @@ const getDebt = (e) => {
   return Math.max(0, contract - paid)
 }
 
-// Distinct category options among this place's own enrollments — no point
-// offering a filter value that would match nothing here.
-const categoryOptions = computed(() => {
-  const map = {}
-  enrollments.value.forEach(e => {
-    if (e.category && !map[e.category]) map[e.category] = { id: e.category, name: e.category_name || `#${e.category}` }
-  })
-  return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
-})
+// All categories, not just ones this place happens to have enrollments in
+// right now — simpler than deriving from a (now server-paginated, so only
+// ever one page wide) enrollments array, and still harmless to offer.
+const categoryOptions = ref([])
+async function fetchCategoryOptions() {
+  try {
+    const res = await api.get('/categories/')
+    const list = Array.isArray(res.data) ? res.data : (res.data.results || [])
+    categoryOptions.value = list.slice().sort((a, b) => a.name.localeCompare(b.name))
+  } catch (err) { console.error(err) }
+}
 
-// "Active" teachers/instructors: distinct coordinators/instructors drawn
-// from this place's students, excluding only canceled enrolments — a
-// student who is new or already finished the course still counts toward
-// their teacher/instructor's active roster here.
-const activeTeachersCount = computed(() => {
-  const ids = new Set()
-  enrollments.value.forEach(e => { if (e.status !== 'canceled' && e.coordinator) ids.add(e.coordinator) })
-  return ids.size
-})
-const activeInstructorsCount = computed(() => {
-  const ids = new Set()
-  enrollments.value.forEach(e => { if (e.status !== 'canceled' && e.instructor) ids.add(e.instructor) })
-  return ids.size
-})
+// Metric cards — all five now reflect the same active filters (previously
+// activeTeachersCount/activeInstructorsCount ignored the table's filters
+// while the other three respected them; unified since enrollments only
+// ever holds one page's rows now, so neither could be derived client-side
+// from it anymore either way).
+const activeTeachersCount = ref(0)
+const activeInstructorsCount = ref(0)
+const activeCount = ref(0)
+const totalPaid = ref(0)
+const totalDebt = ref(0)
 
-// Metric cards reflect the active filters, not the place's full roster.
-const activeCount = computed(() => filteredEnrollments.value.filter(e => e.status === 'enrolled').length)
-const totalPaid = computed(() => filteredEnrollments.value.reduce((s, e) => s + (Number(e.paid_amount) || 0), 0))
-const totalDebt = computed(() => filteredEnrollments.value.reduce((s, e) => s + getDebt(e), 0))
+function buildEnrollmentParams() {
+  const params = { learning_place: route.params.id }
+  if (filterStudentName.value.trim()) params.student_name = filterStudentName.value.trim()
+  if (filterStatus.value) params.status = filterStatus.value
+  if (filterCategory.value) params.category = filterCategory.value
+  if (filterGroupName.value.trim()) params.group_name = filterGroupName.value.trim()
+  if (filterDebt.value === 'has') params.has_debt = 'true'
+  else if (filterDebt.value === 'none') params.has_debt = 'false'
+  if (groupStartFrom.value) params.group_start_from = groupStartFrom.value
+  if (groupStartTo.value) params.group_start_to = groupStartTo.value
+  if (groupEndFrom.value) params.group_end_from = groupEndFrom.value
+  if (groupEndTo.value) params.group_end_to = groupEndTo.value
+  return params
+}
 
-const filteredEnrollments = computed(() => {
-  const q = filterStudentName.value.toLowerCase().trim()
+async function fetchMetrics() {
+  try {
+    const params = buildEnrollmentParams()
+    const [summaryRes, debtRes] = await Promise.all([
+      api.get('/enrollments/metrics-summary/', { params }),
+      api.get('/enrollments/debts-totals/', { params }),
+    ])
+    activeCount.value = summaryRes.data.active_count || 0
+    totalPaid.value = summaryRes.data.total_paid || 0
+    activeTeachersCount.value = summaryRes.data.distinct_coordinators || 0
+    activeInstructorsCount.value = summaryRes.data.distinct_instructors || 0
+    totalDebt.value = debtRes.data.total || 0
+  } catch (err) { console.error(err) }
+}
 
-  const groupQ = filterGroupName.value.toLowerCase().trim()
-
-  const rows = enrollments.value.filter(e => {
-    if (filterStatus.value && e.status !== filterStatus.value) return false
-    if (filterCategory.value && e.category !== filterCategory.value) return false
-    if (filterDebt.value === 'has' && getDebt(e) <= 0) return false
-    if (filterDebt.value === 'none' && getDebt(e) > 0) return false
-    if (q && !(e.student_name || '').toLowerCase().includes(q)) return false
-    if (groupQ && !(e.group_name || '').toLowerCase().includes(groupQ)) return false
-    const grp = groupsById.value[e.group]
-    if (groupStartFrom.value && !(grp && grp.started_at && grp.started_at >= groupStartFrom.value)) return false
-    if (groupStartTo.value && !(grp && grp.started_at && grp.started_at <= groupStartTo.value)) return false
-    if (groupEndFrom.value && !(grp && grp.ends_at && grp.ends_at >= groupEndFrom.value)) return false
-    if (groupEndTo.value && !(grp && grp.ends_at && grp.ends_at <= groupEndTo.value)) return false
-    return true
-  })
-
-  const field = groupStartSort.value ? 'started_at' : (groupEndSort.value ? 'ends_at' : null)
-  if (!field) return rows
-
-  const dir = (groupStartSort.value || groupEndSort.value) === 'asc' ? 1 : -1
-  return rows.slice().sort((a, b) => {
-    const ga = groupsById.value[a.group]
-    const gb = groupsById.value[b.group]
-    const ta = ga && ga[field] ? new Date(ga[field]).getTime() : null
-    const tb = gb && gb[field] ? new Date(gb[field]).getTime() : null
-    if (ta === null && tb === null) return 0
-    if (ta === null) return 1
-    if (tb === null) return -1
-    return (ta - tb) * dir
-  })
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredEnrollments.value.length / displayPageSize.value))
-})
-const displayedEnrollments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredEnrollments.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredEnrollments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchEnrollments()
 }
 
-// This view has no scope-narrowing tabs, so nothing ever needs a refetch
-// after the initial load — the row-fetch-count selector only resets the
-// display page.
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchEnrollments()
 })
+watch([filterStatus, filterCategory, filterDebt, groupStartFrom, groupStartTo, groupEndFrom, groupEndTo], () => {
+  currentPage.value = 1
+  fetchEnrollments()
+  fetchMetrics()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchEnrollments()
+  fetchMetrics()
+}, 400)
+watch([filterStudentName, filterGroupName], debouncedRefetch)
 
 const weekdayShortNames = ['Dush', 'Sesh', 'Chor', 'Pay', 'Juma', 'Shan']
 function daysText(d) {
@@ -475,28 +469,50 @@ function goGroup(id) {
   if (id) router.push(`/groups/${id}`)
 }
 
-async function fetchAll() {
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
+async function fetchEnrollments() {
+  const token = ++fetchToken
   loading.value = true
   error.value = ''
   try {
-    const [placeRes, enrRes, groupsRes] = await Promise.all([
-      api.get(`/learning-places/${route.params.id}/`),
-      // Always the full place-scoped dataset — filtering/sorting/pagination
-      // above all need to see every row, not just one page of them.
-      api.get('/enrollments/', { params: { learning_place: route.params.id, page_size: 100000 } }),
-      // Groups are only used to look up start/end dates for the rows above,
-      // not displayed as their own list — always fetch the full set.
-      api.get('/groups/', { params: { page_size: 1000 } }),
-    ])
-    place.value = placeRes.data
+    const params = {
+      ...buildEnrollmentParams(),
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (groupStartSort.value) params.ordering = groupStartSort.value === 'desc' ? '-group_started_at' : 'group_started_at'
+    else if (groupEndSort.value) params.ordering = groupEndSort.value === 'desc' ? '-group_ends_at' : 'group_ends_at'
+
+    const enrRes = await api.get('/enrollments/', { params })
+    if (token !== fetchToken) return
     enrollments.value = enrRes.data.results ? enrRes.data.results : enrRes.data
     totalCount.value = enrRes.data.count ?? enrollments.value.length
-    groups.value = groupsRes.data.results ? groupsRes.data.results : groupsRes.data
   } catch (err) {
     console.error(err)
     error.value = "O'quv joyi ma'lumotlarini yuklashda xatolik yuz berdi."
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
+  }
+}
+
+async function fetchAll() {
+  try {
+    const [placeRes, groupsRes] = await Promise.all([
+      api.get(`/learning-places/${route.params.id}/`),
+      // Groups are only used to look up start/end dates for the rows below,
+      // not displayed as their own list — always fetch the full set.
+      api.get('/groups/', { params: { page_size: 1000 } }),
+      fetchCategoryOptions(),
+    ])
+    place.value = placeRes.data
+    groups.value = groupsRes.data.results ? groupsRes.data.results : groupsRes.data
+    await Promise.all([fetchEnrollments(), fetchMetrics()])
+  } catch (err) {
+    console.error(err)
+    error.value = "O'quv joyi ma'lumotlarini yuklashda xatolik yuz berdi."
+    initialLoading.value = false
   }
 }
 

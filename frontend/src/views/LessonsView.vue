@@ -18,7 +18,7 @@
       >
         <span class="tab-icon">📖</span>
         <span>Nazariya (Theory)</span>
-        <span class="tab-badge blue-badge">{{ filteredTheoryEnrollments.length }}</span>
+        <span class="tab-badge blue-badge">{{ theoryTotalCount }}</span>
       </button>
 
       <button
@@ -28,13 +28,13 @@
       >
         <span class="tab-icon">🏎️</span>
         <span>Amaliy Haydash (Driving lesson)</span>
-        <span class="tab-badge purple-badge">{{ filteredDrivingLessons.length }} ta dars</span>
+        <span class="tab-badge purple-badge">{{ drivingTotalCount }} ta dars</span>
       </button>
     </div>
 
     <!-- ━━━━━━━━━━━━━━━━━━ TAB 1: NAZARIYA (THEORY) ━━━━━━━━━━━━━━━━━━ -->
     <div v-if="activeTab === 'theory'" class="tab-content margin-top">
-      <div v-if="loading" class="state-box">
+      <div v-if="initialLoading" class="state-box">
         <div class="spinner"></div>
         <span>Nazariya darslari ma'lumotlari yuklanmoqda...</span>
       </div>
@@ -64,7 +64,7 @@
                 <th>
                   <select v-model="theoryCategoryFilter" class="col-filter-select">
                     <option value="">Barchasi</option>
-                    <option v-for="c in theoryCategoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                   </select>
                 </th>
                 <th>
@@ -105,10 +105,10 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-if="displayedTheoryEnrollments.length === 0">
+              <tr v-if="enrollments.length === 0">
                 <td colspan="8" class="td-empty">Mos o'quvchilar topilmadi</td>
               </tr>
-              <tr v-for="enr in displayedTheoryEnrollments" :key="enr.id" class="table-row">
+              <tr v-for="enr in enrollments" :key="enr.id" class="table-row">
                 <td class="font-bold text-dark link-value" @click="goStudent(enr.student)">{{ enr.student_name }}</td>
                 <td><span class="instructor-badge link-value" @click="goUser(enr.coordinator)">👨‍🏫 {{ enr.coordinator_name }}</span></td>
                 <td><span class="cat-chip">{{ enr.category_name }}</span></td>
@@ -130,9 +130,9 @@
             </tbody>
           </table>
         </div>
-        <div class="pagination-bar" v-if="filteredTheoryEnrollments.length > 0">
+        <div class="pagination-bar" v-if="theoryTotalCount > 0">
           <span class="pagination-info">
-            Jami: <strong>{{ filteredTheoryEnrollments.length }}</strong> tadan <strong>{{ displayedTheoryEnrollments.length }}</strong> ko'rsatilmoqda
+            Jami: <strong>{{ theoryTotalCount }}</strong> tadan <strong>{{ enrollments.length }}</strong> ko'rsatilmoqda
           </span>
           <div class="pagination-actions">
             <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentTheoryPage === 1" @click="changeTheoryPage(currentTheoryPage - 1)">Oldingi</button>
@@ -154,7 +154,7 @@
 
     <!-- ━━━━━━━━━━━━━━━━━━ TAB 2: AMALIY HAYDASH (DRIVING LESSON MODEL DATA) ━━━━━━━━━━━━━━━━━━ -->
     <div v-if="activeTab === 'driving'" class="tab-content margin-top">
-      <div v-if="loading" class="state-box">
+      <div v-if="initialLoading" class="state-box">
         <div class="spinner"></div>
         <span>Amaliy haydash darslari ma'lumotlari yuklanmoqda...</span>
       </div>
@@ -238,29 +238,29 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-if="displayedDrivingLessons.length === 0">
+              <tr v-if="drivingLessons.length === 0">
                 <td colspan="9" class="td-empty">Amaliy haydash darslari topilmadi</td>
               </tr>
-              <tr v-for="lesson in displayedDrivingLessons" :key="lesson.id" class="table-row">
+              <tr v-for="lesson in drivingLessons" :key="lesson.id" class="table-row">
                 <td class="font-bold">📅 {{ formatDateTime(lesson.lesson_date) }}</td>
                 <td class="font-bold text-dark link-value" @click="goStudent(lesson.student)">👤 {{ lesson.student_name }}</td>
                 <td><span class="instructor-badge link-value" @click="goUser(lesson.instructor)">🏎️ {{ lesson.instructor_name }}</span></td>
                 <td><span class="car-badge font-bold link-value" @click="goCar(lesson.car)">🚘 {{ lesson.car_name || '-' }}</span></td>
                 <td>
-                  <span v-if="getStudentGroupInfo(lesson.student)" class="group-badge link-value" @click="goGroup(getStudentGroupInfo(lesson.student).id)">{{ getStudentGroupInfo(lesson.student).group_name }}</span>
+                  <span v-if="lesson.group_name" class="group-badge link-value" @click="goGroup(lesson.group)">{{ lesson.group_name }}</span>
                   <span v-else class="text-muted">-</span>
                 </td>
-                <td>{{ getStudentGroupInfo(lesson.student)?.started_at ? formatDate(getStudentGroupInfo(lesson.student).started_at) : '-' }}</td>
-                <td>{{ getStudentGroupInfo(lesson.student)?.ends_at ? formatDate(getStudentGroupInfo(lesson.student).ends_at) : '-' }}</td>
+                <td>{{ lesson.group_started_at ? formatDate(lesson.group_started_at) : '-' }}</td>
+                <td>{{ lesson.group_ends_at ? formatDate(lesson.group_ends_at) : '-' }}</td>
                 <td><span class="status-badge-pill available">✓ Tasdiqlangan</span></td>
                 <td><span class="notes-text">{{ lesson.notes || '-' }}</span></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="pagination-bar" v-if="filteredDrivingLessons.length > 0">
+        <div class="pagination-bar" v-if="drivingTotalCount > 0">
           <span class="pagination-info">
-            Jami: <strong>{{ filteredDrivingLessons.length }}</strong> tadan <strong>{{ displayedDrivingLessons.length }}</strong> ko'rsatilmoqda
+            Jami: <strong>{{ drivingTotalCount }}</strong> tadan <strong>{{ drivingLessons.length }}</strong> ko'rsatilmoqda
           </span>
           <div class="pagination-actions">
             <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentDrivingPage === 1" @click="changeDrivingPage(currentDrivingPage - 1)">Oldingi</button>
@@ -291,6 +291,7 @@ import api from '@/services/api'
 import { useBranchStore } from '@/stores/branch'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, formatLearningDays } from '@/utils/formatters'
+import { debounce } from '@/utils/debounce'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -317,16 +318,30 @@ function goGroup(id) {
 
 const branchStore = useBranchStore()
 const activeTab = ref('theory')
-const loading = ref(true)
+// Only gates the initial full-page spinner (both tabs are fetched together
+// on mount). Gating on a flag that's also set true/false around every
+// filter/sort/page refetch would unmount the whole tab's table on each one
+// — including the column-filter <input> the user was typing into — via
+// v-if, stealing focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 
-// theoryTeachers/drivingInstructors/categories/cars are intentionally not
-// fetched from their own unrelated "give me everything" endpoints — the
-// header select filters below are built from the rows actually on screen
-// (enrollments / driving lessons), so a filter never offers a
-// teacher/group/instructor/car/category that isn't present in the table.
 const enrollments = ref([])
 const drivingLessons = ref([])
 const groups = ref([])
+const theoryTotalCount = ref(0)
+const drivingTotalCount = ref(0)
+
+// All categories, not just ones present on whatever page happens to be
+// loaded — simpler than deriving from the (now server-paginated)
+// enrollments array.
+const categories = ref([])
+async function fetchCategories() {
+  try {
+    const res = await api.get('/categories/')
+    const list = Array.isArray(res.data) ? res.data : (res.data.results || [])
+    categories.value = list.slice().sort((a, b) => a.name.localeCompare(b.name))
+  } catch (err) { console.error(err) }
+}
 
 const theorySearchQuery = ref('')
 const theoryTeacherFilter = ref('')
@@ -353,6 +368,122 @@ const drivingGroupStartTo = ref('')
 const drivingGroupEndFrom = ref('')
 const drivingGroupEndTo = ref('')
 
+const groupsById = computed(() => {
+  const map = {}
+  groups.value.forEach(g => { map[g.id] = g })
+  return map
+})
+
+// Instructors and coordinators only ever see their own lessons — both the
+// theory roster (their own students) and the practical table below.
+const ownStaffId = computed(() =>
+  authStore.isTeachingStaff ? authStore.user?.id : null
+)
+
+const THEORY_ORDERING_MAP = { start: 'group_started_at', end: 'group_ends_at' }
+const theoryOrdering = computed(() => {
+  if (theoryGroupStartSort.value) return (theoryGroupStartSort.value === 'desc' ? '-' : '') + THEORY_ORDERING_MAP.start
+  if (theoryGroupEndSort.value) return (theoryGroupEndSort.value === 'desc' ? '-' : '') + THEORY_ORDERING_MAP.end
+  return ''
+})
+
+const drivingOrdering = computed(() => {
+  if (drivingDateSort.value) return (drivingDateSort.value === 'desc' ? '-' : '') + 'lesson_date'
+  if (drivingGroupStartSort.value) return (drivingGroupStartSort.value === 'desc' ? '-' : '') + 'group_started_at'
+  if (drivingGroupEndSort.value) return (drivingGroupEndSort.value === 'desc' ? '-' : '') + 'group_ends_at'
+  return ''
+})
+
+const pageSizeOption = ref('50')
+const currentTheoryPage = ref(1)
+const currentDrivingPage = ref(1)
+
+// Guards against an older, slower request (e.g. the initial load) resolving
+// *after* a newer filtered one and clobbering it with stale results —
+// debounce only limits how often a request starts, not the order replies
+// come back in. Each tab tracks its own token since the two fetch
+// independently of one another.
+let theoryFetchToken = 0
+async function fetchTheory() {
+  const token = ++theoryFetchToken
+  try {
+    const params = {
+      page: currentTheoryPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (ownStaffId.value) params.coordinator = ownStaffId.value
+    else params.has_coordinator = 'true'
+    if (theorySearchQuery.value.trim()) params.student_name = theorySearchQuery.value.trim()
+    if (theoryTeacherFilter.value.trim()) params.coordinator_name = theoryTeacherFilter.value.trim()
+    if (theoryGroupFilter.value.trim()) params.group_name = theoryGroupFilter.value.trim()
+    if (theoryCategoryFilter.value) params.category = theoryCategoryFilter.value
+    if (theoryGroupStartFrom.value) params.group_start_from = theoryGroupStartFrom.value
+    if (theoryGroupStartTo.value) params.group_start_to = theoryGroupStartTo.value
+    if (theoryGroupEndFrom.value) params.group_end_from = theoryGroupEndFrom.value
+    if (theoryGroupEndTo.value) params.group_end_to = theoryGroupEndTo.value
+    if (theoryOrdering.value) params.ordering = theoryOrdering.value
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+
+    const res = await api.get('/enrollments/', { params })
+    if (token !== theoryFetchToken) return // a newer request has since been sent — discard this stale response
+    enrollments.value = res.data.results || res.data || []
+    theoryTotalCount.value = res.data.count ?? enrollments.value.length
+  } catch (err) {
+    console.error("Nazariya darslarini yuklashda xatolik:", err)
+  }
+}
+
+let drivingFetchToken = 0
+async function fetchDriving() {
+  const token = ++drivingFetchToken
+  try {
+    const params = {
+      page: currentDrivingPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (ownStaffId.value) params.instructor = ownStaffId.value
+    if (drivingSearchQuery.value.trim()) params.student_name = drivingSearchQuery.value.trim()
+    if (drivingInstructorFilter.value.trim()) params.instructor_name = drivingInstructorFilter.value.trim()
+    if (drivingCarFilter.value.trim()) params.car_name = drivingCarFilter.value.trim()
+    if (drivingGroupFilter.value.trim()) params.group_name = drivingGroupFilter.value.trim()
+    if (drivingDateFrom.value) params.lesson_date_from = drivingDateFrom.value
+    if (drivingDateTo.value) params.lesson_date_to = drivingDateTo.value
+    if (drivingGroupStartFrom.value) params.group_start_from = drivingGroupStartFrom.value
+    if (drivingGroupStartTo.value) params.group_start_to = drivingGroupStartTo.value
+    if (drivingGroupEndFrom.value) params.group_end_from = drivingGroupEndFrom.value
+    if (drivingGroupEndTo.value) params.group_end_to = drivingGroupEndTo.value
+    if (drivingOrdering.value) params.ordering = drivingOrdering.value
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+
+    const res = await api.get('/driving-lessons/', { params })
+    if (token !== drivingFetchToken) return
+    drivingLessons.value = res.data.results || res.data || []
+    drivingTotalCount.value = res.data.count ?? drivingLessons.value.length
+  } catch (err) {
+    console.error("Amaliy haydash darslarini yuklashda xatolik:", err)
+  }
+}
+
+async function fetchGroups() {
+  try {
+    // Groups are only used to look up start/end dates for the theory table
+    // above, not displayed as their own paginated list — always fetch the
+    // full (small) set.
+    const res = await api.get('/groups/', { params: { page_size: 1000 } })
+    groups.value = res.data.results || res.data || []
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+// Every filter/sort below triggers a backend refetch of its own tab only
+// (see fetchTheory/fetchDriving) — the other tab's already-loaded data and
+// tab-count badge stay untouched. Select/date/sort filters refetch
+// immediately on change (discrete input, no per-keystroke risk); text
+// filters are debounced so typing doesn't fire a request per keystroke —
+// the input itself is never re-rendered/replaced by any of this (only the
+// table rows below it are, gated by initialLoading rather than a per-fetch
+// flag), so there's no risk of losing focus or cursor position mid-word.
 function setTheoryGroupSort(column, direction) {
   if (column === 'start') {
     theoryGroupEndSort.value = ''
@@ -361,6 +492,8 @@ function setTheoryGroupSort(column, direction) {
     theoryGroupStartSort.value = ''
     theoryGroupEndSort.value = theoryGroupEndSort.value === direction ? '' : direction
   }
+  currentTheoryPage.value = 1
+  fetchTheory()
 }
 
 // Only one of the three driving-table date columns (lesson date, group
@@ -369,219 +502,68 @@ function setDrivingSort(column, direction) {
   const target = column === 'date' ? drivingDateSort : (column === 'start' ? drivingGroupStartSort : drivingGroupEndSort)
   ;[drivingDateSort, drivingGroupStartSort, drivingGroupEndSort].forEach(r => { if (r !== target) r.value = '' })
   target.value = target.value === direction ? '' : direction
+  currentDrivingPage.value = 1
+  fetchDriving()
 }
 
-// Nulls (no date) always sort last, regardless of direction.
-function compareDates(dateA, dateB, direction) {
-  const a = dateA ? new Date(dateA).getTime() : null
-  const b = dateB ? new Date(dateB).getTime() : null
-  if (a == null && b == null) return 0
-  if (a == null) return 1
-  if (b == null) return -1
-  return direction === 'asc' ? a - b : b - a
-}
-
-const groupsById = computed(() => {
-  const map = {}
-  groups.value.forEach(g => { map[g.id] = g })
-  return map
+watch(theoryCategoryFilter, () => { currentTheoryPage.value = 1; fetchTheory() })
+watch([theoryGroupStartFrom, theoryGroupStartTo, theoryGroupEndFrom, theoryGroupEndTo], () => {
+  currentTheoryPage.value = 1
+  fetchTheory()
 })
+const debouncedTheoryRefetch = debounce(() => { currentTheoryPage.value = 1; fetchTheory() }, 400)
+watch([theorySearchQuery, theoryTeacherFilter, theoryGroupFilter], debouncedTheoryRefetch)
 
-// Builds { id, name } option lists from the rows actually visible in a
-// table, deduplicated and alphabetically sorted, instead of pulling from a
-// separate unrelated master list.
-function uniqueOptions(list, idKey, nameKey) {
-  const map = new Map()
-  list.forEach(item => {
-    const id = item[idKey]
-    if (id == null || map.has(id)) return
-    map.set(id, item[nameKey] || '')
-  })
-  return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
-}
-
-// Instructors and coordinators only ever see their own lessons — both the
-// theory roster (their own students) and the practical table below.
-const ownStaffId = computed(() =>
-  authStore.isTeachingStaff ? authStore.user?.id : null
-)
-
-// Theory rows visible before the column filters are applied — the base set
-// the header filter options are drawn from.
-const baseTheoryEnrollments = computed(() =>
-  enrollments.value.filter(e =>
-    e.coordinator &&
-    (!ownStaffId.value || e.coordinator === ownStaffId.value) &&
-    branchStore.isBranchMatch(e)
-  )
-)
-
-const theoryCategoryOptions = computed(() => uniqueOptions(baseTheoryEnrollments.value, 'category', 'category_name'))
-
-// One row per student enrolled with a theory teacher (coordinator) assigned.
-const filteredTheoryEnrollments = computed(() => {
-  const q = theorySearchQuery.value.trim().toLowerCase()
-  const teacherQ = theoryTeacherFilter.value.trim().toLowerCase()
-  const groupQ = theoryGroupFilter.value.trim().toLowerCase()
-  const list = baseTheoryEnrollments.value.filter(e => {
-    if (teacherQ && !(e.coordinator_name || '').toLowerCase().includes(teacherQ)) return false
-    if (groupQ && !(e.group_name || '').toLowerCase().includes(groupQ)) return false
-    if (theoryCategoryFilter.value && e.category !== theoryCategoryFilter.value) return false
-    const grp = groupsById.value[e.group]
-    if (theoryGroupStartFrom.value && !(grp && grp.started_at && grp.started_at >= theoryGroupStartFrom.value)) return false
-    if (theoryGroupStartTo.value && !(grp && grp.started_at && grp.started_at <= theoryGroupStartTo.value)) return false
-    if (theoryGroupEndFrom.value && !(grp && grp.ends_at && grp.ends_at >= theoryGroupEndFrom.value)) return false
-    if (theoryGroupEndTo.value && !(grp && grp.ends_at && grp.ends_at <= theoryGroupEndTo.value)) return false
-    if (!q) return true
-    return (e.student_name || '').toLowerCase().includes(q)
-  })
-  if (theoryGroupStartSort.value || theoryGroupEndSort.value) {
-    const dir = theoryGroupStartSort.value || theoryGroupEndSort.value
-    const field = theoryGroupStartSort.value ? 'started_at' : 'ends_at'
-    return [...list].sort((a, b) => compareDates(groupsById.value[a.group]?.[field], groupsById.value[b.group]?.[field], dir))
-  }
-  return list
+watch([drivingDateFrom, drivingDateTo, drivingGroupStartFrom, drivingGroupStartTo, drivingGroupEndFrom, drivingGroupEndTo], () => {
+  currentDrivingPage.value = 1
+  fetchDriving()
 })
+const debouncedDrivingRefetch = debounce(() => { currentDrivingPage.value = 1; fetchDriving() }, 400)
+watch([drivingSearchQuery, drivingInstructorFilter, drivingCarFilter, drivingGroupFilter], debouncedDrivingRefetch)
 
-// Look up a student's current enrollment (group + category) for filtering/display
-function getStudentEnrollment(studentId) {
-  if (!studentId) return null
-  return enrollments.value.find(e => e.student === studentId && e.group) || null
-}
-
-// Look up a student's current group (name + start/end dates) via their enrollment
-function getStudentGroupInfo(studentId) {
-  const enr = getStudentEnrollment(studentId)
-  if (!enr) return null
-  const group = groupsById.value[enr.group]
-  return {
-    id: enr.group,
-    group_name: enr.group_name || (group ? group.name : ''),
-    started_at: group ? group.started_at : null,
-    ends_at: group ? group.ends_at : null,
-  }
-}
-
-// Driving lesson rows visible before the column filters are applied.
-const baseDrivingLessons = computed(() =>
-  drivingLessons.value.filter(l =>
-    (!ownStaffId.value || l.instructor === ownStaffId.value) &&
-    branchStore.isBranchMatch(l)
-  )
-)
-
-const filteredDrivingLessons = computed(() => {
-  const q = drivingSearchQuery.value.trim().toLowerCase()
-  const instructorQ = drivingInstructorFilter.value.trim().toLowerCase()
-  const carQ = drivingCarFilter.value.trim().toLowerCase()
-  const groupQ = drivingGroupFilter.value.trim().toLowerCase()
-  const from = drivingDateFrom.value
-  const to = drivingDateTo.value
-  const list = baseDrivingLessons.value.filter(l => {
-    if (instructorQ && !(l.instructor_name || '').toLowerCase().includes(instructorQ)) return false
-    const info = groupQ || drivingGroupStartFrom.value || drivingGroupStartTo.value || drivingGroupEndFrom.value || drivingGroupEndTo.value
-      ? getStudentGroupInfo(l.student)
-      : null
-    if (groupQ && (!info || !(info.group_name || '').toLowerCase().includes(groupQ))) return false
-    if (drivingGroupStartFrom.value && !(info && info.started_at && info.started_at >= drivingGroupStartFrom.value)) return false
-    if (drivingGroupStartTo.value && !(info && info.started_at && info.started_at <= drivingGroupStartTo.value)) return false
-    if (drivingGroupEndFrom.value && !(info && info.ends_at && info.ends_at >= drivingGroupEndFrom.value)) return false
-    if (drivingGroupEndTo.value && !(info && info.ends_at && info.ends_at <= drivingGroupEndTo.value)) return false
-    if (carQ && !(l.car_name || '').toLowerCase().includes(carQ)) return false
-    if (from && l.lesson_date && l.lesson_date.slice(0, 10) < from) return false
-    if (to && l.lesson_date && l.lesson_date.slice(0, 10) > to) return false
-    if (!q) return true
-    return (l.student_name || '').toLowerCase().includes(q)
-  })
-  if (drivingDateSort.value) {
-    const dir = drivingDateSort.value
-    return [...list].sort((a, b) => compareDates(a.lesson_date, b.lesson_date, dir))
-  }
-  if (drivingGroupStartSort.value || drivingGroupEndSort.value) {
-    const dir = drivingGroupStartSort.value || drivingGroupEndSort.value
-    const field = drivingGroupStartSort.value ? 'started_at' : 'ends_at'
-    return [...list].sort((a, b) => compareDates(getStudentGroupInfo(a.student)?.[field], getStudentGroupInfo(b.student)?.[field], dir))
-  }
-  return list
-})
-
-// ── Row-fetch-count selector ──────────────────────────────────
-// pageSizeOption no longer controls how much is fetched — fetchData always
-// pulls the entire dataset (see page_size: 100000 below) so every filter
-// above sees every row, not just whatever page happened to be loaded.
-// Instead it controls how many of the *filtered* rows show per page (see
-// the displayTheory*/displayDriving* computeds below). Both tabs' datasets
-// are fetched together in fetchData, so they share one selector, but each
-// tab tracks its own current page independently.
-const pageSizeOption = ref('50')
-const currentTheoryPage = ref(1)
-const currentDrivingPage = ref(1)
-
-async function fetchData() {
-  loading.value = true
-  try {
-    const [enrRes, drvRes, grpRes] = await Promise.all([
-      api.get('/enrollments/', { params: { page_size: 100000 } }),
-      api.get('/driving-lessons/', { params: { page_size: 100000 } }),
-      // Groups are only used to look up start/end dates for the rows above,
-      // not displayed as their own list — always fetch the full set.
-      api.get('/groups/', { params: { page_size: 1000 } }),
-    ])
-
-    enrollments.value = enrRes.data.results || enrRes.data || []
-    drivingLessons.value = drvRes.data.results || drvRes.data || []
-    groups.value = grpRes.data.results || grpRes.data || []
-  } catch (err) {
-    console.error("Darslar ma'lumotlarini yuklashda xatolik:", err)
-  } finally {
-    loading.value = false
-  }
-}
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — no backend round trip, just reset both tabs back to page 1.
+// pageSizeOption and branch are shared across both tabs (one selector/nav
+// bar drives both tables), so changing either refetches both.
 watch(pageSizeOption, () => {
   currentTheoryPage.value = 1
   currentDrivingPage.value = 1
+  fetchTheory()
+  fetchDriving()
 })
-
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
+watch(() => branchStore.activeBranchId, () => {
+  currentTheoryPage.value = 1
+  currentDrivingPage.value = 1
+  fetchTheory()
+  fetchDriving()
+})
 
 const displayTotalTheoryPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredTheoryEnrollments.value.length / displayPageSize.value))
-})
-const displayedTheoryEnrollments = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredTheoryEnrollments.value
-  const page = Math.min(currentTheoryPage.value, displayTotalTheoryPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredTheoryEnrollments.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(theoryTotalCount.value / Number(pageSizeOption.value)))
 })
 function changeTheoryPage(page) {
   if (page < 1 || page > displayTotalTheoryPages.value) return
   currentTheoryPage.value = page
+  fetchTheory()
 }
 
 const displayTotalDrivingPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredDrivingLessons.value.length / displayPageSize.value))
-})
-const displayedDrivingLessons = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredDrivingLessons.value
-  const page = Math.min(currentDrivingPage.value, displayTotalDrivingPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredDrivingLessons.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(drivingTotalCount.value / Number(pageSizeOption.value)))
 })
 function changeDrivingPage(page) {
   if (page < 1 || page > displayTotalDrivingPages.value) return
   currentDrivingPage.value = page
+  fetchDriving()
 }
 
-onMounted(() => {
+onMounted(async () => {
   // Instructors teach practical lessons only, so open them straight on that
   // tab rather than an empty theory list.
   if (authStore.isInstructor) activeTab.value = 'driving'
-  fetchData()
+  fetchCategories()
+  fetchGroups()
+  await Promise.all([fetchTheory(), fetchDriving()])
+  initialLoading.value = false
 })
 
 function formatDate(dateStr) {

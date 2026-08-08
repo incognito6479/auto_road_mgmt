@@ -38,7 +38,7 @@
     </div>
 
     <!-- Loading, error, or empty states -->
-    <div v-if="loading" class="state-container">
+    <div v-if="initialLoading" class="state-container">
       <div class="spinner"></div>
       <p class="state-text">Ma'lumotlar yuklanmoqda...</p>
     </div>
@@ -124,10 +124,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="displayedStudents.length === 0">
+          <tr v-if="students.length === 0">
             <td colspan="10" class="no-data">Hozircha ushbu kategoriyada yangi o'quvchilar mavjud emas</td>
           </tr>
-          <tr v-for="s in displayedStudents" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
+          <tr v-for="s in students" :key="s.id" class="stbl-row clickable-row" @click="goToStudentDetail(s.id)">
             <td class="td-name">{{ s.name }}</td>
             <td @click.stop>
               <input type="checkbox" :value="s.id" v-model="selectedStudentIds" class="td-chk" />
@@ -165,7 +165,7 @@
       </div>
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredStudents.length }}</strong> tadan <strong>{{ displayedStudents.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ students.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -889,6 +889,7 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
 import { useSearchSelectKeyboard } from '@/composables/useSearchSelectKeyboard'
+import { debounce } from '@/utils/debounce'
 
 const router = useRouter()
 const route = useRoute()
@@ -904,7 +905,12 @@ const goToStudentDetail = (id) => {
 const filterName = ref('')
 const filterPhone = ref('')
 const filterJshshr = ref('')
-const filterStatus = ref('')
+// Defaults to "Yangi" (new) — this page's primary purpose — but the
+// dropdown's "Barchasi" option now genuinely means "every status" (it
+// used to be silently ignored: the fetch was hardcoded to status=new
+// regardless of this filter, so picking any other status just produced
+// an empty table).
+const filterStatus = ref('new')
 const enrolledDateSort = ref('')
 const enrolledDateFrom = ref('')
 const enrolledDateTo = ref('')
@@ -915,16 +921,14 @@ function setSort(field, dir) {
   const target = sortRefs[field]
   Object.values(sortRefs).forEach(r => { if (r !== target) r.value = '' })
   target.value = target.value === dir ? '' : dir
+  currentPage.value = 1
+  fetchData()
 }
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: pick how many rows to pull from
-// the backend in one shot, then filter/sort them instantly on the client
-// (see displayedStudents below) instead of round-tripping per filter
-// change. Filtering has to see every row — not just whatever page happened
-// to be fetched — so the fetch itself always pulls everything;
-// pageSizeOption instead controls how many of the *filtered* results are
-// shown per page (see displayedStudents/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchData) — the table only ever holds
+// the current page's rows, not the whole scoped table.
 const pageSizeOption = ref('50')
 const totalCount = ref(0)
 const currentPage = ref(1)
@@ -934,6 +938,11 @@ const category = ref(null)
 const students = ref([])
 const categories = ref([])
 const loading = ref(false)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole table — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 const error = ref('')
 
 // ── Selection State ──────────────────────────────────
@@ -958,13 +967,15 @@ const weekdayOptions = [
   { value: 5, label: 'Shan' },
 ]
 
+// "Select all" now means all on the current page — the table only ever
+// holds one page's rows now that fetching is server-side paginated.
 const isAllSelected = computed(() => {
-  return filteredStudents.value.length > 0 && selectedStudentIds.value.length === filteredStudents.value.length
+  return students.value.length > 0 && selectedStudentIds.value.length === students.value.length
 })
 
 const toggleSelectAll = (e) => {
   if (e.target.checked) {
-    selectedStudentIds.value = filteredStudents.value.map(s => s.id)
+    selectedStudentIds.value = students.value.map(s => s.id)
   } else {
     selectedStudentIds.value = []
   }
@@ -1161,54 +1172,14 @@ const updateStudent = async () => {
   }
 }
 
-const filteredStudents = computed(() => {
-  const nameQ = filterName.value.toLowerCase().trim()
-  const phoneQ = filterPhone.value.replace(/\D/g, '')
-  let list = students.value.filter(s => {
-    if (nameQ && !s.name.toLowerCase().includes(nameQ)) return false
-    if (phoneQ && !s.phone.replace(/\D/g, '').includes(phoneQ)) return false
-    if (filterJshshr.value && !s.jshshr.includes(filterJshshr.value)) return false
-    if (filterStatus.value && s.rawStatus !== filterStatus.value) return false
-    if (enrolledDateFrom.value && !(s.dateRaw && s.dateRaw.slice(0, 10) >= enrolledDateFrom.value)) return false
-    if (enrolledDateTo.value && !(s.dateRaw && s.dateRaw.slice(0, 10) <= enrolledDateTo.value)) return false
-    return true
-  })
-
-  if (enrolledDateSort.value) {
-    const dir = enrolledDateSort.value === 'asc' ? 1 : -1
-    list = list.slice().sort((a, b) => {
-      const ta = a.dateRaw ? new Date(a.dateRaw).getTime() : null
-      const tb = b.dateRaw ? new Date(b.dateRaw).getTime() : null
-      if (ta === null && tb === null) return 0
-      if (ta === null) return 1
-      if (tb === null) return -1
-      return (ta - tb) * dir
-    })
-  } else if (paidAmountSort.value) {
-    const dir = paidAmountSort.value === 'asc' ? 1 : -1
-    list = list.slice().sort((a, b) => (a.paymentAmountRaw - b.paymentAmountRaw) * dir)
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here so it self-corrects the moment a
-// filter shrinks the result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredStudents.value.length / displayPageSize.value))
-})
-const displayedStudents = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredStudents.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredStudents.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchData()
 }
 
 // ── Modal State ──────────────────────────────────────
@@ -1366,17 +1337,40 @@ const formattedPrice = computed(() => {
 })
 
 // ── Fetch Category & Students ────────────────────────
+// Every filter, sort, and page is applied server-side now — `students`
+// only ever holds the current page's rows. The category header and the
+// "all categories" dropdown list are cheap, near-static requests refetched
+// alongside it for simplicity rather than split into a separate one-time
+// fetch; their cost is negligible next to what used to dominate here
+// (serializing every matching student in one response).
+let fetchToken = 0
 const fetchData = async () => {
+  const token = ++fetchToken
   loading.value = true
   error.value = ''
   try {
-    // Always the full dataset — filtering/sorting/pagination above all
-    // need to see every row, not just one page of them.
+    const params = {
+      category: categoryId,
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterName.value.trim()) params.search = filterName.value.trim()
+    if (filterPhone.value.trim()) params.phone = filterPhone.value.trim()
+    if (filterJshshr.value.trim()) params.jshshr = filterJshshr.value.trim()
+    if (enrolledDateFrom.value) params.joined_date_from = enrolledDateFrom.value
+    if (enrolledDateTo.value) params.joined_date_to = enrolledDateTo.value
+    if (enrolledDateSort.value) params.ordering = enrolledDateSort.value === 'desc' ? '-date_joined' : 'date_joined'
+    else if (paidAmountSort.value) params.ordering = paidAmountSort.value === 'desc' ? '-payment_amount' : 'payment_amount'
+    else params.ordering = 'full_name'
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+
     const [catRes, stdRes, allCatsRes] = await Promise.all([
       api.get(`/categories/${categoryId}/`),
-      api.get(`/students/`, { params: { category: categoryId, status: 'new', page: 1, page_size: 100000 } }),
+      api.get(`/students/`, { params }),
       api.get(`/categories/`)
     ])
+    if (token !== fetchToken) return
     category.value = catRes.data
     const stdList = Array.isArray(stdRes.data) ? stdRes.data : (stdRes.data?.results || [])
     students.value = stdList.map(mapStudent)
@@ -1386,15 +1380,30 @@ const fetchData = async () => {
     console.error(err)
     error.value = "Ma'lumotlarni yuklashda xatolik yuz berdi."
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
   }
 }
 
-// Only fetchData (on mount) needs a backend round trip; every filter/sort
-// above is purely client-side, and pageSizeOption now only controls how
-// many of the filtered rows show per page.
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchData()
+})
+watch(filterStatus, () => {
+  currentPage.value = 1
+  fetchData()
+})
+watch([enrolledDateFrom, enrolledDateTo], () => {
+  currentPage.value = 1
+  fetchData()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchData()
+}, 400)
+watch([filterName, filterPhone, filterJshshr], debouncedRefetch)
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchData()
 })
 
 const formatPrice = (price) => {

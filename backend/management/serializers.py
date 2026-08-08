@@ -1128,19 +1128,47 @@ class DrivingLessonsSerializer(serializers.ModelSerializer):
     instructor_name = serializers.CharField(source="instructor.full_name", read_only=True)
     car_name = serializers.CharField(source="car.car_name", read_only=True)
     branch_name = serializers.CharField(source="branch.name", read_only=True)
+    # DrivingLessons has no direct group FK — a lesson's "group" is the
+    # student's group via their current (latest active) enrollment, same
+    # definition used everywhere else in this codebase. Exposed here so
+    # LessonsView's driving tab can display/filter/sort on it without
+    # needing the student's full enrollment list client-side (which, once
+    # the enrollment list itself is paginated, may not even include this
+    # particular student on the currently-loaded page).
+    group = serializers.SerializerMethodField()
+    group_name = serializers.SerializerMethodField()
+    group_started_at = serializers.SerializerMethodField()
+    group_ends_at = serializers.SerializerMethodField()
 
     class Meta:
         model = DrivingLessons
         fields = [
             "id", "student", "student_name", "instructor", "instructor_name",
             "car", "car_name", "branch", "branch_name", "lesson_type", "hours",
-            "lesson_date", "notes", "is_active", "created_at", "updated_at"
+            "lesson_date", "notes", "group", "group_name", "group_started_at",
+            "group_ends_at", "is_active", "created_at", "updated_at"
         ]
         # lesson_date is server-controlled (BaseModel.created_at-style auto
         # timestamp) — always the server's current time at creation, never a
         # client-supplied value, so a lesson/autodrome session can't be
         # backdated or postdated.
         read_only_fields = ["id", "lesson_date", "is_active", "created_at", "updated_at"]
+
+    def get_group(self, obj):
+        enrollment = get_current_student_enrollment(obj.student)
+        return enrollment.group_id if enrollment else None
+
+    def get_group_name(self, obj):
+        enrollment = get_current_student_enrollment(obj.student)
+        return enrollment.group.name if (enrollment and enrollment.group) else None
+
+    def get_group_started_at(self, obj):
+        enrollment = get_current_student_enrollment(obj.student)
+        return enrollment.group.started_at if (enrollment and enrollment.group) else None
+
+    def get_group_ends_at(self, obj):
+        enrollment = get_current_student_enrollment(obj.student)
+        return enrollment.group.ends_at if (enrollment and enrollment.group) else None
 
     def validate(self, attrs):
         lesson_type = attrs.get("lesson_type", DrivingLessons.LessonType.DRIVING)

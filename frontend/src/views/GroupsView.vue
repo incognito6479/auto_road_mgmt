@@ -28,7 +28,7 @@
     </div>
 
     <!-- Loading, error, or empty states -->
-    <div v-if="loading" class="state-container">
+    <div v-if="initialLoading" class="state-container">
       <div class="spinner"></div>
       <p class="state-text">Guruhlar yuklanmoqda...</p>
     </div>
@@ -153,10 +153,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="displayedGroups.length === 0">
+          <tr v-if="groups.length === 0">
             <td colspan="11" class="no-data">Mos guruhlar topilmadi.</td>
           </tr>
-          <tr v-for="g in displayedGroups" :key="g.id" class="clickable-row" @click="router.push({ name: 'group-detail', params: { id: g.id } })">
+          <tr v-for="g in groups" :key="g.id" class="clickable-row" @click="router.push({ name: 'group-detail', params: { id: g.id } })">
             <td class="font-semibold">
               <div class="group-name-cell">
                 <div class="group-icon-wrap group-icon-wrap-sm">
@@ -204,7 +204,7 @@
       <!-- Pagination controls -->
       <div class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredGroups.length }}</strong> tadan <strong>{{ displayedGroups.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ groups.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -454,6 +454,7 @@ import { formatPhone } from '@/utils/formatters'
 import { useBranchStore } from '@/stores/branch'
 import { useAuthStore } from '@/stores/auth'
 import { useFillViewportHeight } from '@/composables/useFillViewportHeight'
+import { debounce } from '@/utils/debounce'
 
 const router = useRouter()
 const route = useRoute()
@@ -473,18 +474,19 @@ const endDateFrom = ref('')
 const endDateTo = ref('')
 
 const loading = ref(false)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole table — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 const error = ref('')
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: pick how many rows to pull from
-// the backend in one shot, then filter/sort them instantly on the client
-// (see displayedGroups below) instead of round-tripping per filter change.
-// Filtering has to see every row matching the active tab — not just
-// whatever page happened to be fetched — so the fetch itself always pulls
-// everything; pageSizeOption instead controls how many of the *filtered*
-// results are shown per page (see displayedGroups/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchGroups) — the table only ever holds
+// the current page's rows, not the whole scoped table.
 const pageSizeOption = ref('50')
-const totalCount = ref(0) // total rows matching the active status tab, per backend
+const totalCount = ref(0) // total rows matching every active filter, per backend
 const currentPage = ref(1)
 
 // ── Status tabs ─────────────────────────────────────────────
@@ -510,6 +512,8 @@ function setGroupSort(column, direction) {
     groupStartSort.value = ''
     groupEndSort.value = groupEndSort.value === direction ? '' : direction
   }
+  currentPage.value = 1
+  fetchGroups()
 }
 
 // ── Edit Group state ──────────────────────────────────
@@ -560,54 +564,14 @@ const weekdayOptions = [
 // matching the active tab (fetchGroups always pulls all of them), not just
 // whatever page happened to be loaded. Only the status tab triggers a new
 // backend request (see watch below).
-const filteredGroups = computed(() => {
-  let list = groups.value.filter(g => branchStore.isBranchMatch(g))
-
-  if (filterGroupName.value.trim()) {
-    const q = filterGroupName.value.trim().toLowerCase()
-    list = list.filter(g => (g.name || '').toLowerCase().includes(q))
-  }
-  if (selectedCategory.value) {
-    list = list.filter(g => String(g.category) === String(selectedCategory.value) || String(g.category_id) === String(selectedCategory.value))
-  }
-  if (startDateFrom.value) list = list.filter(g => g.started_at && g.started_at >= startDateFrom.value)
-  if (startDateTo.value) list = list.filter(g => g.started_at && g.started_at <= startDateTo.value)
-  if (endDateFrom.value) list = list.filter(g => g.ends_at && g.ends_at >= endDateFrom.value)
-  if (endDateTo.value) list = list.filter(g => g.ends_at && g.ends_at <= endDateTo.value)
-
-  if (groupStartSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.started_at || '').localeCompare(b.started_at || '')
-      return groupStartSort.value === 'desc' ? -d : d
-    })
-  } else if (groupEndSort.value) {
-    list = list.slice().sort((a, b) => {
-      const d = (a.ends_at || '').localeCompare(b.ends_at || '')
-      return groupEndSort.value === 'desc' ? -d : d
-    })
-  }
-
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredGroups.value.length / displayPageSize.value))
-})
-const displayedGroups = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredGroups.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredGroups.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchGroups()
 }
 
 const fetchCategories = async () => {
@@ -619,16 +583,31 @@ const fetchCategories = async () => {
   }
 }
 
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
 const fetchGroups = async () => {
+  const token = ++fetchToken
   loading.value = true
   error.value = ''
   try {
-    // Always the full tab-scoped dataset — filtering/sorting/pagination
-    // above all need to see every row, not just one page of them.
-    const params = { page: 1, page_size: 100000 }
+    const params = {
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
     if (activeTab.value !== 'all') params.status = activeTab.value
+    if (filterGroupName.value.trim()) params.name = filterGroupName.value.trim()
+    if (selectedCategory.value) params.category = selectedCategory.value
+    if (startDateFrom.value) params.started_at_from = startDateFrom.value
+    if (startDateTo.value) params.started_at_to = startDateTo.value
+    if (endDateFrom.value) params.ends_at_from = endDateFrom.value
+    if (endDateTo.value) params.ends_at_to = endDateTo.value
+    if (groupStartSort.value) params.ordering = groupStartSort.value === 'desc' ? '-started_at' : 'started_at'
+    else if (groupEndSort.value) params.ordering = groupEndSort.value === 'desc' ? '-ends_at' : 'ends_at'
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
 
     const response = await api.get('/groups/', { params })
+    if (token !== fetchToken) return
     const rawList = response.data.results ? response.data.results : (Array.isArray(response.data) ? response.data : [])
     groups.value = rawList
     totalCount.value = response.data.count ?? rawList.length
@@ -636,17 +615,34 @@ const fetchGroups = async () => {
     console.error(err)
     error.value = "Guruhlarni yuklashda xatolik yuz berdi."
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
   }
 }
 
-// Only the data scope (status tab) needs a backend round trip; every
-// filter/sort/page above is purely client-side.
 watch(activeTab, () => {
+  currentPage.value = 1
   fetchGroups()
 })
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchGroups()
+})
+watch(selectedCategory, () => {
+  currentPage.value = 1
+  fetchGroups()
+})
+watch([startDateFrom, startDateTo, endDateFrom, endDateTo], () => {
+  currentPage.value = 1
+  fetchGroups()
+})
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchGroups()
+}, 400)
+watch(filterGroupName, debouncedRefetch)
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchGroups()
 })
 
 const formatDate = (dateStr) => {

@@ -18,7 +18,7 @@
 
     <!-- Table Container -->
     <div class="table-card">
-      <div v-if="loading" class="state-container">
+      <div v-if="initialLoading" class="state-container">
         <div class="spinner"></div>
         <p class="state-text">O'quv joylari yuklanmoqda...</p>
       </div>
@@ -69,10 +69,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-if="displayedPlaces.length === 0">
+            <tr v-if="places.length === 0">
               <td :colspan="authStore.isAdminOrSuperuser ? 3 : 2" class="td-empty">O'quv joylari topilmadi.</td>
             </tr>
-            <tr v-for="p in displayedPlaces" :key="p.id" class="table-row clickable-row" @click="goToPlaceDetail(p.id)">
+            <tr v-for="p in places" :key="p.id" class="table-row clickable-row" @click="goToPlaceDetail(p.id)">
               <td class="td-name">
                 <div class="place-name-text">{{ p.place_name }}</div>
               </td>
@@ -98,9 +98,9 @@
         </table>
       </div>
 
-      <div v-if="filteredPlaces.length > 0" class="pagination-bar">
+      <div v-if="!initialLoading && totalCount > 0" class="pagination-bar">
         <span class="pagination-info">
-          Jami: <strong>{{ filteredPlaces.length }}</strong> tadan <strong>{{ displayedPlaces.length }}</strong> ko'rsatilmoqda
+          Jami: <strong>{{ totalCount }}</strong> tadan <strong>{{ places.length }}</strong> ko'rsatilmoqda
         </span>
         <div class="pagination-actions">
           <button v-if="pageSizeOption !== 'all'" class="btn-page" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">Oldingi</button>
@@ -206,6 +206,7 @@ import AppLayout from '@/components/AppLayout.vue'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import { useBranchStore } from '@/stores/branch'
+import { debounce } from '@/utils/debounce'
 
 const authStore = useAuthStore()
 const branchStore = useBranchStore()
@@ -216,6 +217,11 @@ const goToPlaceDetail = (id) => {
 }
 const places = ref([])
 const loading = ref(false)
+// Only gates the initial full-page spinner. Re-using `loading` for that
+// meant every filter/sort/page refetch unmounted the whole table — including
+// the column-filter <input> the user was typing into — via v-if, stealing
+// focus and resetting cursor position on every keystroke.
+const initialLoading = ref(true)
 const error = ref('')
 const filterName = ref('')
 const dateSort = ref('')
@@ -223,17 +229,17 @@ const dateFrom = ref('')
 const dateTo = ref('')
 
 // ── Row-fetch-count selector ──────────────────────────────────
-// Replaces classic next/prev pagination: fetch always pulls every learning
-// place (see fetchPlaces below), filtering runs client-side against the
-// full set (filteredPlaces), and pageSizeOption instead controls how many
-// of the *filtered* results are shown per page (see
-// displayedPlaces/changePage below).
+// Controls the page_size sent to the backend. Filtering/sorting/pagination
+// are all done server-side (see fetchPlaces) — the table only ever holds
+// the current page's rows, not the whole scoped table.
 const pageSizeOption = ref('50')
 const totalCount = ref(0)
 const currentPage = ref(1)
 
 function setDateSort(dir) {
   dateSort.value = dateSort.value === dir ? '' : dir
+  currentPage.value = 1
+  fetchPlaces()
 }
 
 // Modal state
@@ -252,66 +258,62 @@ const deletingPlace = ref(null)
 const deleting = ref(false)
 const deleteError = ref('')
 
+// Guards against an older, slower request resolving *after* a newer
+// filtered one and clobbering it with stale results.
+let fetchToken = 0
 const fetchPlaces = async () => {
+  const token = ++fetchToken
   loading.value = true
   error.value = ''
   try {
-    // Always the full dataset — filtering/sorting/pagination below all
-    // need to see every row, not just one page of them.
-    const response = await api.get('/learning-places/', { params: { page: 1, page_size: 100000 } })
+    const params = {
+      page: currentPage.value,
+      page_size: pageSizeOption.value === 'all' ? 100000 : Number(pageSizeOption.value),
+    }
+    if (filterName.value.trim()) params.name = filterName.value.trim()
+    if (dateFrom.value) params.date_from = dateFrom.value
+    if (dateTo.value) params.date_to = dateTo.value
+    if (dateSort.value) params.ordering = dateSort.value === 'desc' ? '-created_at' : 'created_at'
+    if (branchStore.activeBranchId) params.branch = branchStore.activeBranchId
+
+    const response = await api.get('/learning-places/', { params })
+    if (token !== fetchToken) return
     places.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
     totalCount.value = response.data.count ?? places.value.length
   } catch (err) {
     console.error(err)
     error.value = "O'quv joylarini yuklashda xatolik yuz berdi."
   } finally {
-    loading.value = false
+    if (token === fetchToken) { loading.value = false; initialLoading.value = false }
   }
 }
 
-const filteredPlaces = computed(() => {
-  let list = places.value.filter(p => {
-    const q = filterName.value.toLowerCase().trim()
-    const matchSearch = !q || p.place_name.toLowerCase().includes(q)
-    return matchSearch && branchStore.isBranchMatch(p)
-  })
-  if (dateFrom.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) >= dateFrom.value)
-  if (dateTo.value) list = list.filter(p => p.created_at && p.created_at.slice(0, 10) <= dateTo.value)
-  if (dateSort.value) {
-    list.sort((a, b) => {
-      const da = new Date(a.created_at).getTime()
-      const db = new Date(b.created_at).getTime()
-      return dateSort.value === 'asc' ? da - db : db - da
-    })
-  }
-  return list
-})
-
-// pageSizeOption now purely controls how many of the *filtered* rows show
-// per page — currentPage is clamped here (not via a watcher enumerating
-// every filter ref) so it self-corrects the moment a filter shrinks the
-// result set out from under it.
-const displayPageSize = computed(() => pageSizeOption.value === 'all' ? Infinity : Number(pageSizeOption.value))
 const displayTotalPages = computed(() => {
   if (pageSizeOption.value === 'all') return 1
-  return Math.max(1, Math.ceil(filteredPlaces.value.length / displayPageSize.value))
-})
-const displayedPlaces = computed(() => {
-  if (pageSizeOption.value === 'all') return filteredPlaces.value
-  const page = Math.min(currentPage.value, displayTotalPages.value)
-  const start = (page - 1) * displayPageSize.value
-  return filteredPlaces.value.slice(start, start + displayPageSize.value)
+  return Math.max(1, Math.ceil(totalCount.value / Number(pageSizeOption.value)))
 })
 function changePage(page) {
   if (page < 1 || page > displayTotalPages.value) return
   currentPage.value = page
+  fetchPlaces()
 }
 
-// This view has no scope-narrowing tabs, so nothing ever needs a refetch
-// after the initial load — the row-fetch-count selector only resets the
-// display page.
+const debouncedRefetch = debounce(() => {
+  currentPage.value = 1
+  fetchPlaces()
+}, 400)
+watch(filterName, debouncedRefetch)
+watch([dateFrom, dateTo], () => {
+  currentPage.value = 1
+  fetchPlaces()
+})
+watch(() => branchStore.activeBranchId, () => {
+  currentPage.value = 1
+  fetchPlaces()
+})
 watch(pageSizeOption, () => {
   currentPage.value = 1
+  fetchPlaces()
 })
 
 const formatDate = (dateStr) => {
