@@ -70,6 +70,7 @@
               <th>
                 <div class="select-wrap">
                   <select v-model="filterCategory" class="col-filter-select">
+                    <option value="">Barchasi</option>
                     <option v-for="c in categories" :key="c.id" :value="c.name">
                       {{ c.name }}
                     </option>
