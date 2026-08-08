@@ -20,6 +20,7 @@ from reportlab.platypus import (
     Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
+from management.contract import _format_phone
 from management.models import Car
 from management.pdf_fonts import ensure_fonts_registered
 
@@ -113,6 +114,8 @@ def generate_lesson_book_pdf(enrollment):
     instructor = enrollment.instructor
 
     student_name = student.full_name or student.phone
+    phone_display = _format_phone(student.phone)
+    phone2_display = _format_phone(student.phone2)
     group_name = group.name if group else "—"
     instructor_name = instructor.full_name or instructor.phone if instructor else "—"
     car = Car.objects.filter(instructor=instructor, is_active=True).first() if instructor else None
@@ -122,8 +125,8 @@ def generate_lesson_book_pdf(enrollment):
 
     styles = {
         "title": ParagraphStyle("title", fontName="DejaVu-Bold", fontSize=11.5, leading=14, alignment=TA_CENTER, spaceAfter=3),
-        "label": ParagraphStyle("label", fontName="DejaVu", fontSize=8, leading=10, alignment=TA_LEFT),
-        "value": ParagraphStyle("value", fontName="DejaVu-Bold", fontSize=8, leading=10, alignment=TA_LEFT),
+        "label": ParagraphStyle("label", fontName="DejaVu", fontSize=7, leading=8.6, alignment=TA_LEFT),
+        "value": ParagraphStyle("value", fontName="DejaVu-Bold", fontSize=7, leading=8.6, alignment=TA_LEFT),
         "th": ParagraphStyle("th", fontName="DejaVu-Bold", fontSize=6.4, leading=7.6, alignment=TA_CENTER),
         "td": ParagraphStyle("td", fontName="DejaVu", fontSize=6.4, leading=7.8, alignment=TA_LEFT),
         "td_center": ParagraphStyle("td_center", fontName="DejaVu", fontSize=6.6, leading=7.8, alignment=TA_CENTER),
@@ -135,6 +138,8 @@ def generate_lesson_book_pdf(enrollment):
 
     header_rows = [
         ("O'quvchining familiyasi ismi", student_name),
+        ("Telefon raqami", phone_display),
+        ("Qo'shimcha telefon raqami", phone2_display),
         ("O'qigan guruhining tartib raqami №", group_name),
         ("Haydovchi-yo'riqchining familiyasi va ismi", instructor_name),
         ("Yengil avtomobil markasi", car_display),
@@ -158,14 +163,22 @@ def generate_lesson_book_pdf(enrollment):
         ]
         header_table_rows.append(row)
 
+    # Row height must clear the label/value styles' own leading (8.6pt) plus
+    # their top/bottom padding (0.8pt each) — a fixed height smaller than
+    # that (as this used to be, sized only to match the photo/QR square)
+    # causes ReportLab to pack rows tighter than a line actually needs,
+    # visibly overlapping adjacent header lines instead of leaving them
+    # readable.
+    header_row_h = 3.7 * mm
+    last_row = len(header_rows) - 1
     header_table = Table(
         header_table_rows,
         colWidths=[23 * mm, 76 * mm, 71 * mm, 24 * mm],
-        rowHeights=[17 * mm / 7] * 7,
+        rowHeights=[header_row_h] * len(header_rows),
     )
     header_table.setStyle(TableStyle([
-        ("SPAN", (0, 0), (0, 6)),
-        ("SPAN", (3, 0), (3, 6)),
+        ("SPAN", (0, 0), (0, last_row)),
+        ("SPAN", (3, 0), (3, last_row)),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (0, 0), (0, 0), "CENTER"),
         ("ALIGN", (3, 0), (3, 0), "CENTER"),
@@ -207,8 +220,8 @@ def generate_lesson_book_pdf(enrollment):
         ("GRID", (0, 0), (-1, -1), 0.4, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 0.6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.6),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.3),
         ("LEFTPADDING", (0, 0), (-1, -1), 2),
         ("RIGHTPADDING", (0, 0), (-1, -1), 2),
         ("SPAN", (0, -1), (1, -1)),
@@ -229,7 +242,7 @@ def generate_lesson_book_pdf(enrollment):
     extra_table = Table(
         [extra_header] + [[Paragraph(str(i), styles["extra_th"]), "", "", ""] for i in range(1, 4)],
         colWidths=[7 * mm, 65 * mm, 60 * mm, 62 * mm],
-        rowHeights=[5 * mm] * 4,
+        rowHeights=[3.5 * mm] * 4,
     )
     extra_table.setStyle(TableStyle([
         ("LINEBELOW", (1, 1), (-1, -1), 0.6, colors.black),
@@ -242,7 +255,7 @@ def generate_lesson_book_pdf(enrollment):
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        topMargin=4 * mm, bottomMargin=4 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
+        topMargin=2 * mm, bottomMargin=2 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
         title=f"Amaliy mashq varaqasi - {student_name}",
     )
     doc.build(story)
